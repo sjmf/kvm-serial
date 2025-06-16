@@ -9,6 +9,7 @@ import sys
 @patch.dict(sys.modules, {
     'cv2': MagicMock(),
     'numpy': MagicMock(),
+    'tkinter': MagicMock(),
     'pynput.mouse': MagicMock(),
     'pynput.keyboard': MagicMock(),
     'pynput.mouse.Button': MagicMock(),

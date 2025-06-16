@@ -1,8 +1,13 @@
 from unittest.mock import patch, MagicMock
 from kvm_serial.kvm import KVMGui
-
+import sys
 
 @patch("tkinter.Tk")
+@patch.dict(sys.modules, {
+    'cv2': MagicMock(),
+    'numpy': MagicMock(),
+    'tkinter': MagicMock(),
+})
 class TestKVM:
     def test_kvmgui_initial_values(self, mock_tk):
         """Test that KVMGui initializes with correct default values"""
