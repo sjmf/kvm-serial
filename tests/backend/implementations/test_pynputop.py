@@ -4,6 +4,7 @@ from tests._utilities import MockSerial, mock_serial
 
 # Some modules must be patched before importing (see test_control.py)
 @patch.dict(sys.modules, {
+    "pynput.keyboard": MagicMock(),
     'pynput.keyboard.Key': MagicMock(),
     'pynput.keyboard.KeyCode': MagicMock(),
     'pynput.keyboard.Listener': MagicMock()
