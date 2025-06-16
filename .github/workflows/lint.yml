@@ -1,4 +1,4 @@
-name: Lint using black code style
+name: Lint using Black
 
 on: [push, pull_request]
 
