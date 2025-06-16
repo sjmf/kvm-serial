@@ -3,9 +3,8 @@
 [![PyPI](https://img.shields.io/pypi/v/kvm-serial)](https://pypi.org/project/kvm-serial/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
 [![Black](https://img.shields.io/badge/code%20style-black-black)](https://github.com/sjmf/kvm-serial/actions/workflows/lint.yml)
-![Python](https://img.shields.io/badge/python-3670A0?&logo=python&color=ffdd54&logoColor=blue)
-[![codecov](https://codecov.io/gh/sjmf/kvm-serial/graph/badge.svg?token=LESQXR9PRE)](https://codecov.io/gh/sjmf/kvm-serial)
-[![Run Tests](https://github.com/sjmf/kvm-serial/actions/workflows/test.yml/badge.svg)](https://github.com/sjmf/kvm-serial/actions/workflows/test.yml)
+[![Run Tests](https://img.shields.io/github/actions/workflow/status/sjmf/kvm-serial/test.yml?label=Unit%20Tests)](https://github.com/sjmf/kvm-serial/actions/workflows/test.yml)
+[![codecov](https://img.shields.io/codecov/c/gh/sjmf/kvm-serial)](https://codecov.io/gh/sjmf/kvm-serial)
 
 __PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling CH9329 hardware.__
 
