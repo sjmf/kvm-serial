@@ -1,16 +1,16 @@
 from unittest.mock import patch, MagicMock
-from kvm_serial.kvm import KVMGui
 import sys
 
-@patch("tkinter.Tk")
+@patch("tkinter.font.nametofont", MagicMock(return_value=MagicMock(actual=lambda key: "Arial")))
 @patch.dict(sys.modules, {
-    'cv2': MagicMock(),
-    'numpy': MagicMock(),
-    'tkinter': MagicMock(),
+    "cv2": MagicMock(),
+    "numpy": MagicMock(),
 })
 class TestKVM:
-    def test_kvmgui_initial_values(self, mock_tk):
+    def test_kvmgui_initial_values(self):
         """Test that KVMGui initializes with correct default values"""
+        from kvm_serial.kvm import KVMGui
+        
         gui = KVMGui()
 
         # Test initial backend options
@@ -26,8 +26,10 @@ class TestKVM:
         assert gui.window_var.get() is False
         assert gui.verbose_var.get() is False
 
-    def test_stop_subprocess(self, mock_tk):
+    def test_stop_subprocess(self):
         """Test subprocess termination"""
+        from kvm_serial.kvm import KVMGui
+
         gui = KVMGui()
         # Create a mock process
         mock_process = MagicMock()
@@ -38,8 +40,10 @@ class TestKVM:
         # Verify process was terminated
         mock_process.terminate.assert_called_once()
 
-    def test_on_checkbox_changed(self, mock_tk):
+    def test_on_checkbox_changed(self):
         """Test checkbox state affects combobox state"""
+        from kvm_serial.kvm import KVMGui
+
         gui = KVMGui()
         mock_combo = MagicMock()
         mock_var = MagicMock()
