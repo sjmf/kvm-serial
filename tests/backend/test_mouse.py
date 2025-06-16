@@ -1,6 +1,13 @@
 from unittest.mock import patch, MagicMock
-from kvm_serial.backend.mouse import MouseListener
 from tests._utilities import MockSerial, mock_serial
+
+# Mock modules which include Pynput imports before importing
+# These DO NOT WORK headless, i.e. in Github Actions runner
+with( 
+    patch("kvm_serial.backend.mouse.Button", MagicMock()),
+    patch("kvm_serial.backend.mouse.Listener", MagicMock()),
+):
+    from kvm_serial.backend.mouse import MouseListener
 
 
 class TestMouse:

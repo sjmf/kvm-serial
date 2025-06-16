@@ -1,8 +1,8 @@
 from unittest.mock import patch, MagicMock
 import signal
-import pytest
 
-# Mock the imports before importing from control
+# Mock modules which include Pynput imports before importing
+# These DO NOT WORK headless, i.e. in Github Actions runner
 with (
     patch("kvm_serial.backend.mouse.MouseListener", MagicMock()),
     patch("kvm_serial.backend.keyboard.KeyboardListener", MagicMock()),
