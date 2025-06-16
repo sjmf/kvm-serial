@@ -21,10 +21,8 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run tests
-        run: | 
-            pytest --cov --cov-branch --cov-report=xml 
-              --junitxml=./junit.xml
-              --ignore=tests/test_kvm.py
+        run: pytest --ignore=tests/test_kvm.py --cov --cov-branch --cov-report=xml --junitxml=./junit.xml
+              
       
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
