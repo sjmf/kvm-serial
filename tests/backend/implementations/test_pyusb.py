@@ -10,3 +10,5 @@ class TestPyUSBOperation:
         """Test that the name property returns 'usb'"""
         op = PyUSBOp(mock_serial)
         assert op.name == "usb"
+
+    # TODO: Implement further tests

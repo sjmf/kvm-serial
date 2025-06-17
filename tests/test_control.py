@@ -56,3 +56,5 @@ class TestControl:
     def test_main(self, mock_capture, mock_keyboard, mock_mouse):
         """Test main function basic execution"""
         pass  # TODO: Implement test with mocked dependencies
+
+    # TODO: Implement further tests

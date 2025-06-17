@@ -42,6 +42,7 @@ class TestScancodeToAscii:
         with pytest.raises(KeyError):
             scancode_to_ascii(array("B", [0, 0, 0xFF, 0, 0, 0, 0, 0]), raise_err=True)
 
+    # TODO: Test multiple keydowns before keyup
 
 class TestAsciiToScancode:
     def test_basic_letters(self):

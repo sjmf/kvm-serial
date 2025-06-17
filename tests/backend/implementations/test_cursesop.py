@@ -50,3 +50,5 @@ class TestCursesOperation:
         assert term.clear.called
         assert term.keypad.called
         assert term.addstr.called
+
+    # TODO: Implement further tests

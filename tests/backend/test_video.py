@@ -44,3 +44,5 @@ class TestCaptureDevice:
         device = CaptureDevice(cam=mock_cam, threaded=True)
         assert device.cam == mock_cam
         assert device.thread is not None
+
+    # TODO: Implement further tests
