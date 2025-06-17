@@ -10,6 +10,6 @@ jobs:
       - uses: psf/black@stable
         with:
           options: "--check"
-          src: "./kvm_serial"
+          src: "./kvm_serial ./tests"
           version: ">= 25.1"
   
