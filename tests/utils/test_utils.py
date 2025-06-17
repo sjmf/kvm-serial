@@ -44,6 +44,7 @@ class TestScancodeToAscii:
 
     # TODO: Test multiple keydowns before keyup
 
+
 class TestAsciiToScancode:
     def test_basic_letters(self):
         """Test basic letter conversions"""

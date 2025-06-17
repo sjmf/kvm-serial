@@ -1,16 +1,20 @@
 from unittest.mock import patch, MagicMock
 import sys
 
+
 @patch("tkinter.font.nametofont", MagicMock(return_value=MagicMock(actual=lambda key: "Arial")))
-@patch.dict(sys.modules, {
-    "cv2": MagicMock(),
-    "numpy": MagicMock(),
-})
+@patch.dict(
+    sys.modules,
+    {
+        "cv2": MagicMock(),
+        "numpy": MagicMock(),
+    },
+)
 class TestKVM:
     def test_kvmgui_initial_values(self):
         """Test that KVMGui initializes with correct default values"""
         from kvm_serial.kvm import KVMGui
-        
+
         gui = KVMGui()
 
         # Test initial backend options
