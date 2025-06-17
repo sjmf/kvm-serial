@@ -5,9 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "kvm-serial"
 version = "1.4.2"
-authors = [
-    { name="Samantha Finnigan", email="1038320+sjmf@users.noreply.github.com" }
-]
+authors = [{ name="Samantha Finnigan", email="1038320+sjmf@users.noreply.github.com" }]
 description = "Python package for interfacing with CH9329 KVM devices"
 readme = "README.md"
 
@@ -16,7 +14,7 @@ requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
-]
+    ]
 
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
@@ -27,9 +25,10 @@ dependencies = ["dynamic"]
 dev = [
     "pytest",
     "pytest-cov",
+    "pytest-watch",
     "black", 
     "pre-commit"
-]
+    ]
 
 [project.urls]
 Homepage = "https://github.com/sjmf/kvm-serial"
@@ -42,8 +41,7 @@ where = ["."]
 line-length = 100
 target-version = ['py310']
 include = '\.pyi?$'
-exclude = '''
-/(
+exclude = '''/(
     \._| # hidden files and directories
     build/
     dist/
@@ -55,12 +53,9 @@ exclude = '''
     \.venv/
     _build/
     buck-out/
-    build/
-    dist/
     __pycache__/
     *.egg-info/
-)/
-'''
+    )/'''
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -70,4 +65,8 @@ addopts = [
     "--tb=short",
     "--cov=kvm_serial",
     "--cov-report=term-missing",
-]
+    "--cov-report=lcov:lcov.info"
+    ]
+
+[tool.coverage.run]
+source = ["tests"]
