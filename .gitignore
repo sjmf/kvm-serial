@@ -9,3 +9,4 @@ dist/
 coverage.xml
 junit.xml
 .coverage
+lcov.info
