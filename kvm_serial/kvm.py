@@ -90,6 +90,10 @@ class KVMGui(tk.Tk):
     verbose_var: tk.BooleanVar
     process: subprocess.Popen | None
 
+    keyboard_checkbox: tk.Checkbutton
+    video_checkbox: tk.Checkbutton
+    mouse_checkbox: tk.Checkbutton
+
     backend_combo: ttk.Combobox
     serial_port_combo: ttk.Combobox
     baud_rate_combo: ttk.Combobox
@@ -131,12 +135,12 @@ class KVMGui(tk.Tk):
         bar.grid(row=1, column=0, rowspan=4, sticky="ne", padx=(0, 10), pady=(10, 0))
 
         # Checkboxes
-        e = tk.Checkbutton(self, text="Keyboard", variable=self.keyboard_var)
-        e.grid(row=1, column=0, sticky="w", padx=10, pady=5)
-        e = tk.Checkbutton(self, text="Video", variable=self.video_var)
-        e.grid(row=2, column=0, sticky="w", padx=10, pady=5)
-        e = tk.Checkbutton(self, text="Mouse", variable=self.mouse_var)
-        e.grid(row=3, column=0, sticky="w", padx=10, pady=5)
+        self.keyboard_checkbox = tk.Checkbutton(self, text="Keyboard", variable=self.keyboard_var)
+        self.keyboard_checkbox.grid(row=1, column=0, sticky="w", padx=10, pady=5)
+        self.video_checkbox = tk.Checkbutton(self, text="Video", variable=self.video_var)
+        self.video_checkbox.grid(row=2, column=0, sticky="w", padx=10, pady=5)
+        self.mouse_checkbox = tk.Checkbutton(self, text="Mouse", variable=self.mouse_var)
+        self.mouse_checkbox.grid(row=3, column=0, sticky="w", padx=10, pady=5)
 
         e = tk.Checkbutton(self, text="Windowed", variable=self.window_var)
         e.grid(row=4, column=0, sticky="w", padx=10, pady=5)
@@ -242,6 +246,12 @@ class KVMGui(tk.Tk):
 
         if len(self.video_devices) > 0:
             self.video_device_var.set(str(self.video_devices[0]))
+        else:
+            self.video_device_var.set("None found")
+            self.video_device_combo.config(state="disabled")
+            self.video_checkbox.config(state="disabled")
+            self.video_var.set(False)
+            messagebox.showerror("Start-up Error!", "No video devices found.")
 
     @chainable
     def _load_settings(self, chain: List[Callable] = []) -> None:
