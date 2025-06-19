@@ -9,7 +9,7 @@ from .inputhandler import InputHandler
 logger = logging.getLogger(__name__)
 
 CAMERAS_TO_CHECK = 10
-MAX_CAM_FAILURES = 1
+MAX_CAM_FAILURES = 2
 
 
 class CaptureDeviceException(Exception):
