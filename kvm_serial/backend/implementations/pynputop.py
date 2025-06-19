@@ -39,6 +39,8 @@ class PynputOp(KeyboardOp):
     def __init__(self, serial_port):
         super().__init__(serial_port)
         self.modifier_map = {}
+        # TODO: implement n-key rollover
+        # self.key_rollover_map = {}
 
     def run(self):
         """
@@ -60,7 +62,30 @@ class PynputOp(KeyboardOp):
         with Listener(on_press=self.on_press, on_release=self.on_release) as listener:
             listener.join()
 
-    def on_press(self, key):
+    def _nonalphanumeric_key_to_scancode(self, key: Key):
+        """
+        Converts a non-alphanumeric key to its corresponding scancode representation.
+
+        Args:
+            key (Key): The non-alphanumeric key to convert.
+        Returns:
+            list: A list of 8 bytes representing the scancode.
+        Raises:
+            KeyError: If the provided key is not found in MODIFIER_TO_VALUE or KEYS_WITH_CODES.
+        """
+        scancode = [b for b in b"\x00" * 8]
+
+        if key in MODIFIER_TO_VALUE:
+            value = MODIFIER_TO_VALUE[key]
+            scancode[0] = value
+            self.modifier_map[key] = scancode
+        else:
+            value = KEYS_WITH_CODES[key]
+            scancode[2] = value
+
+        return scancode
+
+    def on_press(self, key: Key | KeyCode | None):
         """
         Function which runs when a key is pressed down
         :param key:
@@ -70,23 +95,16 @@ class PynputOp(KeyboardOp):
 
         try:
             # Collect modifiers
-            if isinstance(key, Key):
-                if key in MODIFIER_TO_VALUE:
-                    value = MODIFIER_TO_VALUE[key]
-                    scancode[0] = value
-                else:
-                    value = KEYS_WITH_CODES[key]
-                    scancode[2] = value
+            try:
+                scancode = self._nonalphanumeric_key_to_scancode(key)  # type: ignore
+            except KeyError as e:
+                # This may be an alphanumeric instead
+                scancode = ascii_to_scancode(key.char)  # type: ignore
 
-                self.modifier_map[key] = scancode
+            scan_modifiers = merge_scancodes(self.modifier_map.values())
+            scancode = merge_scancodes([scan_modifiers, scancode])
 
-            scancode = merge_scancodes(self.modifier_map.values())
-
-            # Merge alphanumerics in with the modifiers
-            if isinstance(key, KeyCode):
-                scancode[2] = ascii_to_scancode(key.char)[2]
-
-        except KeyError as e:
+        except AttributeError as e:
             logging.error("Key not found: " + str(e))
 
         # Merge keys in the modifier_keys_map and send over serial
@@ -102,12 +120,9 @@ class PynputOp(KeyboardOp):
         # Send key release (null scancode)
         self.hid_serial_out.release()
 
-        # Ctrl + ESC escape sequence
+        # Ctrl + ESC escape sequence will stop listener
         if key == Key.esc and Key.ctrl in self.modifier_map:
-            # Stop listener
-            from pynput.keyboard import Listener as PynputListener
-
-            raise PynputListener.StopException()
+            raise Listener.StopException()
 
         try:
             self.modifier_map.pop(key)
