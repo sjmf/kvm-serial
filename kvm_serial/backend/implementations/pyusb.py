@@ -21,6 +21,18 @@ class PyUSBOp(KeyboardOp):
         super().__init__(serial_port)
         self.usb_endpoints = get_usb_endpoints()
 
+    def _sleep_interval(self, callback: Callable, interval=0.05, *args, **kwargs):
+        """Rate-limit a callback function to avoid busy-waiting.
+        :param callback: Function to call
+        :param interval: Minimum time interval between calls in seconds
+        """
+        start = time.time()
+        retval = callback(*args, **kwargs)
+        elapsed = time.time() - start
+        if elapsed < interval:
+            time.sleep(interval - elapsed)
+        return retval
+
     def run(self):
         """
         Main method for control using pyusb (requires superuser)
@@ -46,7 +58,8 @@ class PyUSBOp(KeyboardOp):
                 dev.detach_kernel_driver(interface_number)
 
             logging.info("Press Ctrl+ESC to exit")
-            while self._parse_key(endpoint):
+
+            while self._sleep_interval(self._parse_key, endpoint=endpoint):
                 pass
 
         except usb.core.USBError as e:
