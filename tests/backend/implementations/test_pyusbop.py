@@ -228,8 +228,8 @@ class TestPyUSBOperation:
             mock_endpoint.read.side_effect.errno = 60
             assert op._parse_key(mock_endpoint) is True
 
-    def test_parse_key_exit_combos(self, mock_keyboard_device, op):
-        """Test _parse_key with Ctrl+C scancode triggers warning and continues."""
+    def test_parse_key_exit_combos(self, mock_keyboard_device, op, caplog):
+        """Test _parse_key with Ctrl+C and Ctrl+ESC scancodes"""
         from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
 
         # Ctrl+C scancode: [0x01, ..., 0x06, ...]
@@ -237,11 +237,13 @@ class TestPyUSBOperation:
         mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
         mock_endpoint.read.return_value = scancode
 
-        # Patch logging.warning to check result
-        with patch("logging.warning") as mock_warn:
+        with caplog.at_level("WARNING"):
             op.debounce = None
             assert op._parse_key(mock_endpoint) is True
-            mock_warn.assert_called_with("\nCtrl+C passed through. Use Ctrl+ESC to exit!")
+            assert any(
+                "Ctrl+C passed through. Use Ctrl+ESC to exit!" in record.message
+                for record in caplog.records
+            )
 
             # Verify that the method continued after Ctrl+C
             mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
@@ -249,10 +251,14 @@ class TestPyUSBOperation:
             op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
             mock_ascii.reset_mock()
+            caplog.clear()
             scancode[2] = 0x29
             mock_endpoint.read.return_value = scancode
             assert op._parse_key(mock_endpoint) is False
-            mock_warn.assert_called_with("\nCtrl+ESC escape sequence detected! Exiting...")
+            assert any(
+                "Ctrl+ESC escape sequence detected! Exiting..." in record.message
+                for record in caplog.records
+            )
             assert mock_ascii.call_count == 1
 
         # Reset the call_count for mock_ascii after the test
@@ -301,8 +307,8 @@ class TestPyUSBOperation:
             mock_dispose.assert_called_once_with(mock_keyboard_device)
             assert op._parse_key.call_count == 2
 
-    def test_run_detach_kernel_driver_usb_error(self, mock_keyboard_device, op):
-        """Test PyUSBOp.run() when detach_kernel_driver raises usb.core.USBError."""
+    def test_run_detach_kernel_driver_usb_error(self, mock_keyboard_device, op, caplog):
+        """Test PyUSBOp.run() when detach_kernel_driver raises usb.core.USBError, using caplog."""
         import usb.util
 
         class MockUSBError(Exception):
@@ -314,11 +320,15 @@ class TestPyUSBOperation:
         with (
             patch.object(usb.core, "USBError", MockUSBError),
             patch.object(usb.util, "dispose_resources") as mock_dispose,
-            patch("logging.error") as mock_log_error,
+            caplog.at_level("ERROR"),
         ):
             op.run()
             mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
             mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
-            mock_log_error.assert_any_call(mock_keyboard_device.detach_kernel_driver.side_effect)
-            mock_log_error.assert_any_call("This script does not seem to be running as superuser.")
             mock_dispose.assert_called_once_with(mock_keyboard_device)
+            # Check error logs
+            assert any("mock error" in record.message for record in caplog.records)
+            assert any(
+                "This script does not seem to be running as superuser." in record.message
+                for record in caplog.records
+            )
