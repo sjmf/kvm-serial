@@ -125,12 +125,12 @@ class TestPyUSBOperation:
             endpoints = get_usb_endpoints()
             assert endpoints == {}
 
-    def test_get_usb_endpoints_device_exceptions(self):
-        """Test get_usb_endpoints handles AttributeError, TypeError, and usb.core.USBError."""
+    def test_get_usb_endpoints_device_exceptions(self, caplog):
+        """Test get_usb_endpoints handles AttributeError, TypeError, and usb.core.USBError using caplog."""
         from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
         import usb.core
 
-        class MockUSBError(BaseException):
+        class MockUSBError(Exception):
             errno = -1
 
         # Device that raises AttributeError
@@ -155,20 +155,18 @@ class TestPyUSBOperation:
         with (
             patch.object(usb.core, "find", return_value=devices),
             patch.object(usb.core, "USBError", MockUSBError),
-            patch("logging.info") as mock_log_info,
-            patch("logging.error") as mock_log_error,
         ):
-            endpoints = get_usb_endpoints()
+            with caplog.at_level("INFO"):
+                endpoints = get_usb_endpoints()
             assert endpoints == {}
             # Should log info for AttributeError and TypeError
             assert any(
-                "Skipping non-device or non-interface object" in call.args[0]
-                for call in mock_log_info.call_args_list
+                "Skipping non-device or non-interface object" in record.message
+                for record in caplog.records
             )
             # Should log error for USBError
             assert any(
-                "USB error while processing device" in call.args[0]
-                for call in mock_log_error.call_args_list
+                "USB error while processing device" in record.message for record in caplog.records
             )
 
     def test_pyusbop_sleep_interval(self, op):
@@ -214,7 +212,7 @@ class TestPyUSBOperation:
         """Test _parse_key when endpoint.read raises usb.core.USBError."""
         import usb.core
 
-        class MockUSBError(BaseException):
+        class MockUSBError(Exception):
             errno = -1
 
         # Set up the endpoint to raise our MockUSBError
@@ -307,7 +305,7 @@ class TestPyUSBOperation:
         """Test PyUSBOp.run() when detach_kernel_driver raises usb.core.USBError."""
         import usb.util
 
-        class MockUSBError(BaseException):
+        class MockUSBError(Exception):
             errno = 13
 
         op._parse_key = MagicMock(side_effect=False)
