@@ -9,7 +9,7 @@ def scancode_to_ascii(scancode, raise_err: bool = False):
     """
     Convert a keyboard scancode to its ASCII representation
     :param scancode:
-    :param raise_err: Raise KeyError instead of returning None if mapping failse
+    :param raise_err: Raise KeyError instead of returning None if mapping fails
     :return: mapping to ASCII
     """
     key = 0
