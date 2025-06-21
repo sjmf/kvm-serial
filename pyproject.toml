@@ -69,4 +69,4 @@ addopts = [
     ]
 
 [tool.coverage.run]
-source = ["tests"]
+source = ["kvm_serial"]
