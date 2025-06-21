@@ -117,3 +117,18 @@ class TestPyUSBOperation:
         with patch.object(usb.core, "find", return_value=None):
             endpoints = get_usb_endpoints()
             assert endpoints == {}
+
+    def test_sleep_interval(self, op):
+        """Test that _sleep_interval calls the callback with correct args and enforces the interval."""
+        import time
+
+        return_value = 42
+        callback = MagicMock(return_value=return_value)
+        interval = 0.05
+        start = time.time()
+        result = op._sleep_interval(callback, interval, "ultimate_answer")
+        elapsed = time.time() - start
+
+        callback.assert_called_once_with("ultimate_answer")
+        assert result == return_value
+        assert elapsed >= interval
