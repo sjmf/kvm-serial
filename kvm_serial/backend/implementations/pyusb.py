@@ -11,6 +11,26 @@ logger = logging.getLogger(__name__)
 class PyUSBOp(KeyboardOp):
     """
     PyUSB operation mode: supports all modifier keys, requires superuser.
+
+    This mode uses the PyUSB library to interact with USB devices directly.
+    It reads keyboard scancodes from the USB endpoint and translates them
+    into ASCII characters, printing them to the console.
+    Use Ctrl+ESC to exit the operation.
+
+    :param serial_port: Serial port to use for communication (not used in this mode)
+    :type serial_port: str
+    :raises usb.core.USBError: If there is an error accessing the USB device
+    :raises usb.core.NoBackendError: If no suitable USB backend is found
+    :raises usb.core.USBTimeoutError: If the USB operation times out
+    :raises usb.core.USBError: For other USB-related errors
+    :example:
+        >>> from kvm_serial.backend.implementations.pyusb import PyUSBOp
+        >>> op = PyUSBOp("/dev/ttyUSB0")
+        >>> op.run()
+
+    :note: This operation mode requires superuser permissions to access USB devices.
+    :note: Input is blocked and collected outside of console focus.
+    :note: This mode does not support paste functionality.
     """
 
     @property
@@ -64,6 +84,8 @@ class PyUSBOp(KeyboardOp):
 
         except usb.core.USBError as e:
             logging.error(e)
+            if e.errno == 13:
+                logging.error("This script does not seem to be running as superuser.")
 
         finally:
             usb.util.dispose_resources(dev)
@@ -76,7 +98,7 @@ class PyUSBOp(KeyboardOp):
             data_in = endpoint.read(endpoint.wMaxPacketSize, timeout=100)
         except usb.core.USBError as e:
             if e.errno == 60:
-                # logging.debug("[Errno 60] Operation timed out. Continuing...")
+                logging.debug("[Errno 60] Operation timed out. Continuing...")
                 return True
             raise e
 
@@ -178,6 +200,8 @@ def get_usb_endpoints():
                 interface_number,
             )
 
+
+    logging.debug(f"Found {len(endpoints)} USB Keyboard endpoints.")
     return endpoints
 
 
