@@ -1,7 +1,8 @@
 # PyUSB implementation
 import logging
+import time
 import usb.core
-from usb.core import Device, Interface
+from typing import Callable
 from kvm_serial.utils.utils import scancode_to_ascii
 from .baseop import KeyboardOp
 
@@ -92,10 +93,10 @@ class PyUSBOp(KeyboardOp):
             if dev is not None:
                 dev.attach_kernel_driver(interface_number)
 
-    def _parse_key(self, endpoint):
+    def _parse_key(self, endpoint: usb.core.Endpoint):
         # Read keyboard scancodes
         try:
-            data_in = endpoint.read(endpoint.wMaxPacketSize, timeout=100)
+            data_in = endpoint.read(getattr(endpoint, "wMaxPacketSize"), timeout=100)
         except usb.core.USBError as e:
             if e.errno == 60:
                 logging.debug("[Errno 60] Operation timed out. Continuing...")
@@ -151,12 +152,14 @@ def get_usb_endpoints():
     # Iterate through connected USB devices
     for device in devices:
         # Ensure we only process Device objects (not Configuration)
-        if not isinstance(device, Device):
-            continue
+        try:
+            # Using duck typing, non-Device objects are skipped via exception.
+            cfg = device.get_active_configuration()  # type: ignore[reportAttributeAccessIssue]
 
-        # Check if the device is a keyboard
-        if getattr(device, "bDeviceClass") == 0 and getattr(device, "bDeviceSubClass") == 0:
-            cfg = device.get_active_configuration()
+            # Check if the device is a keyboard
+            if getattr(device, "bDeviceClass") != 0 or getattr(device, "bDeviceSubClass") != 0:
+                continue
+
             interface_number = list(cfg)[0].bInterfaceNumber
             intf = usb.util.find_descriptor(
                 cfg,
@@ -171,35 +174,39 @@ def get_usb_endpoints():
                 ),
             )
 
-            if not isinstance(intf, Interface) or not endpoint:
-                continue
-
+            # Check if the endpoint is valid and if the interface is a keyboard
             # A keyboard will have the following: (https://wuffs.org/blog/mouse-adventures-part-5)
             # bInterfaceClass == 0x3
             # bInterfaceSubClass == 0x1
             # bInterfaceProtocol == 0x1 (mouse is protocol 0x2)
-            if not (
+            if endpoint and (
                 getattr(intf, "bInterfaceClass") == 0x03
                 and getattr(intf, "bInterfaceSubClass") == 0x01
                 and getattr(intf, "bInterfaceProtocol") == 0x01
             ):
-                continue
+                vendorID = getattr(device, "idVendor")
+                productID = getattr(device, "idProduct")
+                logger.info(
+                    f"Found USB Keyboard: vID: 0x{vendorID:04x}; "
+                    f"pID: 0x{productID:04x}; "
+                    f"if: {interface_number}"
+                )
+                logger.debug(intf)
 
-            vendorID = getattr(device, "idVendor")
-            productID = getattr(device, "idProduct")
-            logger.info(
-                f"Keyboard: vID: 0x{vendorID:04x}; "
-                f"pID: 0x{productID:04x}; "
-                f"if: {interface_number}"
+                endpoints[f"{vendorID:04x}:{productID:04x}"] = (
+                    endpoint,
+                    device,
+                    interface_number,
+                )
+
+        except (AttributeError, TypeError):
+            logging.info(f"Skipping non-device or non-interface object: {device}")
+        except usb.core.USBError as e:
+            logging.error(
+                "USB error while processing device: '"
+                f"{getattr(device, 'manufacturer')} {getattr(device, 'product')}'"
+                f"\n{e}"
             )
-            logger.debug(intf)
-
-            endpoints[f"{vendorID:04x}:{productID:04x}"] = (
-                endpoint,
-                device,
-                interface_number,
-            )
-
 
     logging.debug(f"Found {len(endpoints)} USB Keyboard endpoints.")
     return endpoints
