@@ -135,8 +135,7 @@ def main():
     if args.mode == "pynput" and args.sigint != "ignore":
         logging.warning("Consider using --mode='pynput' with --sigint=ignore")
     if args.mode != "pynput" and args.mouse:
-        logging.warning("Ignoring --mode: --mouse (-e) input specified, so will use 'pynput'")
-        args.mode = "pynput"
+        logging.warning("Consider using --mode='pynput' with --mouse (-e)")
     if args.windowed and not args.video:
         logging.warning("--windowed (-w) arg will not work without --video (-x)")
     if args.camindex and not args.video:
