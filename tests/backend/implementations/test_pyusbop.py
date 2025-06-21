@@ -31,6 +31,10 @@ class TestPyUSBOperation:
                 self.interfaces = []
                 self._active_configuration = []
 
+                self.is_kernel_driver_active = MagicMock(return_value=True)
+                self.detach_kernel_driver = MagicMock()
+                self.attach_kernel_driver = MagicMock()
+
             def get_active_configuration(self):
                 return self._active_configuration
 
@@ -120,6 +124,52 @@ class TestPyUSBOperation:
         with patch.object(usb.core, "find", return_value=None):
             endpoints = get_usb_endpoints()
             assert endpoints == {}
+
+    def test_get_usb_endpoints_device_exceptions(self):
+        """Test get_usb_endpoints handles AttributeError, TypeError, and usb.core.USBError."""
+        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
+        import usb.core
+
+        class MockUSBError(BaseException):
+            errno = -1
+
+        # Device that raises AttributeError
+        class AttrErrorDevice:
+            def get_active_configuration(self):
+                raise AttributeError("mock attr error")
+
+        # Device that raises TypeError
+        class TypeErrorDevice:
+            def get_active_configuration(self):
+                raise TypeError("mock type error")
+
+        # Device that raises usb.core.USBError
+        class USBErrorDevice:
+            manufacturer = "Test"
+            product = "Device"
+
+            def get_active_configuration(self):
+                raise MockUSBError("mock usb error")
+
+        devices = [AttrErrorDevice(), TypeErrorDevice(), USBErrorDevice()]
+        with (
+            patch.object(usb.core, "find", return_value=devices),
+            patch.object(usb.core, "USBError", MockUSBError),
+            patch("logging.info") as mock_log_info,
+            patch("logging.error") as mock_log_error,
+        ):
+            endpoints = get_usb_endpoints()
+            assert endpoints == {}
+            # Should log info for AttributeError and TypeError
+            assert any(
+                "Skipping non-device or non-interface object" in call.args[0]
+                for call in mock_log_info.call_args_list
+            )
+            # Should log error for USBError
+            assert any(
+                "USB error while processing device" in call.args[0]
+                for call in mock_log_error.call_args_list
+            )
 
     def test_pyusbop_sleep_interval(self, op):
         """Test that _sleep_interval calls the callback with correct args and enforces the interval."""
@@ -230,3 +280,47 @@ class TestPyUSBOperation:
 
         # Reset the call_count for mock_ascii after the test
         mock_ascii.reset_mock()
+
+    def test_run(self, mock_keyboard_device, op):
+        """Test the run() method of PyUSBOp for normal flow."""
+        import usb.util
+
+        # Patch endpoint.read to simulate a single keypress, then stop
+        scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]
+        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+        mock_endpoint.read.return_value = scancode
+
+        # Patch _parse_key to return False after first call (to break loop)
+        op._parse_key = MagicMock(side_effect=[True, False])
+        # Patch is_kernel_driver_active and detach_kernel_driver
+
+        # Patch usb.util.dispose_resources
+        with patch.object(usb.util, "dispose_resources") as mock_dispose:
+            op.run()
+            mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
+            mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
+            mock_keyboard_device.attach_kernel_driver.assert_called_once_with(0)
+            mock_dispose.assert_called_once_with(mock_keyboard_device)
+            assert op._parse_key.call_count == 2
+
+    def test_run_detach_kernel_driver_usb_error(self, mock_keyboard_device, op):
+        """Test PyUSBOp.run() when detach_kernel_driver raises usb.core.USBError."""
+        import usb.util
+
+        class MockUSBError(BaseException):
+            errno = 13
+
+        op._parse_key = MagicMock(side_effect=False)
+        mock_keyboard_device.detach_kernel_driver.side_effect = MockUSBError("mock error")
+
+        with (
+            patch.object(usb.core, "USBError", MockUSBError),
+            patch.object(usb.util, "dispose_resources") as mock_dispose,
+            patch("logging.error") as mock_log_error,
+        ):
+            op.run()
+            mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
+            mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
+            mock_log_error.assert_any_call(mock_keyboard_device.detach_kernel_driver.side_effect)
+            mock_log_error.assert_any_call("This script does not seem to be running as superuser.")
+            mock_dispose.assert_called_once_with(mock_keyboard_device)
