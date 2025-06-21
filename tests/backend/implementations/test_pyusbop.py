@@ -11,6 +11,7 @@ PYUSB_MOCKS = {
     "usb.core.Device": MagicMock(),
     "usb.core.Endpoint": MagicMock(),
     "usb.core.Interface": MagicMock(),
+    "kvm_serial.utils.utils": MagicMock(),
 }
 
 
@@ -36,6 +37,7 @@ class TestPyUSBOperation:
         mock_endpoint = MagicMock()
         mock_endpoint.bEndpointAddress = 0x81  # IN endpoint
         mock_endpoint.bmAttributes = 0x03  # Interrupt transfer
+        mock_endpoint.wMaxPacketSize = 8
 
         mock_interface = MagicMock()
         mock_interface.endpoints = [mock_endpoint]
@@ -58,13 +60,14 @@ class TestPyUSBOperation:
 
         op = PyUSBOp(mock_serial)
         op.hid_serial_out = MagicMock()
+        op.hid_serial_out.send_scancode.return_value = True
 
         mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
         op.usb_endpoints = {"dead:beef": (mock_endpoint, mock_keyboard_device, 0)}
 
         return op
 
-    def test_pyusb_name_property(self, op):
+    def test_pyusbop_name_property(self, op):
         """Test that the name property returns 'usb'"""
         assert op.name == "usb"
 
@@ -118,13 +121,14 @@ class TestPyUSBOperation:
             endpoints = get_usb_endpoints()
             assert endpoints == {}
 
-    def test_sleep_interval(self, op):
+    def test_pyusbop_sleep_interval(self, op):
         """Test that _sleep_interval calls the callback with correct args and enforces the interval."""
         import time
 
         return_value = 42
-        callback = MagicMock(return_value=return_value)
         interval = 0.05
+
+        callback = MagicMock(return_value=return_value)
         start = time.time()
         result = op._sleep_interval(callback, interval, "ultimate_answer")
         elapsed = time.time() - start
@@ -132,3 +136,47 @@ class TestPyUSBOperation:
         callback.assert_called_once_with("ultimate_answer")
         assert result == return_value
         assert elapsed >= interval
+
+    def test_parse_key(self, mock_keyboard_device, op):
+        """Test _parse_key with mocked endpoint and scancode_to_ascii."""
+        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+
+        # Patch scancode_to_ascii to return 'a'
+        mock_ascii.return_value = "a"
+
+        # Mock endpoint
+        mock_interface = mock_keyboard_device.interfaces[0]
+        mock_endpoint = mock_interface.endpoints[0]
+
+        # Simulate endpoint.read returning a scancode array
+        scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]  # 'a' key
+        mock_endpoint.read.return_value = scancode
+
+        result = op._parse_key(mock_endpoint)
+        assert result is True
+
+        mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+        assert mock_ascii.call_count == 2
+        op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+
+    def test_parse_key_usb_error(self, mock_keyboard_device, op):
+        """Test _parse_key when endpoint.read raises usb.core.USBError."""
+        import usb.core
+
+        class MockUSBError(BaseException):
+            errno = -1
+
+        # Set up the endpoint to raise our MockUSBError
+        mock_interface = mock_keyboard_device.interfaces[0]
+        mock_endpoint = mock_interface.endpoints[0]
+        mock_endpoint.read.side_effect = MockUSBError("mock error")
+
+        with patch.object(usb.core, "USBError", MockUSBError):
+            # On a general error, the class should raise the exception:
+            with pytest.raises(MockUSBError):
+                op._parse_key(mock_endpoint)
+
+            # On error 60, it should return True to continue the loop
+            mock_endpoint.read.side_effect.errno = 60
+            result = op._parse_key(mock_endpoint)
+            assert result is True
