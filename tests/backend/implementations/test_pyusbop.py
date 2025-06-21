@@ -145,19 +145,20 @@ class TestPyUSBOperation:
         mock_ascii.return_value = "a"
 
         # Mock endpoint
-        mock_interface = mock_keyboard_device.interfaces[0]
-        mock_endpoint = mock_interface.endpoints[0]
+        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
 
         # Simulate endpoint.read returning a scancode array
         scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]  # 'a' key
         mock_endpoint.read.return_value = scancode
 
-        result = op._parse_key(mock_endpoint)
-        assert result is True
+        assert op._parse_key(mock_endpoint) is True
 
         mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
         assert mock_ascii.call_count == 2
         op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+
+        # Reset the call_count for mock_ascii after the test
+        mock_ascii.reset_mock()
 
     def test_parse_key_usb_error(self, mock_keyboard_device, op):
         """Test _parse_key when endpoint.read raises usb.core.USBError."""
@@ -167,8 +168,7 @@ class TestPyUSBOperation:
             errno = -1
 
         # Set up the endpoint to raise our MockUSBError
-        mock_interface = mock_keyboard_device.interfaces[0]
-        mock_endpoint = mock_interface.endpoints[0]
+        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
         mock_endpoint.read.side_effect = MockUSBError("mock error")
 
         with patch.object(usb.core, "USBError", MockUSBError):
@@ -178,5 +178,55 @@ class TestPyUSBOperation:
 
             # On error 60, it should return True to continue the loop
             mock_endpoint.read.side_effect.errno = 60
-            result = op._parse_key(mock_endpoint)
-            assert result is True
+            assert op._parse_key(mock_endpoint) is True
+
+    def test_parse_key_exit_combos(self, mock_keyboard_device, op):
+        """Test _parse_key with Ctrl+C scancode triggers warning and continues."""
+        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+
+        # Ctrl+C scancode: [0x01, ..., 0x06, ...]
+        scancode = [0x01, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00]
+        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+        mock_endpoint.read.return_value = scancode
+
+        # Patch logging.warning to check result
+        with patch("logging.warning") as mock_warn:
+            op.debounce = None
+            assert op._parse_key(mock_endpoint) is True
+            mock_warn.assert_called_with("\nCtrl+C passed through. Use Ctrl+ESC to exit!")
+
+            # Verify that the method continued after Ctrl+C
+            mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+            assert mock_ascii.call_count == 2
+            op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+
+            mock_ascii.reset_mock()
+            scancode[2] = 0x29
+            mock_endpoint.read.return_value = scancode
+            assert op._parse_key(mock_endpoint) is False
+            mock_warn.assert_called_with("\nCtrl+ESC escape sequence detected! Exiting...")
+            assert mock_ascii.call_count == 1
+
+        # Reset the call_count for mock_ascii after the test
+        mock_ascii.reset_mock()
+
+    def test_parse_key_invalid_scancode(self, mock_keyboard_device, op):
+        """Test _parse_key with a scancode that does not map to any key (scancode_to_ascii returns None)."""
+        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+
+        # Use a scancode that is not mapped (e.g., 0xFF)
+        scancode = [0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
+        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+        mock_endpoint.read.return_value = scancode
+
+        mock_ascii.return_value = None
+
+        op.debounce = None
+        result = op._parse_key(mock_endpoint)
+        assert result is True
+        mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+        assert mock_ascii.call_count == 2
+        op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+
+        # Reset the call_count for mock_ascii after the test
+        mock_ascii.reset_mock()
