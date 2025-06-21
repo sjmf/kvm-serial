@@ -41,6 +41,7 @@ class PyUSBOp(KeyboardOp):
     def __init__(self, serial_port):
         super().__init__(serial_port)
         self.usb_endpoints = get_usb_endpoints()
+        self.debounce = None
 
     def _sleep_interval(self, callback: Callable, interval=0.05, *args, **kwargs):
         """Rate-limit a callback function to avoid busy-waiting.
@@ -121,7 +122,7 @@ class PyUSBOp(KeyboardOp):
         key = scancode_to_ascii(data_in)
 
         if key != self.debounce and key:
-            print(key, end="", flush=True)
+            # print(key, end="", flush=True)
             self.debounce = key
         elif not key:
             self.debounce = None
