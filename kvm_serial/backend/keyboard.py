@@ -55,7 +55,7 @@ class KeyboardListener(InputHandler):
         if self.mode is Mode.NONE:
             return  # noop
         elif self.mode is Mode.USB:
-            from backend.implementations.pyusb import PyUSBOp
+            from backend.implementations.pyusbop import PyUSBOp
 
             keyboard_handler = PyUSBOp(self.serial_port)
         elif self.mode is Mode.PYNPUT:

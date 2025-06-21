@@ -52,9 +52,9 @@ class TestPyUSBOperation:
 
     @pytest.fixture
     @patch.dict(sys.modules, PYUSB_MOCKS)
-    @patch("kvm_serial.backend.implementations.pyusb.get_usb_endpoints", return_value={})
+    @patch("kvm_serial.backend.implementations.pyusbop.get_usb_endpoints", return_value={})
     def op(self, mock_serial, mock_keyboard_device):
-        from kvm_serial.backend.implementations.pyusb import PyUSBOp
+        from kvm_serial.backend.implementations.pyusbop import PyUSBOp
 
         op = PyUSBOp(mock_serial)
         op.hid_serial_out = MagicMock()
@@ -70,7 +70,7 @@ class TestPyUSBOperation:
 
     def test_get_usb_endpoints(self, mock_keyboard_device):
         """Test get_usb_endpoints function"""
-        from kvm_serial.backend.implementations.pyusb import get_usb_endpoints
+        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
         import usb.core, usb.util
 
         mock_interface = mock_keyboard_device.interfaces[0]
@@ -96,7 +96,7 @@ class TestPyUSBOperation:
 
     def test_get_usb_endpoints_no_backend_error(self):
         """Test get_usb_endpoints raises NoBackendError if no backend is found"""
-        from kvm_serial.backend.implementations.pyusb import get_usb_endpoints
+        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
         import usb.core
 
         class MockNoBackendError(BaseException):
@@ -111,7 +111,7 @@ class TestPyUSBOperation:
 
     def test_get_usb_endpoints_devices_none(self):
         """Test get_usb_endpoints returns empty dict if no devices found"""
-        from kvm_serial.backend.implementations.pyusb import get_usb_endpoints
+        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
         import usb.core
 
         with patch.object(usb.core, "find", return_value=None):
