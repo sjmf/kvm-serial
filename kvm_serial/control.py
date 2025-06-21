@@ -7,16 +7,13 @@ import logging
 
 from serial import Serial
 
-from kvm_serial.backend.mouse import MouseListener
-from kvm_serial.backend.keyboard import KeyboardListener
-from kvm_serial.backend.video import CaptureDevice
 
 logger = logging.getLogger(__name__)
 
 # Globally visible listener objects for thread stop
-ml: MouseListener | None = None
-cap: CaptureDevice | None = None
-keeb: KeyboardListener | None = None
+ml = None
+cap = None
+keeb = None
 
 
 # Provide different options for handling SIGINT so Ctrl+C can be passed to controller
@@ -32,19 +29,32 @@ def signal_handler_ignore(sig, frame):
 
 
 def start_threads(args, serial_port):
+    """Start handler threads based on command line arguments.
+
+    Args:
+        args: Parsed command line arguments.
+        serial_port: Serial port object for communication.
+    """
     global ml, cap, keeb
+
     # Start mouse listner on --mouse (-e)
     if args.mouse:
+        from kvm_serial.backend.mouse import MouseListener
+
         ml = MouseListener(serial_port)
         ml.start()
 
     # Do not capture keyboard with --no-keyboard (-n)
     if not args.no_keyboard:
+        from kvm_serial.backend.keyboard import KeyboardListener
+
         keeb = KeyboardListener(serial_port, mode=args.mode)
         keeb.start()
 
     # Display video window if --video (-x)
     if args.video:
+        from kvm_serial.backend.video import CaptureDevice
+
         cap = CaptureDevice(fullscreen=(not args.windowed))
         if args.camindex:
             cap.setCamera(args.camindex)
@@ -52,6 +62,7 @@ def start_threads(args, serial_port):
 
 def join_threads(args):
     global ml, cap, keeb
+
     # Wait for threads to finish.
     # The main thread is different depending on the options provided.
     if (args.mode == "none" or args.no_keyboard) and not args.video:
@@ -59,17 +70,20 @@ def join_threads(args):
         # If only mouse is captured, Ctrl+C will raise a keyboard interrupt,
         # which allows us to exit the program
         logging.info("Waiting for mouse listener...")
-        ml.thread.join()
-    elif (not args.no_keyboard and isinstance(keeb, KeyboardListener)) and not args.video:
+        ml.thread.join()  # type: ignore (static analysis doesn't know about MouseListener)
+
+    elif not args.no_keyboard and not args.video:
         # If not running video, wait on KeyboardListener to exit
+        # (unless no keyboard capture)
         # Exit is handled by the listener implementation (e.g. Ctrl+ESC)
         logging.info("Waiting for keyboard listener...")
-        keeb.thread.join()
+        keeb.thread.join()  # type: ignore
+
     else:
         # Video only
         # Exit handled by closing the video window or ESC
         logging.info("Waiting for video capture...")
-        cap.capture()
+        cap.capture()  # type: ignore
         # Video window does not work in a thread on OSX. :/
         # I bet CV2 is using Tk internally.
         # Perform capture() in our main thread for now.
