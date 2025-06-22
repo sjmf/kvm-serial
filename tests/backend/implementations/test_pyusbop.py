@@ -1,7 +1,7 @@
 import sys
 import pytest
 from unittest.mock import patch, MagicMock
-from tests._utilities import MockSerial
+from tests._utilities import MockSerial, mock_serial
 
 # Mock usb.core and related classes to prevent actual USB operations
 PYUSB_MOCKS = {
@@ -15,7 +15,7 @@ PYUSB_MOCKS = {
 }
 
 
-@patch.dict("sys.modules", PYUSB_MOCKS)
+@patch.dict(sys.modules, PYUSB_MOCKS)
 @patch("serial.Serial", MockSerial)
 class TestPyUSBOperation:
     """
@@ -271,7 +271,7 @@ class TestPyUSBOperation:
         assert op._parse_key(mock_endpoint) is True
 
         mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-        assert mock_ascii.call_count == 2
+        mock_ascii.assert_called_once_with(scancode)
         op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
         # Reset the call_count for mock_ascii after the test
@@ -322,6 +322,8 @@ class TestPyUSBOperation:
         mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
         mock_endpoint.read.return_value = scancode
 
+        mock_ascii.reset_mock()
+
         with caplog.at_level("WARNING"):
             op.debounce = None
             assert op._parse_key(mock_endpoint) is True
@@ -332,7 +334,7 @@ class TestPyUSBOperation:
 
             # Verify that the method continued after Ctrl+C
             mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-            assert mock_ascii.call_count == 2
+            mock_ascii.assert_called_once_with(scancode)
             op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
             mock_ascii.reset_mock()
@@ -344,7 +346,7 @@ class TestPyUSBOperation:
                 "Ctrl+ESC escape sequence detected! Exiting..." in record.message
                 for record in caplog.records
             )
-            assert mock_ascii.call_count == 1
+            mock_ascii.assert_not_called()
 
         # Reset the call_count for mock_ascii after the test
         mock_ascii.reset_mock()
@@ -368,10 +370,9 @@ class TestPyUSBOperation:
         mock_ascii.return_value = None
 
         op.debounce = None
-        result = op._parse_key(mock_endpoint)
-        assert result is True
+        assert op._parse_key(mock_endpoint) is True
         mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-        assert mock_ascii.call_count == 2
+        mock_ascii.assert_called_once_with(scancode)
         op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
         # Reset the call_count for mock_ascii after the test
