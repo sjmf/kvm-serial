@@ -26,6 +26,7 @@ dev = [
     "pytest",
     "pytest-cov",
     "pytest-watch",
+    "pytest-timeout",
     "black", 
     "pre-commit"
     ]
@@ -67,6 +68,8 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-report=lcov:lcov.info"
     ]
+timeout = 5
+
 
 [tool.coverage.run]
 source = ["kvm_serial"]
