@@ -27,7 +27,6 @@ class KeyboardOp(ABC):
         Start the operation mode using the given serial port.
         :param serial_port: The serial port to communicate with.
         """
-        pass
 
     @property
     @abstractmethod
@@ -35,10 +34,8 @@ class KeyboardOp(ABC):
         """
         Return the name of the implementation.
         """
-        pass
 
     def cleanup(self):
         """
         Optional cleanup method for implementations that need it.
         """
-        pass
