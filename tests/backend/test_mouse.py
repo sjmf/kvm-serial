@@ -235,3 +235,79 @@ class TestMouse:
             mock_comm.send.assert_called_once_with(expected_data_left, cmd=b"\x05")
             assert result_left is True
             mock_comm.send.reset_mock()
+
+
+# ---
+# Test for mouse_main
+class TestMouseMain:
+    @pytest.fixture
+    def mock_args(self):
+        args = MagicMock()
+        args.port = "/dev/ttyUSB0"
+        args.baud = 115200
+        args.block = True
+        return args
+
+    @patch("kvm_serial.backend.mouse.Serial")
+    @patch("kvm_serial.backend.mouse.MouseListener")
+    @patch("argparse.ArgumentParser.parse_args")
+    def test_mouse_main_basic(
+        self, mock_parse_args, mock_mouse_listener_cls, mock_serial_cls, mock_args
+    ):
+        """
+        Test mouse_main: mocks Serial and MouseListener, simulates thread loop and KeyboardInterrupt.
+        """
+        mock_parse_args.return_value = mock_args
+        # Prepare mock Serial and MouseListener
+        mock_serial = MagicMock()
+        mock_serial_cls.return_value = mock_serial
+        mock_listener = MagicMock()
+        # Simulate thread.is_alive() True once, then False
+        mock_listener.thread.is_alive.side_effect = [True, False]
+        mock_mouse_listener_cls.return_value = mock_listener
+
+        # Patching done, import the class:
+        from kvm_serial.backend.mouse import mouse_main
+
+        mouse_main()
+
+        # Check Serial and MouseListener were called with correct args
+        mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
+        mock_mouse_listener_cls.assert_called_once_with(mock_serial, block=True)
+        # MouseListener.start() should be called
+        mock_listener.start.assert_called_once()
+        # MouseListener.thread.join should be called at least once
+        assert mock_listener.thread.join.call_count >= 1
+
+    @patch("kvm_serial.backend.mouse.Serial")
+    @patch("kvm_serial.backend.mouse.MouseListener")
+    @patch("argparse.ArgumentParser.parse_args")
+    def test_mouse_main_keyboardinterrupt_on_start(
+        self, mock_parse_args, mock_mouse_listener_cls, mock_serial_cls, mock_args
+    ):
+        """
+        Test mouse_main: MouseListener.start raises KeyboardInterrupt, should exit gracefully.
+        """
+        mock_parse_args.return_value = mock_args
+
+        # Prepare mock Serial and MouseListener
+        mock_serial = MagicMock()
+        mock_serial_cls.return_value = mock_serial
+        mock_listener = MagicMock()
+        # Patch start to raise KeyboardInterrupt
+        mock_listener.start.side_effect = KeyboardInterrupt
+        mock_mouse_listener_cls.return_value = mock_listener
+
+        # Patching done, import the class:
+        from kvm_serial.backend.mouse import mouse_main
+
+        # Should not raise, should handle KeyboardInterrupt
+        mouse_main()
+
+        # Serial and MouseListener should be called as before
+        mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
+        mock_mouse_listener_cls.assert_called_once_with(mock_serial, block=True)
+        mock_listener.start.assert_called_once()
+        mock_listener.stop.assert_called_once()
+        # No join calls expected since start raises
+        assert mock_listener.thread.join.call_count == 0
