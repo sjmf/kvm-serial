@@ -71,7 +71,7 @@ class KeyboardListener(InputHandler):
 
             keyboard_handler = CursesOp(self.serial_port)
         else:
-            raise Exception("Selected mode somehow invalid")
+            raise ValueError(f"Unknown keyboard mode: {self.mode!r}")
 
         keyboard_handler.run()
 
