@@ -118,7 +118,7 @@ def mouse_main():
         while ml.thread.is_alive():
             ml.thread.join(timeout=0.1)
     except KeyboardInterrupt:
-        print("Stopping mouse listener...")
+        logging.info("Stopping mouse listener...")
         ml.stop()
 
 
