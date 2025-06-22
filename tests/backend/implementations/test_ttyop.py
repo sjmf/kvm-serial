@@ -116,19 +116,17 @@ class TestTTYOperation:
         """
         Test that main_tty instantiates TtyOp, calls run, and returns None.
         Mocks:
-            - TtyOp: The class is patched so instantiation and run can be tracked
+            - TtyOp: Patched so instantiation and run can be tracked
         Asserts:
             - TtyOp is instantiated with the correct argument
             - run() is called once
             - main_tty returns None
         """
+        from kvm_serial.backend.implementations.ttyop import main_tty
+
         with patch("kvm_serial.backend.implementations.ttyop.TtyOp") as mock_ttyop:
-            instance = mock_ttyop.return_value
-            instance.run.return_value = None
-            from kvm_serial.backend.implementations.ttyop import main_tty
-
-            result = main_tty(mock_serial)
-
+            mock_ttyop.return_value._parse_key.side_effect = False
+            mock_ttyop.return_value.run.return_value = None
+            assert main_tty(mock_serial) is None
             mock_ttyop.assert_called_once_with(mock_serial)
-            instance.run.assert_called_once()
-            assert result is None
+            mock_ttyop.return_value.run.assert_called_once()
