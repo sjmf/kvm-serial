@@ -91,7 +91,7 @@ class MouseListener(InputHandler):
         return True
 
 
-if __name__ == "__main__":
+def mouse_main():
     import argparse
 
     parser = argparse.ArgumentParser()
@@ -120,3 +120,7 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         print("Stopping mouse listener...")
         ml.stop()
+
+
+if __name__ == "__main__":
+    mouse_main()
