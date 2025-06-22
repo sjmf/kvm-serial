@@ -3,8 +3,6 @@ from unittest.mock import MagicMock, patch
 from typing import List
 from array import array
 import logging
-from curses import error as curses_error
-from kvm_serial.backend.implementations.cursesop import CursesOp, MODIFIER_CODES, CONTROL_CHARACTERS
 
 
 class MockTerminal(MagicMock):
@@ -21,6 +19,8 @@ class MockTerminal(MagicMock):
 
     def _getkey_impl(self):
         """Simulate key input"""
+        from curses import error as curses_error
+
         if not self._keys_to_return:
             raise curses_error("no input")
         return self._keys_to_return.pop(0)
@@ -34,6 +34,8 @@ class MockTerminal(MagicMock):
 class TestCursesOperation:
     @patch("kvm_serial.backend.implementations.cursesop.curses.wrapper")
     def test_cursesop_instantiation(self, mock_curses, mock_serial):
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
         op = CursesOp(mock_serial)
         assert op.name == "curses"
         mock_curses.return_value = True
@@ -42,6 +44,8 @@ class TestCursesOperation:
     @patch("kvm_serial.backend.implementations.cursesop.curses.raw")
     @patch("kvm_serial.backend.implementations.cursesop.curses.napms")
     def test_cursesop_input_loop(self, mock_napms, mock_raw, mock_serial):
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
 
@@ -59,6 +63,8 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_read_terminal(self, mock_serial):
         """Test sending MODIFIER_CODES (strings) to hid_serial_out"""
+        from kvm_serial.backend.implementations.cursesop import CursesOp, MODIFIER_CODES
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
 
@@ -85,6 +91,8 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_send_existing_scancode(self, mock_serial):
         """Send a scancode, and check object state afterwards"""
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
         op.hid_serial_out = MagicMock()
@@ -101,6 +109,8 @@ class TestCursesOperation:
 
     @patch("kvm_serial.backend.implementations.cursesop.curses.napms")
     def test_cursesop_no_input(self, mock_napms, mock_serial):
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
         op.hid_serial_out = MagicMock()
@@ -114,6 +124,8 @@ class TestCursesOperation:
     @patch("kvm_serial.backend.implementations.cursesop.ascii_to_scancode")
     def test_cursesop_parse_key_single_ascii(self, mock_ascii, mock_serial):
         """Send a scancode, and check object state afterwards"""
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
         op.hid_serial_out = MagicMock()
@@ -134,6 +146,8 @@ class TestCursesOperation:
     @patch("kvm_serial.backend.implementations.cursesop.build_scancode")
     def test_cursesop_parse_key_control_characters(self, mock_build, mock_serial):
         """Send a control character, and check object state afterwards"""
+        from kvm_serial.backend.implementations.cursesop import CursesOp, CONTROL_CHARACTERS
+
         op = CursesOp(mock_serial)
         term = MockTerminal()
         op.hid_serial_out = MagicMock()
@@ -162,6 +176,8 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_errors(self, mock_serial):
         """Test various errors which can be raised are handled correctly"""
+        from kvm_serial.backend.implementations.cursesop import CursesOp, MODIFIER_CODES
+        from curses import error as curses_error
 
         op = CursesOp(mock_serial)
         term = MockTerminal()

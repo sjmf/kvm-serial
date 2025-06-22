@@ -1,6 +1,20 @@
 import sys
+import pytest
 from unittest.mock import MagicMock, patch
 from tests._utilities import MockSerial, mock_serial, patch_isinstance_for_serial
+
+
+@pytest.fixture
+def sys_modules_patch():
+    fake_pynput = MagicMock()
+    fake_pynput_mouse = MagicMock()
+    fake_pynput.mouse = fake_pynput_mouse
+    return {
+        "pynput": fake_pynput,
+        "pynput.mouse": fake_pynput_mouse,
+        "screeninfo": MagicMock(),
+        "serial": MagicMock(),
+    }
 
 
 class TestKeyboardMain:
@@ -9,7 +23,7 @@ class TestKeyboardMain:
     as a script instead of a module.
     """
 
-    def test_keyboard_main_invokes_listener(self, monkeypatch):
+    def test_keyboard_main_invokes_listener(self, monkeypatch, sys_modules_patch):
         """
         Test keyboard_main runs KeyboardListener with correct arguments.
         Mocks:
@@ -20,35 +34,35 @@ class TestKeyboardMain:
             - KeyboardListener is instantiated with correct args
             - start() and thread.join() are called
         """
-        import sys
-        from kvm_serial.backend import keyboard as kb_mod
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend import keyboard as kb_mod
 
-        # Prepare sys.argv for the script
-        monkeypatch.setattr(sys, "argv", ["keyboard.py", "COM1", "tty", "9600"])
+            # Prepare sys.argv for the script
+            monkeypatch.setattr(sys, "argv", ["keyboard.py", "COM1", "tty", "9600"])
 
-        mock_listener = MagicMock()
-        mock_instance = MagicMock()
-        mock_listener.return_value = mock_instance
+            mock_listener = MagicMock()
+            mock_instance = MagicMock()
+            mock_listener.return_value = mock_instance
 
-        with (
-            patch.object(kb_mod, "KeyboardListener", mock_listener),
-            patch("logging.basicConfig", lambda *a, **k: None),
-        ):
-            kb_mod.keyboard_main()
+            with (
+                patch.object(kb_mod, "KeyboardListener", mock_listener),
+                patch("logging.basicConfig", lambda *a, **k: None),
+            ):
+                kb_mod.keyboard_main()
 
-        mock_listener.assert_called_once_with("COM1", mode="tty", baud=9600)
-        mock_instance.start.assert_called_once()
-        mock_instance.thread.join.assert_called_once()
+            mock_listener.assert_called_once_with("COM1", mode="tty", baud=9600)
+            mock_instance.start.assert_called_once()
+            mock_instance.thread.join.assert_called_once()
 
-        # Test case where no arguments are provided:
-        monkeypatch.setattr(sys, "argv", [])
+            # Test case where no arguments are provided:
+            monkeypatch.setattr(sys, "argv", [])
 
-        with (
-            patch.object(sys, "exit"),
-            patch.object(kb_mod, "KeyboardListener", mock_listener),
-            patch("logging.basicConfig", lambda *a, **k: None),
-        ):
-            kb_mod.keyboard_main()
+            with (
+                patch.object(sys, "exit"),
+                patch.object(kb_mod, "KeyboardListener", mock_listener),
+                patch("logging.basicConfig", lambda *a, **k: None),
+            ):
+                kb_mod.keyboard_main()
 
     def test_keyboard_module_fallback_import(self, monkeypatch):
         """
@@ -213,8 +227,6 @@ class TestKeyboard:
             - No handler is called for Mode.NONE
         """
         from kvm_serial.backend.keyboard import KeyboardListener, Mode
-        import sys
-        from unittest.mock import MagicMock
 
         # Create mock modules and handler classes
         mock_pyusbop = MagicMock()

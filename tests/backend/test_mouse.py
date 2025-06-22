@@ -26,18 +26,19 @@ class TestMouse:
 
     # Mock modules which include Pynput imports before importing
     # These DO NOT WORK headless, i.e. in Github Actions runner
-    @patch("kvm_serial.backend.mouse.DataComm")
-    def test_mouse_listener(self, mock_datacomm, mock_serial, mouse_mocks):
+    def test_mouse_listener(self, mock_serial, mouse_mocks):
         """Test basic MouseListener initialization"""
 
-        with patch.dict(sys.modules, mouse_mocks):
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+        ):
             from kvm_serial.backend.mouse import MouseListener
 
             listener = MouseListener(mock_serial)
             mock_datacomm.assert_called_once_with(mock_serial)
 
-    @patch("kvm_serial.backend.mouse.Listener")
-    def test_run_calls_thread_start_and_join(self, mock_listener_cls, mock_serial, mouse_mocks):
+    def test_thread_calls(self, mock_serial, mouse_mocks):
         """
         Test that MouseListener.run(), start(), and stop() call correct Listener thread methods.
         Mocks:
@@ -45,7 +46,10 @@ class TestMouse:
         Asserts:
             - thread.start(), thread.join(), and thread.stop() are called as expected
         """
-        with patch.dict(sys.modules, mouse_mocks):
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.Listener") as mock_listener_cls,
+        ):
             from kvm_serial.backend.mouse import MouseListener
 
             mock_thread = MagicMock()
@@ -68,8 +72,7 @@ class TestMouse:
             mock_thread.reset_mock()
             mock_listener_cls.reset_mock()
 
-    @patch("kvm_serial.backend.mouse.DataComm")
-    def test_on_move(self, mock_datacomm, mock_serial, mouse_mocks):
+    def test_on_move(self, mock_serial, mouse_mocks):
         """
         Test MouseListener.on_move sends the correct data to comm.send and returns True.
         Mocks:
@@ -92,7 +95,10 @@ class TestMouse:
             expected_data += dy.to_bytes(2, "little")
             return expected_data[:7] if len(expected_data) > 7 else expected_data.ljust(7, b"\x00")
 
-        with patch.dict(sys.modules, mouse_mocks):
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+        ):
             from kvm_serial.backend.mouse import MouseListener
 
             # Set up the mock DataComm instance
@@ -142,8 +148,7 @@ class TestMouse:
             assert result_neg3 is True
             mock_comm.send.reset_mock()
 
-    @patch("kvm_serial.backend.mouse.DataComm")
-    def test_on_click(self, mock_datacomm, mock_serial, mouse_mocks):
+    def test_on_click(self, mock_serial, mouse_mocks):
         """
         Test MouseListener.on_click sends correct data for button press/release and returns True.
         Mocks:
@@ -152,7 +157,10 @@ class TestMouse:
             - comm.send is called with expected data and cmd for press and release
             - on_click returns True
         """
-        with patch.dict(sys.modules, mouse_mocks):
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+        ):
             from kvm_serial.backend.mouse import MouseListener
 
             mock_comm = MagicMock()
@@ -193,8 +201,7 @@ class TestMouse:
             assert result_release_r is True
             mock_comm.send.reset_mock()
 
-    @patch("kvm_serial.backend.mouse.DataComm")
-    def test_on_scroll(self, mock_datacomm, mock_serial, mouse_mocks):
+    def test_on_scroll(self, mock_serial, mouse_mocks):
         """
         Test MouseListener.on_scroll sends correct data for scroll events and returns True.
         Mocks:
@@ -203,7 +210,10 @@ class TestMouse:
             - comm.send is called with expected data and cmd for scroll up/down/left/right
             - on_scroll returns True
         """
-        with patch.dict(sys.modules, mouse_mocks):
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+        ):
             from kvm_serial.backend.mouse import MouseListener
 
             mock_comm = MagicMock()
@@ -248,28 +258,29 @@ class TestMouseMain:
         args.block = True
         return args
 
-    @patch("kvm_serial.backend.mouse.Serial")
-    @patch("kvm_serial.backend.mouse.MouseListener")
     @patch("argparse.ArgumentParser.parse_args")
-    def test_mouse_main_basic(
-        self, mock_parse_args, mock_mouse_listener_cls, mock_serial_cls, mock_args
-    ):
+    def test_mouse_main_basic(self, mock_parse_args, mock_args, mouse_mocks):
         """
         Test mouse_main: mocks Serial and MouseListener, simulates thread loop and KeyboardInterrupt.
         """
-        mock_parse_args.return_value = mock_args
-        # Prepare mock Serial and MouseListener
-        mock_serial = MagicMock()
-        mock_serial_cls.return_value = mock_serial
-        mock_listener = MagicMock()
-        # Simulate thread.is_alive() True once, then False
-        mock_listener.thread.is_alive.side_effect = [True, False]
-        mock_mouse_listener_cls.return_value = mock_listener
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
+            patch("kvm_serial.backend.mouse.MouseListener") as mock_mouse_listener_cls,
+        ):
+            mock_parse_args.return_value = mock_args
+            # Prepare mock Serial and MouseListener
+            mock_serial = MagicMock()
+            mock_serial_cls.return_value = mock_serial
+            mock_listener = MagicMock()
+            # Simulate thread.is_alive() True once, then False
+            mock_listener.thread.is_alive.side_effect = [True, False]
+            mock_mouse_listener_cls.return_value = mock_listener
 
-        # Patching done, import the class:
-        from kvm_serial.backend.mouse import mouse_main
+            # Patching done, import the class:
+            from kvm_serial.backend.mouse import mouse_main
 
-        mouse_main()
+            mouse_main()
 
         # Check Serial and MouseListener were called with correct args
         mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
@@ -279,30 +290,31 @@ class TestMouseMain:
         # MouseListener.thread.join should be called at least once
         assert mock_listener.thread.join.call_count >= 1
 
-    @patch("kvm_serial.backend.mouse.Serial")
-    @patch("kvm_serial.backend.mouse.MouseListener")
     @patch("argparse.ArgumentParser.parse_args")
-    def test_mouse_main_keyboardinterrupt_on_start(
-        self, mock_parse_args, mock_mouse_listener_cls, mock_serial_cls, mock_args
-    ):
+    def test_mouse_main_keyboardinterrupt_on_start(self, mock_parse_args, mock_args, mouse_mocks):
         """
         Test mouse_main: MouseListener.start raises KeyboardInterrupt, should exit gracefully.
         """
-        mock_parse_args.return_value = mock_args
+        with (
+            patch.dict(sys.modules, mouse_mocks),
+            patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
+            patch("kvm_serial.backend.mouse.MouseListener") as mock_mouse_listener_cls,
+        ):
+            mock_parse_args.return_value = mock_args
 
-        # Prepare mock Serial and MouseListener
-        mock_serial = MagicMock()
-        mock_serial_cls.return_value = mock_serial
-        mock_listener = MagicMock()
-        # Patch start to raise KeyboardInterrupt
-        mock_listener.start.side_effect = KeyboardInterrupt
-        mock_mouse_listener_cls.return_value = mock_listener
+            # Prepare mock Serial and MouseListener
+            mock_serial = MagicMock()
+            mock_serial_cls.return_value = mock_serial
+            mock_listener = MagicMock()
+            # Patch start to raise KeyboardInterrupt
+            mock_listener.start.side_effect = KeyboardInterrupt
+            mock_mouse_listener_cls.return_value = mock_listener
 
-        # Patching done, import the class:
-        from kvm_serial.backend.mouse import mouse_main
+            # Patching done, import the class:
+            from kvm_serial.backend.mouse import mouse_main
 
-        # Should not raise, should handle KeyboardInterrupt
-        mouse_main()
+            # Should not raise, should handle KeyboardInterrupt
+            mouse_main()
 
         # Serial and MouseListener should be called as before
         mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)

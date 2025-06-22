@@ -1,19 +1,4 @@
 from unittest.mock import patch, MagicMock
-from kvm_serial.backend.implementations.baseop import KeyboardOp
-
-
-class ConcreteKeyboardOp(KeyboardOp):
-    """Concrete implementation of KeyboardOp for testing"""
-
-    def run(self):
-        return True
-
-    def cleanup(self):
-        pass
-
-    @property
-    def name(self):
-        return "test_keyboard"
 
 
 class TestKeyboardOpImplementation:
@@ -22,6 +7,22 @@ class TestKeyboardOpImplementation:
     @patch("serial.Serial")
     @patch("kvm_serial.backend.implementations.baseop.DataComm")
     def test_init(self, mock_datacomm, mock_serial):
+
+        from kvm_serial.backend.implementations.baseop import KeyboardOp
+
+        class ConcreteKeyboardOp(KeyboardOp):
+            """Concrete implementation of KeyboardOp for testing"""
+
+            def run(self):
+                return True
+
+            def cleanup(self):
+                pass
+
+            @property
+            def name(self):
+                return "test_keyboard"
+
         # Create instance
         op = ConcreteKeyboardOp(mock_serial)
 
