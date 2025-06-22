@@ -104,13 +104,6 @@ class PyUSBOp(KeyboardOp):
                 return True
             raise e
 
-        # Debug print scancodes:
-        logging.debug(
-            f"{data_in}, \t"
-            f"({', '.join([hex(i) for i in data_in])})\t"
-            f"{scancode_to_ascii(data_in)}"
-        )
-
         # Check for escape sequence (and helpful prompt)
         if data_in[0] == 0x1 and data_in[2] == 0x6 and self.debounce != "c":  # Ctrl+C:
             logging.warning("\nCtrl+C passed through. Use Ctrl+ESC to exit!")
@@ -120,6 +113,9 @@ class PyUSBOp(KeyboardOp):
             return False
 
         key = scancode_to_ascii(data_in)
+
+        # Debug print scancodes:
+        logging.debug(f"{data_in}, \t({', '.join([hex(i) for i in data_in])}) \t{key}")
 
         if key != self.debounce and key:
             # print(key, end="", flush=True)
