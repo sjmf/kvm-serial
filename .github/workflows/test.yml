@@ -15,7 +15,7 @@ jobs:
           cache: 'pip'  # Enable pip caching
 
       - name: Install test dependencies
-        run: pip install pytest pytest-cov
+        run: pip install pytest pytest-cov pytest-timeout
 
       - name: Install project dependencies
         run: pip install -r requirements.txt
