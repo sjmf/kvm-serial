@@ -9,12 +9,19 @@ class InputHandler(ABC):
 
     @abstractmethod
     def run(self):
-        pass
+        """
+        Start the handler and block until complete
+        In practice, this will probably mean start threads and join them
+        """
 
     @abstractmethod
     def start(self):
-        pass
+        """
+        Start theads in non-blocking mode (i.e. don't call '.join()')
+        """
 
     @abstractmethod
     def stop(self):
-        pass
+        """
+        Stop operation threads. Should block until .join()ed
+        """
