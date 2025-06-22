@@ -209,3 +209,21 @@ class TestCursesOperation:
         term.getkey.side_effect = KeyboardInterrupt
         returnval = op._parse_key(term)
         assert returnval == True
+
+    def test_legacy_main_curses(self, mock_serial):
+        """
+        Test that main_curses instantiates CursesOp, calls run, and returns None.
+        Mocks:
+            - CursesOp: Patched so instantiation and run can be tracked
+        Asserts:
+            - CursesOp instantiated with the correct argument
+            - run() called once
+            - main_curses returns None
+        """
+        from kvm_serial.backend.implementations.cursesop import main_curses
+
+        with patch("kvm_serial.backend.implementations.cursesop.CursesOp") as mock_op:
+            mock_op.return_value.run.return_value = None
+            assert main_curses(mock_serial) is None
+            mock_op.assert_called_once_with(mock_serial)
+            mock_op.return_value.run.assert_called_once()

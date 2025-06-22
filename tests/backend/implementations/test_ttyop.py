@@ -124,8 +124,8 @@ class TestTTYOperation:
         """
         from kvm_serial.backend.implementations.ttyop import main_tty
 
-        with patch("kvm_serial.backend.implementations.ttyop.TtyOp") as mock_ttyop:
-            mock_ttyop.return_value.run.return_value = None
+        with patch("kvm_serial.backend.implementations.ttyop.TtyOp") as mock_op:
+            mock_op.return_value.run.return_value = None
             assert main_tty(mock_serial) is None
-            mock_ttyop.assert_called_once_with(mock_serial)
-            mock_ttyop.return_value.run.assert_called_once()
+            mock_op.assert_called_once_with(mock_serial)
+            mock_op.return_value.run.assert_called_once()

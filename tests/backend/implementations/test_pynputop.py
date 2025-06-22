@@ -216,3 +216,21 @@ class TestPynputOperation:
                 op.on_press(self.modifier_keys["ctrl"])
                 op.on_press(self.nonalpha_keys["esc"])
                 op.on_release(self.nonalpha_keys["esc"])
+
+    def test_legacy_main_pynput(self, mock_serial):
+        """
+        Test that main_pynput instantiates PynputOp, calls run, and returns None.
+        Mocks:
+            - PynputOp: Patched so instantiation and run can be tracked
+        Asserts:
+            - PynputOp instantiated with the correct argument
+            - run() called once
+            - main_pynput returns None
+        """
+        from kvm_serial.backend.implementations.pynputop import main_pynput
+
+        with patch("kvm_serial.backend.implementations.pynputop.PynputOp") as mock_op:
+            mock_op.return_value.run.return_value = None
+            assert main_pynput(mock_serial) is None
+            mock_op.assert_called_once_with(mock_serial)
+            mock_op.return_value.run.assert_called_once()

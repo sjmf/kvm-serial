@@ -444,3 +444,21 @@ class TestPyUSBOperation:
                 "This script does not seem to be running as superuser." in record.message
                 for record in caplog.records
             )
+
+    def test_legacy_main_usb(self, mock_serial):
+        """
+        Test that main_usb instantiates PyUSBOp, calls run, and returns None.
+        Mocks:
+            - PyUSBOp: Patched so instantiation and run can be tracked
+        Asserts:
+            - PyUSBOp instantiated with the correct argument
+            - run() called once
+            - main_usb returns None
+        """
+        from kvm_serial.backend.implementations.pyusbop import main_usb
+
+        with patch("kvm_serial.backend.implementations.pyusbop.PyUSBOp") as mock_op:
+            mock_op.return_value.run.return_value = None
+            assert main_usb(mock_serial) is None
+            mock_op.assert_called_once_with(mock_serial)
+            mock_op.return_value.run.assert_called_once()
