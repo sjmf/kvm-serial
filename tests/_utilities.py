@@ -7,9 +7,10 @@ from io import StringIO
 class MockSerial:
     """Mock class for Serial object"""
 
-    def __init__(self, port=None) -> None:
+    def __init__(self, port=None, baud=None) -> None:
         self.output = StringIO()
         self.fd = self.output
+        self.baud = baud
 
         self.is_open: bool = False
         self.portstr: Optional[str] = None
