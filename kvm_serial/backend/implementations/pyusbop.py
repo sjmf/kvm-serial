@@ -1,7 +1,9 @@
 # PyUSB implementation
 import logging
 import time
-import usb.core
+from usb.core import Endpoint, USBError, NoBackendError, find as usb_core_find
+from usb.util import find_descriptor, endpoint_direction, endpoint_type, dispose_resources
+from usb.util import ENDPOINT_IN, ENDPOINT_TYPE_INTR
 from typing import Callable
 from kvm_serial.utils.utils import scancode_to_ascii
 from .baseop import KeyboardOp
@@ -60,7 +62,7 @@ class PyUSBOp(KeyboardOp):
         Main method for control using pyusb (requires superuser)
         :return:
         """
-        logging.info(
+        logger.info(
             "Using PyUSB operation mode.\n"
             "All modifier keys supported. Paste not supported.\n"
             "Requires superuser permission.\n"
@@ -79,43 +81,43 @@ class PyUSBOp(KeyboardOp):
             if dev.is_kernel_driver_active(interface_number):
                 dev.detach_kernel_driver(interface_number)
 
-            logging.info("Press Ctrl+ESC to exit")
+            logger.info("Press Ctrl+ESC to exit")
 
             while self._sleep_interval(self._parse_key, endpoint=endpoint):
                 pass
 
-        except usb.core.USBError as e:
-            logging.error(e)
+        except USBError as e:
+            logger.error(e)
             if e.errno == 13:
-                logging.error("This script does not seem to be running as superuser.")
+                logger.error("This script does not seem to be running as superuser.")
 
         finally:
-            usb.util.dispose_resources(dev)
+            dispose_resources(dev)
             if dev is not None:
                 dev.attach_kernel_driver(interface_number)
 
-    def _parse_key(self, endpoint: usb.core.Endpoint):
+    def _parse_key(self, endpoint: Endpoint):
         # Read keyboard scancodes
         try:
             data_in = endpoint.read(getattr(endpoint, "wMaxPacketSize"), timeout=100)
-        except usb.core.USBError as e:
+        except USBError as e:
             if e.errno == 60:
-                logging.debug("[Errno 60] Operation timed out. Continuing...")
+                logger.debug("[Errno 60] Operation timed out. Continuing...")
                 return True
             raise e
 
         # Check for escape sequence (and helpful prompt)
         if data_in[0] == 0x1 and data_in[2] == 0x6 and self.debounce != "c":  # Ctrl+C:
-            logging.warning("\nCtrl+C passed through. Use Ctrl+ESC to exit!")
+            logger.warning("\nCtrl+C passed through. Use Ctrl+ESC to exit!")
 
         if data_in[0] == 0x1 and data_in[2] == 0x29:  # Ctrl+ESC:
-            logging.warning("\nCtrl+ESC escape sequence detected! Exiting...")
+            logger.warning("\nCtrl+ESC escape sequence detected! Exiting...")
             return False
 
         key = scancode_to_ascii(data_in)
 
         # Debug print scancodes:
-        logging.debug(f"{data_in}, \t({', '.join([hex(i) for i in data_in])}) \t{key}")
+        logger.debug(f"{data_in}, \t({', '.join([hex(i) for i in data_in])}) \t{key}")
 
         if key != self.debounce and key:
             # print(key, end="", flush=True)
@@ -131,9 +133,9 @@ def get_usb_endpoints():
 
     # Find all USB devices
     try:
-        devices = usb.core.find(find_all=True)
-    except usb.core.NoBackendError as e:
-        logging.error(
+        devices = usb_core_find(find_all=True)
+    except NoBackendError as e:
+        logger.error(
             "The PyUSB library cannot find a suitable USB backend (such as libusb)"
             " on your system. Install one using your system's package manager, e.g.:\n"
             "\t$ sudo apt-get install libusb-1.0-0-dev (Debian/Ubuntu)\n"
@@ -143,7 +145,7 @@ def get_usb_endpoints():
         raise e
 
     if devices is None:
-        logging.warning("No USB devices found.")
+        logger.warning("No USB devices found.")
         return endpoints
 
     # Iterate through connected USB devices
@@ -158,16 +160,16 @@ def get_usb_endpoints():
                 continue
 
             interface_number = list(cfg)[0].bInterfaceNumber
-            intf = usb.util.find_descriptor(
+            intf = find_descriptor(
                 cfg,
                 bInterfaceNumber=interface_number,
             )
 
-            endpoint = usb.util.find_descriptor(
+            endpoint = find_descriptor(
                 intf,
                 custom_match=lambda e: (
-                    usb.util.endpoint_direction(e.bEndpointAddress) == usb.util.ENDPOINT_IN
-                    and usb.util.endpoint_type(e.bmAttributes) == usb.util.ENDPOINT_TYPE_INTR,
+                    endpoint_direction(e.bEndpointAddress) == ENDPOINT_IN
+                    and endpoint_type(e.bmAttributes) == ENDPOINT_TYPE_INTR
                 ),
             )
 
@@ -197,15 +199,15 @@ def get_usb_endpoints():
                 )
 
         except (AttributeError, TypeError):
-            logging.info(f"Skipping non-device or non-interface object: {device}")
-        except usb.core.USBError as e:
-            logging.error(
+            logger.info(f"Skipping non-device or non-interface object: {device}")
+        except USBError as e:
+            logger.error(
                 "USB error while processing device: '"
                 f"{getattr(device, 'manufacturer')} {getattr(device, 'product')}'"
                 f"\n{e}"
             )
 
-    logging.debug(f"Found {len(endpoints)} USB Keyboard endpoints.")
+    logger.debug(f"Found {len(endpoints)} USB Keyboard endpoints.")
     return endpoints
 
 
