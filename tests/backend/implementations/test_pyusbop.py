@@ -181,11 +181,11 @@ class TestPyUSBOperation:
         with (
             patch(f"{CLASS_PATH}.usb_core_find", side_effect=MockNoBackendError("test")),
             patch(f"{CLASS_PATH}.NoBackendError", MockNoBackendError),
+            raises(MockNoBackendError),
         ):
             from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
 
-            with raises(MockNoBackendError):
-                get_usb_endpoints()
+            get_usb_endpoints()
 
     def test_get_usb_endpoints_devices_none(self):
         """
@@ -308,20 +308,21 @@ class TestPyUSBOperation:
         2. When the USBError has errno 60 (indicating a timeout),
             _parse_key returns True to signal that the loop should continue.
         """
-        with patch.dict(sys.modules, sys_modules_patch):
-
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.USBError", MockUSBError),
+        ):
             # Set up the endpoint to raise our MockUSBError
             mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
             mock_endpoint.read.side_effect = MockUSBError("mock error")
 
-            with patch(f"{CLASS_PATH}.USBError", MockUSBError):
-                # On a general error, the class should raise the exception:
-                with raises(MockUSBError):
-                    op._parse_key(mock_endpoint)
+            # On a general error, the class should raise the exception:
+            with raises(MockUSBError):
+                op._parse_key(mock_endpoint)
 
-                # On error 60, it should return True to continue the loop
-                mock_endpoint.read.side_effect.errno = 60
-                assert op._parse_key(mock_endpoint) is True
+            # On error 60, it should return True to continue the loop
+            mock_endpoint.read.side_effect.errno = 60
+            assert op._parse_key(mock_endpoint) is True
 
     def test_parse_key_exit_combos(self, mock_keyboard_device, op, caplog, sys_modules_patch):
         """
@@ -360,6 +361,7 @@ class TestPyUSBOperation:
             scancode[2] = 0x29
             mock_endpoint.read.return_value = scancode
             assert op._parse_key(mock_endpoint) is False
+
             assert any(
                 "Ctrl+ESC escape sequence detected! Exiting..." in record.message
                 for record in caplog.records
@@ -385,12 +387,13 @@ class TestPyUSBOperation:
             mock_endpoint.read.return_value = scancode
 
             mock_ascii.return_value = None
-
             op.debounce = None
+
             assert op._parse_key(mock_endpoint) is True
-            mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-            mock_ascii.assert_called_once_with(scancode)
-            op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+
+        mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+        mock_ascii.assert_called_once_with(scancode)
+        op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
     def test_run(self, mock_keyboard_device, op, sys_modules_patch):
         """
@@ -418,11 +421,11 @@ class TestPyUSBOperation:
 
             op.run()
 
-            mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
-            mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
-            mock_keyboard_device.attach_kernel_driver.assert_called_once_with(0)
-            mock_dispose.assert_called_once_with(mock_keyboard_device)
-            assert op._parse_key.call_count == 2
+        mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
+        mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
+        mock_keyboard_device.attach_kernel_driver.assert_called_once_with(0)
+        mock_dispose.assert_called_once_with(mock_keyboard_device)
+        assert op._parse_key.call_count == 2
 
     def test_run_detach_kernel_driver_usb_error(
         self, mock_keyboard_device, op, caplog, sys_modules_patch
@@ -450,9 +453,6 @@ class TestPyUSBOperation:
 
             op.run()
 
-        for record in caplog.records:
-            print(f"LOG: {record.levelname} {record.name} {record.message}")
-
         mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
         mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
         mock_dispose.assert_called_once_with(mock_keyboard_device)
@@ -474,11 +474,13 @@ class TestPyUSBOperation:
             - run() called once
             - main_usb returns None
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.PyUSBOp") as mock_op,
+        ):
             from kvm_serial.backend.implementations.pyusbop import main_usb
 
-            with patch(f"{CLASS_PATH}.PyUSBOp") as mock_op:
-                mock_op.return_value.run.return_value = None
-                assert main_usb(mock_serial) is None
-                mock_op.assert_called_once_with(mock_serial)
-                mock_op.return_value.run.assert_called_once()
+            mock_op.return_value.run.return_value = None
+            assert main_usb(mock_serial) is None
+            mock_op.assert_called_once_with(mock_serial)
+            mock_op.return_value.run.assert_called_once()
