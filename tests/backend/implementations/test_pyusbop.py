@@ -1,28 +1,66 @@
 import sys
-import pytest
+from pytest import fixture, raises
 from unittest.mock import patch, MagicMock
 from tests._utilities import MockSerial, mock_serial
 
+
 # Mock usb.core and related classes to prevent actual USB operations
-PYUSB_MOCKS = {
-    "usb": MagicMock(),
-    "usb.util": MagicMock(),
-    "usb.core": MagicMock(),
-    "usb.core.Device": MagicMock(),
-    "usb.core.Endpoint": MagicMock(),
-    "usb.core.Interface": MagicMock(),
-    "kvm_serial.utils.utils": MagicMock(),
-}
+@fixture
+def sys_modules_patch():
+    return {"usb.core": MagicMock()}
 
 
-@patch.dict(sys.modules, PYUSB_MOCKS)
+CLASS_PATH = "kvm_serial.backend.implementations.pyusbop"
+
+
+class MockNoBackendError(Exception):
+    """A mock exception for testing NoBackendError"""
+
+
+class MockUSBError(Exception):
+    """A mock exception for testing USBError"""
+
+    errno = -1
+
+
+class BaseErrorDevice:
+    """A base device for error-raising USB devices"""
+
+    def __init__(self, name="ErrorDevice"):
+        self.name = name
+
+    manufacturer = "Test"
+    product = "Device"
+
+
+class AttrErrorDevice(BaseErrorDevice):
+    """Device that raises AttributeError"""
+
+    def get_active_configuration(self):
+        raise AttributeError("mock attr error")
+
+
+class TypeErrorDevice(BaseErrorDevice):
+    """Device that raises TypeError"""
+
+    def get_active_configuration(self):
+        raise TypeError("mock type error")
+
+
+class USBErrorDevice(BaseErrorDevice):
+    """Device that raises usb.core.USBError"""
+
+    def get_active_configuration(self):
+        raise MockUSBError("mock usb error")
+
+
 @patch("serial.Serial", MockSerial)
 class TestPyUSBOperation:
     """
     Tests the PyUSBOp class
     """
 
-    @pytest.fixture
+    @fixture
     def mock_keyboard_device(self):
         """
         Creates and returns a mock USB keyboard device for testing purposes.
@@ -72,10 +110,9 @@ class TestPyUSBOperation:
 
         return mock_device
 
-    @pytest.fixture
-    @patch.dict(sys.modules, PYUSB_MOCKS)
-    @patch("kvm_serial.backend.implementations.pyusbop.get_usb_endpoints", return_value={})
-    def op(self, mock_serial, mock_keyboard_device):
+    @fixture
+    @patch(f"{CLASS_PATH}.get_usb_endpoints", return_value={})
+    def op(self, mock_serial, mock_keyboard_device, sys_modules_patch):
         """
         Fixture that creates and configures a PyUSBOp instance for testing.
         Args:
@@ -84,17 +121,17 @@ class TestPyUSBOperation:
         Returns:
             PyUSBOp: Configured PyUSBOp instance ready for use in tests.
         """
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend.implementations.pyusbop import PyUSBOp
 
-        from kvm_serial.backend.implementations.pyusbop import PyUSBOp
+            op = PyUSBOp(mock_serial)
+            op.hid_serial_out = MagicMock()
+            op.hid_serial_out.send_scancode.return_value = True
 
-        op = PyUSBOp(mock_serial)
-        op.hid_serial_out = MagicMock()
-        op.hid_serial_out.send_scancode.return_value = True
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            op.usb_endpoints = {"dead:beef": (mock_endpoint, mock_keyboard_device, 0)}
 
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
-        op.usb_endpoints = {"dead:beef": (mock_endpoint, mock_keyboard_device, 0)}
-
-        return op
+            return op
 
     def test_pyusbop_name_property(self, op):
         """Test that the name property returns 'usb'"""
@@ -111,46 +148,43 @@ class TestPyUSBOperation:
         - The endpoint, device, and interface number are correctly extracted and returned.
         - The underlying USB library functions are called as expected.
         """
-        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
-        import usb.core, usb.util
-
-        mock_interface = mock_keyboard_device.interfaces[0]
-        mock_endpoint = mock_interface.endpoints[0]
+        mock_intf = mock_keyboard_device.interfaces[0]
+        mock_endp = mock_keyboard_device.interfaces[0].endpoints[0]
 
         with (
-            patch.object(usb.core, "find", return_value=[mock_keyboard_device]),
-            patch.object(usb.util, "endpoint_direction", return_value=0x80),
-            patch.object(usb.util, "endpoint_type", return_value=0x03),
-            patch.object(usb.util, "find_descriptor", side_effect=[mock_interface, mock_endpoint]),
+            patch(f"{CLASS_PATH}.usb_core_find", return_value=[mock_keyboard_device]) as find,
+            patch(f"{CLASS_PATH}.find_descriptor", side_effect=[mock_intf, mock_endp]) as f_desc,
+            patch(f"{CLASS_PATH}.endpoint_direction", return_value=0x80),
+            patch(f"{CLASS_PATH}.endpoint_type", return_value=0x03),
         ):
+            from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
+
             endpoints = get_usb_endpoints()
             assert len(endpoints) == 1
             device_key = "dead:beef"
             assert device_key in endpoints
             endpoint, device, interface_number = endpoints[device_key]
-            assert endpoint == mock_endpoint
+            assert endpoint == mock_keyboard_device.interfaces[0].endpoints[0]
             assert device == mock_keyboard_device
             assert interface_number == 0
 
             # Verify that find_descriptor was called correctly
-            usb.core.find.assert_called_once_with(find_all=True)
+            find.assert_called_once_with(find_all=True)
+            assert f_desc.call_count == 2
 
     def test_get_usb_endpoints_no_backend_error(self):
         """
         Tests that get_usb_endpoints raises the correct exception when no USB backend is available.
         Mocks the usb.core.find method to simulate a backend error and ensures that it propagates
         """
-        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
-        import usb.core
-
-        class MockNoBackendError(BaseException):
-            pass
 
         with (
-            patch.object(usb.core, "find", side_effect=MockNoBackendError),
-            patch.object(usb.core, "NoBackendError", MockNoBackendError),
+            patch(f"{CLASS_PATH}.usb_core_find", side_effect=MockNoBackendError("test")),
+            patch(f"{CLASS_PATH}.NoBackendError", MockNoBackendError),
         ):
-            with pytest.raises(MockNoBackendError):
+            from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
+
+            with raises(MockNoBackendError):
                 get_usb_endpoints()
 
     def test_get_usb_endpoints_devices_none(self):
@@ -159,14 +193,13 @@ class TestPyUSBOperation:
         Patches usb.core.find to return None, simulating the absence of connected devices.
         Verifies the function returns an empty dict.
         """
-        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
-        import usb.core
+        with patch(f"{CLASS_PATH}.usb_core_find", return_value=None):
+            from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
 
-        with patch.object(usb.core, "find", return_value=None):
             endpoints = get_usb_endpoints()
             assert endpoints == {}
 
-    def test_get_usb_endpoints_device_exceptions(self, caplog):
+    def test_get_usb_endpoints_device_exceptions(self, caplog, sys_modules_patch):
         """
         Test the `get_usb_endpoints` function to ensure exception
         handling where raised by USB devices.
@@ -182,68 +215,54 @@ class TestPyUSBOperation:
         The test uses mock device classes to simulate each exception scenario and asserts
         both the return value and the presence of expected log messages in `caplog`.
         """
-        from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
-        import usb.core
-
-        class MockUSBError(Exception):
-            errno = -1
-
-        # Device that raises AttributeError
-        class AttrErrorDevice:
-            def get_active_configuration(self):
-                raise AttributeError("mock attr error")
-
-        # Device that raises TypeError
-        class TypeErrorDevice:
-            def get_active_configuration(self):
-                raise TypeError("mock type error")
-
-        # Device that raises usb.core.USBError
-        class USBErrorDevice:
-            manufacturer = "Test"
-            product = "Device"
-
-            def get_active_configuration(self):
-                raise MockUSBError("mock usb error")
 
         devices = [AttrErrorDevice(), TypeErrorDevice(), USBErrorDevice()]
         with (
-            patch.object(usb.core, "find", return_value=devices),
-            patch.object(usb.core, "USBError", MockUSBError),
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.usb_core_find", return_value=devices),
+            patch(f"{CLASS_PATH}.USBError", MockUSBError),
+            caplog.at_level("INFO"),
         ):
-            with caplog.at_level("INFO"):
-                endpoints = get_usb_endpoints()
+            from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
+
+            endpoints = get_usb_endpoints()
             assert endpoints == {}
+
             # Should log info for AttributeError and TypeError
-            assert any(
-                "Skipping non-device or non-interface object" in record.message
-                for record in caplog.records
-            )
+            for device in devices[:2]:
+                assert any(
+                    f"Skipping non-device or non-interface object: <{__name__}.{type(device).__name__} object"
+                    in record.message
+                    for record in caplog.records
+                )
+
             # Should log error for USBError
             assert any(
-                "USB error while processing device" in record.message for record in caplog.records
+                "USB error while processing device: 'Test Device" in record.message
+                for record in caplog.records
             )
 
-    def test_pyusbop_sleep_interval(self, op):
+    def test_pyusbop_sleep_interval(self, op, sys_modules_patch):
         """
         Test that _sleep_interval calls the callback with correct args and enforces the interval.
         Ensures timing and callback behavior are correct.
         """
-        import time
+        with patch.dict(sys.modules, sys_modules_patch):
+            import time
 
-        return_value = 42
-        interval = 0.05
+            return_value = 42
+            interval = 0.05
 
-        callback = MagicMock(return_value=return_value)
-        start = time.time()
-        result = op._sleep_interval(callback, interval, "ultimate_answer")
-        elapsed = time.time() - start
+            callback = MagicMock(return_value=return_value)
+            start = time.time()
+            result = op._sleep_interval(callback, interval, "ultimate_answer")
+            elapsed = time.time() - start
 
-        callback.assert_called_once_with("ultimate_answer")
-        assert result == return_value
-        assert elapsed >= interval
+            callback.assert_called_once_with("ultimate_answer")
+            assert result == return_value
+            assert elapsed >= interval
 
-    def test_parse_key(self, mock_keyboard_device, op):
+    def test_parse_key(self, mock_keyboard_device, op, sys_modules_patch):
         """
         Test _parse_key with mocked endpoint and scancode_to_ascii
         Patches scancode_to_ascii to return 'a', and mocks endpoint read to return a scancode
@@ -256,28 +275,30 @@ class TestPyUSBOperation:
         - The hid_serial_out.send_scancode method is called once with the correct scancode.
         - The call count for scancode_to_ascii is reset after the test.
         """
-        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
+        ):
+            # Patch scancode_to_ascii to return 'a'
+            mock_ascii.return_value = "a"
 
-        # Patch scancode_to_ascii to return 'a'
-        mock_ascii.return_value = "a"
+            # Mock endpoint
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
 
-        # Mock endpoint
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            # Simulate endpoint.read returning a scancode array
+            scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]  # 'a' key
+            mock_endpoint.read.return_value = scancode
 
-        # Simulate endpoint.read returning a scancode array
-        scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]  # 'a' key
-        mock_endpoint.read.return_value = scancode
+            assert op._parse_key(mock_endpoint) is True
 
-        assert op._parse_key(mock_endpoint) is True
+            mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+            mock_ascii.assert_called_once_with(scancode)
+            op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
-        mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-        mock_ascii.assert_called_once_with(scancode)
-        op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
+            # Reset the call_count for mock_ascii after the test
+            mock_ascii.reset_mock()
 
-        # Reset the call_count for mock_ascii after the test
-        mock_ascii.reset_mock()
-
-    def test_parse_key_usb_error(self, mock_keyboard_device, op):
+    def test_parse_key_usb_error(self, mock_keyboard_device, op, sys_modules_patch):
         """
         Test the behavior of _parse_key when USB endpoint read raises a USBError.
 
@@ -287,25 +308,22 @@ class TestPyUSBOperation:
         2. When the USBError has errno 60 (indicating a timeout),
             _parse_key returns True to signal that the loop should continue.
         """
-        import usb.core
+        with patch.dict(sys.modules, sys_modules_patch):
 
-        class MockUSBError(Exception):
-            errno = -1
+            # Set up the endpoint to raise our MockUSBError
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            mock_endpoint.read.side_effect = MockUSBError("mock error")
 
-        # Set up the endpoint to raise our MockUSBError
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
-        mock_endpoint.read.side_effect = MockUSBError("mock error")
+            with patch(f"{CLASS_PATH}.USBError", MockUSBError):
+                # On a general error, the class should raise the exception:
+                with raises(MockUSBError):
+                    op._parse_key(mock_endpoint)
 
-        with patch.object(usb.core, "USBError", MockUSBError):
-            # On a general error, the class should raise the exception:
-            with pytest.raises(MockUSBError):
-                op._parse_key(mock_endpoint)
+                # On error 60, it should return True to continue the loop
+                mock_endpoint.read.side_effect.errno = 60
+                assert op._parse_key(mock_endpoint) is True
 
-            # On error 60, it should return True to continue the loop
-            mock_endpoint.read.side_effect.errno = 60
-            assert op._parse_key(mock_endpoint) is True
-
-    def test_parse_key_exit_combos(self, mock_keyboard_device, op, caplog):
+    def test_parse_key_exit_combos(self, mock_keyboard_device, op, caplog, sys_modules_patch):
         """
         Test `_parse_key` handles Ctrl+C and Ctrl+ESC key combinations.
 
@@ -315,16 +333,16 @@ class TestPyUSBOperation:
           - When Ctrl+ESC is pressed: the method returns False, logs an exit warning, and does not continue processing.
           - The correct number of calls are made to scancode_to_ascii and serial output.
         """
-        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
+            caplog.at_level("WARNING"),
+        ):
+            # Ctrl+C scancode: [0x01, ..., 0x06, ...]
+            scancode = [0x01, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00]
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            mock_endpoint.read.return_value = scancode
 
-        # Ctrl+C scancode: [0x01, ..., 0x06, ...]
-        scancode = [0x01, 0x00, 0x06, 0x00, 0x00, 0x00, 0x00, 0x00]
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
-        mock_endpoint.read.return_value = scancode
-
-        mock_ascii.reset_mock()
-
-        with caplog.at_level("WARNING"):
             op.debounce = None
             assert op._parse_key(mock_endpoint) is True
             assert any(
@@ -348,10 +366,7 @@ class TestPyUSBOperation:
             )
             mock_ascii.assert_not_called()
 
-        # Reset the call_count for mock_ascii after the test
-        mock_ascii.reset_mock()
-
-    def test_parse_key_invalid_scancode(self, mock_keyboard_device, op):
+    def test_parse_key_invalid_scancode(self, mock_keyboard_device, op, sys_modules_patch):
         """Test _parse_key with an unmapped scancode (scancode_to_ascii returns None).
 
         Verifies when an invalid scancode is read:
@@ -360,25 +375,24 @@ class TestPyUSBOperation:
          - scancode_to_ascii called (patched to return None as if KeyError raised)
          - unmodified scancode sent anyway
         """
-        from kvm_serial.utils.utils import scancode_to_ascii as mock_ascii
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
+        ):
+            # Use a scancode that is not mapped (e.g., 0xFF)
+            scancode = [0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            mock_endpoint.read.return_value = scancode
 
-        # Use a scancode that is not mapped (e.g., 0xFF)
-        scancode = [0x00, 0x00, 0xFF, 0x00, 0x00, 0x00, 0x00, 0x00]
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
-        mock_endpoint.read.return_value = scancode
+            mock_ascii.return_value = None
 
-        mock_ascii.return_value = None
+            op.debounce = None
+            assert op._parse_key(mock_endpoint) is True
+            mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
+            mock_ascii.assert_called_once_with(scancode)
+            op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
 
-        op.debounce = None
-        assert op._parse_key(mock_endpoint) is True
-        mock_endpoint.read.assert_called_once_with(mock_endpoint.wMaxPacketSize, timeout=100)
-        mock_ascii.assert_called_once_with(scancode)
-        op.hid_serial_out.send_scancode.assert_called_once_with(scancode)
-
-        # Reset the call_count for mock_ascii after the test
-        mock_ascii.reset_mock()
-
-    def test_run(self, mock_keyboard_device, op):
+    def test_run(self, mock_keyboard_device, op, sys_modules_patch):
         """
         Test the normal execution of PyUSBOp.run() with a simulated USB keyboard device
 
@@ -389,27 +403,30 @@ class TestPyUSBOperation:
         - usb.util.dispose_resources is called to clean up resources after loop broken
         - Correct number of key parsing attempts are made
         """
-        import usb.util
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.USBError", MockUSBError),
+            patch(f"{CLASS_PATH}.dispose_resources") as mock_dispose,
+        ):
+            # Patch endpoint.read to simulate a single keypress, then stop
+            scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]
+            mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
+            mock_endpoint.read.return_value = scancode
 
-        # Patch endpoint.read to simulate a single keypress, then stop
-        scancode = [0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]
-        mock_endpoint = mock_keyboard_device.interfaces[0].endpoints[0]
-        mock_endpoint.read.return_value = scancode
+            # Patch _parse_key to return False after first call (to break loop)
+            op._parse_key = MagicMock(side_effect=[True, False])
 
-        # Patch _parse_key to return False after first call (to break loop)
-        op._parse_key = MagicMock(side_effect=[True, False])
-        # Patch is_kernel_driver_active and detach_kernel_driver
-
-        # Patch usb.util.dispose_resources
-        with patch.object(usb.util, "dispose_resources") as mock_dispose:
             op.run()
+
             mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
             mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
             mock_keyboard_device.attach_kernel_driver.assert_called_once_with(0)
             mock_dispose.assert_called_once_with(mock_keyboard_device)
             assert op._parse_key.call_count == 2
 
-    def test_run_detach_kernel_driver_usb_error(self, mock_keyboard_device, op, caplog):
+    def test_run_detach_kernel_driver_usb_error(
+        self, mock_keyboard_device, op, caplog, sys_modules_patch
+    ):
         """
         Test PyUSBOp.run() when detaching the kernel driver raises a usb.core.USBError.
 
@@ -421,31 +438,33 @@ class TestPyUSBOperation:
         - usb.util.dispose_resources called to clean up resources
         - Appropriate error messages are logged at the ERROR level
         """
-        import usb.util
-
-        class MockUSBError(Exception):
-            errno = 13
-
-        op._parse_key = MagicMock(side_effect=False)
-        mock_keyboard_device.detach_kernel_driver.side_effect = MockUSBError("mock error")
-
         with (
-            patch.object(usb.core, "USBError", MockUSBError),
-            patch.object(usb.util, "dispose_resources") as mock_dispose,
-            caplog.at_level("ERROR"),
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.dispose_resources") as mock_dispose,
+            patch(f"{CLASS_PATH}.USBError", MockUSBError),
+            caplog.at_level("ERROR", logger=f"{CLASS_PATH}"),
         ):
-            op.run()
-            mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
-            mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
-            mock_dispose.assert_called_once_with(mock_keyboard_device)
-            # Check error logs
-            assert any("mock error" in record.message for record in caplog.records)
-            assert any(
-                "This script does not seem to be running as superuser." in record.message
-                for record in caplog.records
-            )
+            op._parse_key = MagicMock(side_effect=False)
+            mock_keyboard_device.detach_kernel_driver.side_effect = MockUSBError("mock error")
+            mock_keyboard_device.detach_kernel_driver.side_effect.errno = 13
 
-    def test_legacy_main_usb(self, mock_serial):
+            op.run()
+
+        for record in caplog.records:
+            print(f"LOG: {record.levelname} {record.name} {record.message}")
+
+        mock_keyboard_device.is_kernel_driver_active.assert_called_once_with(0)
+        mock_keyboard_device.detach_kernel_driver.assert_called_once_with(0)
+        mock_dispose.assert_called_once_with(mock_keyboard_device)
+
+        # Check error logs
+        assert any("mock error" in record.message for record in caplog.records)
+        assert any(
+            "This script does not seem to be running as superuser." in record.message
+            for record in caplog.records
+        )
+
+    def test_legacy_main_usb(self, mock_serial, sys_modules_patch):
         """
         Test that main_usb instantiates PyUSBOp, calls run, and returns None.
         Mocks:
@@ -455,10 +474,11 @@ class TestPyUSBOperation:
             - run() called once
             - main_usb returns None
         """
-        from kvm_serial.backend.implementations.pyusbop import main_usb
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend.implementations.pyusbop import main_usb
 
-        with patch("kvm_serial.backend.implementations.pyusbop.PyUSBOp") as mock_op:
-            mock_op.return_value.run.return_value = None
-            assert main_usb(mock_serial) is None
-            mock_op.assert_called_once_with(mock_serial)
-            mock_op.return_value.run.assert_called_once()
+            with patch(f"{CLASS_PATH}.PyUSBOp") as mock_op:
+                mock_op.return_value.run.return_value = None
+                assert main_usb(mock_serial) is None
+                mock_op.assert_called_once_with(mock_serial)
+                mock_op.return_value.run.assert_called_once()
