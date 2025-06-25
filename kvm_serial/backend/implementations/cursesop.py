@@ -1,5 +1,6 @@
 # curses implementation
 import curses
+from curses import error as CursesError
 import logging
 
 from kvm_serial.utils import ascii_to_scancode, build_scancode, scancode_to_ascii
@@ -153,7 +154,7 @@ class CursesOp(KeyboardOp):
                     return False
 
             # Handle common exceptions and continue to next loop (return True):
-            except curses.error as e:
+            except CursesError as e:
                 if "no input" in str(e).lower():
                     curses.napms(100)
                     return True
@@ -174,7 +175,7 @@ class CursesOp(KeyboardOp):
             term.addstr("^C")
             self.sc = build_scancode(ascii_to_scancode("c")[2], 0x1)
 
-        except curses.error as e:
+        except CursesError as e:
             term.clear()
             term.addstr(e, end="")
 
