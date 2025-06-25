@@ -110,6 +110,9 @@ class TestKeyboardMain:
             # Patch KeyboardListener and logging.basicConfig
             from kvm_serial.backend import keyboard as kb_mod
 
+            # Ensure module is in sys.modules before reload
+            sys.modules["kvm_serial.backend.keyboard"] = kb_mod
+
             with (
                 patch.object(kb_mod, "KeyboardListener", MagicMock()),
                 patch("logging.basicConfig", lambda *a, **k: None),
@@ -121,11 +124,11 @@ class TestKeyboardMain:
                 assert kb_mod.KeyboardOp is mock_keyboardop
         finally:
             # Restore sys.modules to its original state
+            sys.modules.pop("implementations.baseop", None)
             if orig_kvm_serial is not None:
                 sys.modules["kvm_serial"] = orig_kvm_serial
             if orig_baseop is not None:
                 sys.modules["kvm_serial.backend.implementations.baseop"] = orig_baseop
-            sys.modules.pop("implementations.baseop", None)
 
 
 # Mock Serial
