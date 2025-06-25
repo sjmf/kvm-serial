@@ -1,12 +1,20 @@
+import sys
+from pytest import fixture
 from tests._utilities import MockSerial, mock_serial
 from unittest.mock import MagicMock, patch
 from typing import List
 from array import array
 import logging
 
+CLASS_PATH = "kvm_serial.backend.implementations.cursesop"
+
+
+class MockCursesError(Exception):
+    """A mock error for curses.error"""
+
 
 class MockTerminal(MagicMock):
-    """Mock class for curses term"""
+    """Mock class for curses mock_term"""
 
     def __init__(self):
         super().__init__()
@@ -19,10 +27,9 @@ class MockTerminal(MagicMock):
 
     def _getkey_impl(self):
         """Simulate key input"""
-        from curses import error as curses_error
 
         if not self._keys_to_return:
-            raise curses_error("no input")
+            raise MockCursesError("no input")
         return self._keys_to_return.pop(0)
 
     def set_keys(self, keys: List[str | bytes]):
@@ -30,203 +37,219 @@ class MockTerminal(MagicMock):
         self._keys_to_return = list(keys)
 
 
+@fixture
+def sys_modules_patch():
+    curses = MagicMock()
+    curses.error = MockCursesError
+    return {
+        "curses": curses,
+    }
+
+
+@fixture
+def mock_term():
+    """Get a mock terminal for testing curses"""
+    return MockTerminal()
+
+
 @patch("serial.Serial", MockSerial)
 class TestCursesOperation:
-    @patch("kvm_serial.backend.implementations.cursesop.curses.wrapper")
-    def test_cursesop_instantiation(self, mock_curses, mock_serial):
-        from kvm_serial.backend.implementations.cursesop import CursesOp
 
-        op = CursesOp(mock_serial)
-        assert op.name == "curses"
-        mock_curses.return_value = True
-        op.run()
-
-    @patch("kvm_serial.backend.implementations.cursesop.curses.raw")
-    @patch("kvm_serial.backend.implementations.cursesop.curses.napms")
-    def test_cursesop_input_loop(self, mock_napms, mock_raw, mock_serial):
-        from kvm_serial.backend.implementations.cursesop import CursesOp
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-
-        # Patch _parse_key to return True on first iteration, then False
-        with patch.object(CursesOp, "_parse_key") as patched:
-            patched.side_effect = [True, False]  # Iterator
-            op._input_loop(term)
-            assert patched.call_count == 2
-
-        # Verify terminal was properly initialized
-        term.nodelay.assert_called()
-        term.clear.assert_called()
-        term.keypad.assert_called()
-        term.addstr.assert_called()
-
-    def test_cursesop_parse_key_read_terminal(self, mock_serial):
-        """Test sending MODIFIER_CODES (strings) to hid_serial_out"""
-        from kvm_serial.backend.implementations.cursesop import CursesOp, MODIFIER_CODES
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-
-        # Check the verbose debug log on line 111
-        old_level = logging.root.level
-        logging.root.level = logging.DEBUG
-
-        # Iterate through the modifiers list
-        for code in MODIFIER_CODES:
-            term.reset_mock()
-            term.set_keys([code])
-            op._parse_key(term)
-
-            term.getkey.assert_called()
-            assert op.sc == array("B", [0, 0, MODIFIER_CODES[code], 0, 0, 0, 0, 0])
-
-        logging.root.level = old_level
-
-        # Test a single key
-        term.set_keys(["KEY_HOME"])
-        op._parse_key(term)
-        term.getkey.assert_called()
-        assert op.sc == array("B", [0, 0, 0x4A, 0, 0, 0, 0, 0])
-
-    def test_cursesop_parse_key_send_existing_scancode(self, mock_serial):
-        """Send a scancode, and check object state afterwards"""
-        from kvm_serial.backend.implementations.cursesop import CursesOp
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-        op.hid_serial_out = MagicMock()
-
-        # Scancode for letter 'a'
-        scancode = array("B", [0x02, 0, 0x04, 0, 0, 0, 0, 0])
-        op.sc = scancode
-        returnval = op._parse_key(term)
-
-        assert op.sc == None
-        assert returnval == True
-        op.hid_serial_out.send_scancode.assert_called_with(bytes(scancode))
-        op.hid_serial_out.release.assert_called_once()
-
-    @patch("kvm_serial.backend.implementations.cursesop.curses.napms")
-    def test_cursesop_no_input(self, mock_napms, mock_serial):
-        from kvm_serial.backend.implementations.cursesop import CursesOp
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-        op.hid_serial_out = MagicMock()
-
-        returnval = op._parse_key(term)
-
-        assert returnval == True
-        mock_napms.assert_called_with(100)
-        mock_napms.assert_called_once()
-
-    @patch("kvm_serial.backend.implementations.cursesop.ascii_to_scancode")
-    def test_cursesop_parse_key_single_ascii(self, mock_ascii, mock_serial):
-        """Send a scancode, and check object state afterwards"""
-        from kvm_serial.backend.implementations.cursesop import CursesOp
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-        op.hid_serial_out = MagicMock()
-
-        # Scancode for letter 'a'
-        key = "A"
-        scancode = array("B", [0x02, 0, 0x04, 0, 0, 0, 0, 0])
-        term.set_keys([key])
-        mock_ascii.return_value = scancode
-
-        returnval = op._parse_key(term)
-
-        assert returnval == True
-        assert op.sc == scancode
-        mock_ascii.assert_called_with(key)
-        term.addstr.assert_called_once()
-
-    @patch("kvm_serial.backend.implementations.cursesop.build_scancode")
-    def test_cursesop_parse_key_control_characters(self, mock_build, mock_serial):
-        """Send a control character, and check object state afterwards"""
-        from kvm_serial.backend.implementations.cursesop import CursesOp, CONTROL_CHARACTERS
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-        op.hid_serial_out = MagicMock()
-
-        # Also hit the verbose debug log on line 146 in this test, as a bonus
-        old_level = logging.root.level
-        logging.root.level = logging.DEBUG
-
-        # Test ^Q
-        key = b"\x11"
-        term.set_keys([key])
-
-        returnval = op._parse_key(term)
-        assert returnval == True
-        mock_build.assert_called_with(CONTROL_CHARACTERS[ord(key)], 0x1)
-
-        logging.root.level = old_level
-
-        # Test ESC
-        key = b"\x1b"
-        term.set_keys([key])
-
-        returnval = op._parse_key(term)
-        assert returnval == False
-        mock_build.assert_called_with(CONTROL_CHARACTERS[ord(key)], 0x1)
-
-    def test_cursesop_parse_key_errors(self, mock_serial):
-        """Test various errors which can be raised are handled correctly"""
-        from kvm_serial.backend.implementations.cursesop import CursesOp, MODIFIER_CODES
-        from curses import error as curses_error
-
-        op = CursesOp(mock_serial)
-        term = MockTerminal()
-        op.hid_serial_out = MagicMock()
-
-        # Test addwstr (L160)
-        term.getkey.side_effect = curses_error("addwstr")
-        returnval = op._parse_key(term)
-        term.clear.assert_called_once()
-        assert returnval == True
-        op.sc = None
-
-        # Test logging the error otherwise
-        term.getkey.reset_mock()
-        term.getkey.side_effect = curses_error("something-else")
-        returnval = op._parse_key(term)
-        term.addstr.assert_called_once()
-        term.clear.assert_called_once()
-        assert returnval == True
-        op.sc = None
-
-        # Test KeyError handling
-        term.addstr.reset_mock()
-        term.getkey.reset_mock()
-        term.getkey.side_effect = None
-        term.getkey.return_value = "nonexistent_key"
-        with patch.dict(MODIFIER_CODES, {}, clear=True):
-            returnval = op._parse_key(term)
-            term.addstr.assert_called()
-            assert "Ordinal missing" in str(term.addstr.call_args_list[0])
-            assert returnval == True
-
-        # Test ValueError handling
-        term.addstr.reset_mock()
-        term.getkey.reset_mock()
-        term.getkey.return_value = "A"
-        with patch(
-            "kvm_serial.backend.implementations.cursesop.ascii_to_scancode", side_effect=ValueError
+    @fixture
+    def op(self, mock_serial, sys_modules_patch):
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch("kvm_serial.utils.ascii_to_scancode") as mock_ascii,
+            patch("kvm_serial.utils.scancode_to_ascii") as mock_scancode,
+            patch("kvm_serial.utils.build_scancode") as mock_build,
         ):
-            returnval = op._parse_key(term)
-            term.addstr.assert_called()
+            from kvm_serial.backend.implementations.cursesop import CursesOp
+
+            op = CursesOp(mock_serial)
+            op.hid_serial_out = MagicMock()
+
+            # Store the mocked utils on the op object (a hack!)
+            # We *have* to patch kvm_serial.utils here, as it's next to impossible to patch later
+            setattr(op, "_mock_ascii", mock_ascii)
+            setattr(op, "_mock_scancode", mock_scancode)
+            setattr(op, "_mock_build", mock_build)
+
+            return op
+
+    def test_cursesop_instantiation(self, op, sys_modules_patch):
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.curses.wrapper") as mock_curses,
+        ):
+            assert op.name == "curses"
+            mock_curses.return_value = True
+            op.run()
+
+    def test_cursesop_input_loop(self, op, sys_modules_patch, mock_term):
+        with patch.dict(sys.modules, sys_modules_patch):
+
+            # Patch _parse_key to return True on first iteration, then False
+            with patch.object(op, "_parse_key") as patched:
+                patched.side_effect = [True, False]  # Iterator
+                op._input_loop(mock_term)
+                assert patched.call_count == 2
+
+            # Verify terminal was properly initialized
+            mock_term.nodelay.assert_called()
+            mock_term.clear.assert_called()
+            mock_term.keypad.assert_called()
+            mock_term.addstr.assert_called()
+
+    def test_cursesop_parse_key_read_terminal(self, op, sys_modules_patch, mock_term):
+        """Test sending MODIFIER_CODES (strings) to hid_serial_out"""
+
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend.implementations.cursesop import MODIFIER_CODES
+
+            # Check the verbose debug log on line 111
+            old_level = logging.root.level
+            logging.root.level = logging.DEBUG
+
+            # Iterate through the modifiers list
+            for code in MODIFIER_CODES:
+                mock_term.reset_mock()
+                mock_term.set_keys([code])
+                scancode = array("B", [0, 0, MODIFIER_CODES[code], 0, 0, 0, 0, 0])
+                op._mock_build.return_value = scancode
+
+                op._parse_key(mock_term)
+
+                mock_term.getkey.assert_called()
+                assert op.sc == scancode
+
+            logging.root.level = old_level
+
+            # Test a single key
+            scancode = array("B", [0, 0, 0x4A, 0, 0, 0, 0, 0])
+            mock_term.set_keys(["KEY_HOME"])
+            op._mock_build.return_value = scancode
+            op._parse_key(mock_term)
+            mock_term.getkey.assert_called()
+            assert op.sc == scancode
+
+    def test_cursesop_parse_key_send_existing_scancode(self, op, sys_modules_patch, mock_term):
+        """Send a scancode, and check object state afterwards"""
+        with patch.dict(sys.modules, sys_modules_patch):
+            # terminal has *no keys set* (no mock_term.set_keys(['a'])) for this test
+            # Scancode for letter 'a'
+            scancode = array("B", [0, 0, 0x04, 0, 0, 0, 0, 0])
+            op.sc = scancode
+            returnval = op._parse_key(mock_term)
+
+            assert op.sc == None
+            assert returnval == True
+            op.hid_serial_out.send_scancode.assert_called_with(bytes(scancode))
+            op.hid_serial_out.release.assert_called_once()
+
+    def test_cursesop_no_input(self, op, sys_modules_patch, mock_term):
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.curses.napms") as mock_napms,
+        ):
+            returnval = op._parse_key(mock_term)
+
+            assert returnval == True
+            mock_napms.assert_called_with(100)
+            mock_napms.assert_called_once()
+
+    def test_cursesop_parse_key_single_ascii(self, op, sys_modules_patch, mock_term):
+        """Send a scancode, and check object state afterwards"""
+
+        key = "a"
+        scancode = array("B", [0, 0, 0x04, 0, 0, 0, 0, 0])
+
+        with patch.dict(sys.modules, sys_modules_patch):
+            mock_term.set_keys([key])
+            op._mock_ascii.return_value = scancode
+            op._mock_build.return_value = scancode
+            returnval = op._parse_key(mock_term)
+
+            assert returnval == True
+            assert op.sc == scancode
+            mock_term.addstr.assert_called_once()
+            op._mock_ascii.assert_called_with(key)
+
+    def test_cursesop_parse_key_control_characters(self, op, sys_modules_patch, mock_term):
+        """Send a control character, and check object state afterwards"""
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend.implementations.cursesop import CONTROL_CHARACTERS
+
+            # Also hit the verbose debug log on line 146 in this test, as a bonus
+            old_level = logging.root.level
+            logging.root.level = logging.DEBUG
+
+            # Test ^Q
+            key = b"\x11"
+            mock_term.set_keys([key])
+
+            returnval = op._parse_key(mock_term)
+            assert returnval == True
+            op._mock_build.assert_called_with(CONTROL_CHARACTERS[ord(key)], 0x1)
+
+            logging.root.level = old_level
+
+            # Test ESC
+            key = b"\x1b"
+            mock_term.set_keys([key])
+
+            returnval = op._parse_key(mock_term)
+            assert returnval == False
+            op._mock_build.assert_called_with(CONTROL_CHARACTERS[ord(key)], 0x1)
+
+    def test_cursesop_parse_key_errors(self, op, sys_modules_patch, mock_term):
+        """Test various errors which can be raised are handled correctly"""
+        with patch.dict(sys.modules, sys_modules_patch):
+            from kvm_serial.backend.implementations.cursesop import MODIFIER_CODES
+
+            # Test addwstr (L160)
+            mock_term.getkey.side_effect = MockCursesError("addwstr")
+            returnval = op._parse_key(mock_term)
+            mock_term.clear.assert_called_once()
+            assert returnval == True
+            op.sc = None
+
+            # Test logging the error otherwise
+            mock_term.getkey.reset_mock()
+            mock_term.getkey.side_effect = MockCursesError("something-else")
+            returnval = op._parse_key(mock_term)
+            mock_term.addstr.assert_called_once()
+            mock_term.clear.assert_called_once()
+            assert returnval == True
+            op.sc = None
+
+            # Test KeyError handling
+            mock_term.addstr.reset_mock()
+            mock_term.getkey.reset_mock()
+            mock_term.getkey.side_effect = None
+            mock_term.getkey.return_value = "nonexistent_key"
+            with patch.dict(MODIFIER_CODES, {}, clear=True):
+                returnval = op._parse_key(mock_term)
+                mock_term.addstr.assert_called()
+                assert "Ordinal missing" in str(mock_term.addstr.call_args_list[0])
+                assert returnval == True
+
+            # Test ValueError handling
+            mock_term.addstr.reset_mock()
+            mock_term.getkey.reset_mock()
+            mock_term.getkey.return_value = "A"
+
+            op._mock_ascii.side_effect = ValueError
+            returnval = op._parse_key(mock_term)
+            op._mock_ascii.side_effect = None
+            mock_term.addstr.assert_called()
             assert returnval == True
 
-        # Test KeyboardInterrupt handling does not break
-        term.getkey.side_effect = KeyboardInterrupt
-        returnval = op._parse_key(term)
-        assert returnval == True
+            # Test KeyboardInterrupt handling does not break
+            mock_term.getkey.side_effect = KeyboardInterrupt
+            returnval = op._parse_key(mock_term)
+            assert returnval == True
 
-    def test_legacy_main_curses(self, mock_serial):
+    def test_legacy_main_curses(self, sys_modules_patch, mock_serial):
         """
         Test that main_curses instantiates CursesOp, calls run, and returns None.
         Mocks:
@@ -236,9 +259,12 @@ class TestCursesOperation:
             - run() called once
             - main_curses returns None
         """
-        from kvm_serial.backend.implementations.cursesop import main_curses
+        with (
+            patch.dict(sys.modules, sys_modules_patch),
+            patch(f"{CLASS_PATH}.CursesOp") as mock_op,
+        ):
+            from kvm_serial.backend.implementations.cursesop import main_curses
 
-        with patch("kvm_serial.backend.implementations.cursesop.CursesOp") as mock_op:
             mock_op.return_value.run.return_value = None
             assert main_curses(mock_serial) is None
             mock_op.assert_called_once_with(mock_serial)
