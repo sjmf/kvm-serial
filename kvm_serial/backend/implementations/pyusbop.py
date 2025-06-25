@@ -5,7 +5,7 @@ from usb.core import Endpoint, USBError, NoBackendError, find as usb_core_find
 from usb.util import find_descriptor, endpoint_direction, endpoint_type, dispose_resources
 from usb.util import ENDPOINT_IN, ENDPOINT_TYPE_INTR
 from typing import Callable
-from kvm_serial.utils.utils import scancode_to_ascii
+from kvm_serial.utils import scancode_to_ascii
 from .baseop import KeyboardOp
 
 logger = logging.getLogger(__name__)

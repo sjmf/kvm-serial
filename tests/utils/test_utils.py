@@ -2,7 +2,7 @@
 
 import pytest
 from array import array
-from kvm_serial.utils.utils import (
+from kvm_serial.utils import (
     scancode_to_ascii,
     ascii_to_scancode,
     build_scancode,

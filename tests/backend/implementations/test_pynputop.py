@@ -114,7 +114,7 @@ class TestPynputOperation:
 
     def test_pynputop_on_press_alphanumeric(self, op):
         """Test pressing single characters"""
-        from kvm_serial.utils.utils import ascii_to_scancode, merge_scancodes
+        from kvm_serial.utils import ascii_to_scancode, merge_scancodes
 
         # Test single characters
         for char in ["a", "l", "k", "q", "z"]:
@@ -134,7 +134,7 @@ class TestPynputOperation:
         """Complex PynputOp test case:
         Test presses, releases, and presses of syskeys and modifiers all together
         """
-        from kvm_serial.utils.utils import ascii_to_scancode, merge_scancodes
+        from kvm_serial.utils import ascii_to_scancode, merge_scancodes
 
         # Press shift_l, then 'a', then ctrl, then 'b', then release shift_l, then press 'c'
         shift = self.modifier_keys["shift_l"]

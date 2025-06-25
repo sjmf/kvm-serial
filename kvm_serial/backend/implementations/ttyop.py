@@ -4,7 +4,7 @@ import tty
 import termios
 import logging
 import time
-from kvm_serial.utils.utils import ascii_to_scancode
+from kvm_serial.utils import ascii_to_scancode
 from .baseop import KeyboardOp
 
 logger = logging.getLogger(__name__)

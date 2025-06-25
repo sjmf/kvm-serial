@@ -2,7 +2,7 @@
 import curses
 import logging
 
-from kvm_serial.utils.utils import ascii_to_scancode, build_scancode, scancode_to_ascii
+from kvm_serial.utils import ascii_to_scancode, build_scancode, scancode_to_ascii
 from .baseop import KeyboardOp
 
 logger = logging.getLogger(__name__)

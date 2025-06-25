@@ -9,7 +9,7 @@ def sys_modules_patch():
     return {
         "tty": MagicMock(),
         "termios": MagicMock(),
-        "kvm_serial.utils.utils": MagicMock(),
+        "kvm_serial.utils": MagicMock(),
     }
 
 
@@ -98,7 +98,7 @@ class TestTTYOperation:
             - _parse_key returns True
         """
         with patch.dict(sys.modules, sys_modules_patch):
-            from kvm_serial.utils.utils import ascii_to_scancode as mock_scancode
+            from kvm_serial.utils import ascii_to_scancode as mock_scancode
 
             mock_scancode.return_value = [0, 0, 42, 0, 0, 0, 0, 0]
 
