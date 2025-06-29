@@ -121,7 +121,7 @@ class TestPyUSBOperation:
         Returns:
             PyUSBOp: Configured PyUSBOp instance ready for use in tests.
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations.pyusbop import PyUSBOp
 
             op = PyUSBOp(mock_serial)
@@ -218,7 +218,7 @@ class TestPyUSBOperation:
 
         devices = [AttrErrorDevice(), TypeErrorDevice(), USBErrorDevice()]
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.usb_core_find", return_value=devices),
             patch(f"{CLASS_PATH}.USBError", MockUSBError),
             caplog.at_level("INFO"),
@@ -247,7 +247,7 @@ class TestPyUSBOperation:
         Test that _sleep_interval calls the callback with correct args and enforces the interval.
         Ensures timing and callback behavior are correct.
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             import time
 
             return_value = 42
@@ -276,7 +276,7 @@ class TestPyUSBOperation:
         - The call count for scancode_to_ascii is reset after the test.
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
         ):
             # Patch scancode_to_ascii to return 'a'
@@ -309,7 +309,7 @@ class TestPyUSBOperation:
             _parse_key returns True to signal that the loop should continue.
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.USBError", MockUSBError),
         ):
             # Set up the endpoint to raise our MockUSBError
@@ -335,7 +335,7 @@ class TestPyUSBOperation:
           - The correct number of calls are made to scancode_to_ascii and serial output.
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
             caplog.at_level("WARNING"),
         ):
@@ -378,7 +378,7 @@ class TestPyUSBOperation:
          - unmodified scancode sent anyway
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.scancode_to_ascii") as mock_ascii,
         ):
             # Use a scancode that is not mapped (e.g., 0xFF)
@@ -407,7 +407,7 @@ class TestPyUSBOperation:
         - Correct number of key parsing attempts are made
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.USBError", MockUSBError),
             patch(f"{CLASS_PATH}.dispose_resources") as mock_dispose,
         ):
@@ -442,7 +442,7 @@ class TestPyUSBOperation:
         - Appropriate error messages are logged at the ERROR level
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.dispose_resources") as mock_dispose,
             patch(f"{CLASS_PATH}.USBError", MockUSBError),
             caplog.at_level("ERROR", logger=f"{CLASS_PATH}"),
@@ -475,7 +475,7 @@ class TestPyUSBOperation:
             - main_usb returns None
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.PyUSBOp") as mock_op,
         ):
             from kvm_serial.backend.implementations.pyusbop import main_usb

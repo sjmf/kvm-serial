@@ -58,7 +58,7 @@ class TestCursesOperation:
     @fixture
     def op(self, mock_serial, sys_modules_patch):
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch("kvm_serial.utils.ascii_to_scancode") as mock_ascii,
             patch("kvm_serial.utils.scancode_to_ascii") as mock_scancode,
             patch("kvm_serial.utils.build_scancode") as mock_build,
@@ -78,7 +78,7 @@ class TestCursesOperation:
 
     def test_cursesop_instantiation(self, op, sys_modules_patch):
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.curses.wrapper") as mock_curses,
         ):
             assert op.name == "curses"
@@ -86,7 +86,7 @@ class TestCursesOperation:
             op.run()
 
     def test_cursesop_input_loop(self, op, sys_modules_patch, mock_term):
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
 
             # Patch _parse_key to return True on first iteration, then False
             with patch.object(op, "_parse_key") as patched:
@@ -103,7 +103,7 @@ class TestCursesOperation:
     def test_cursesop_parse_key_read_terminal(self, op, sys_modules_patch, mock_term):
         """Test sending MODIFIER_CODES (strings) to hid_serial_out"""
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations.cursesop import MODIFIER_CODES
 
             # Check the verbose debug log on line 111
@@ -134,7 +134,7 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_send_existing_scancode(self, op, sys_modules_patch, mock_term):
         """Send a scancode, and check object state afterwards"""
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             # terminal has *no keys set* (no mock_term.set_keys(['a'])) for this test
             # Scancode for letter 'a'
             scancode = array("B", [0, 0, 0x04, 0, 0, 0, 0, 0])
@@ -148,7 +148,7 @@ class TestCursesOperation:
 
     def test_cursesop_no_input(self, op, sys_modules_patch, mock_term):
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.curses.napms") as mock_napms,
         ):
             returnval = op._parse_key(mock_term)
@@ -163,7 +163,7 @@ class TestCursesOperation:
         key = "a"
         scancode = array("B", [0, 0, 0x04, 0, 0, 0, 0, 0])
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             mock_term.set_keys([key])
             op._mock_ascii.return_value = scancode
             op._mock_build.return_value = scancode
@@ -176,7 +176,7 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_control_characters(self, op, sys_modules_patch, mock_term):
         """Send a control character, and check object state afterwards"""
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations.cursesop import CONTROL_CHARACTERS
 
             # Also hit the verbose debug log on line 146 in this test, as a bonus
@@ -203,7 +203,7 @@ class TestCursesOperation:
 
     def test_cursesop_parse_key_errors(self, op, sys_modules_patch, mock_term):
         """Test various errors which can be raised are handled correctly"""
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations.cursesop import MODIFIER_CODES
 
             # Test addwstr (L160)
@@ -260,7 +260,7 @@ class TestCursesOperation:
             - main_curses returns None
         """
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch(f"{CLASS_PATH}.CursesOp") as mock_op,
         ):
             from kvm_serial.backend.implementations.cursesop import main_curses

@@ -30,7 +30,7 @@ class TestMouse:
         """Test basic MouseListener initialization"""
 
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
@@ -47,7 +47,7 @@ class TestMouse:
             - thread.start(), thread.join(), and thread.stop() are called as expected
         """
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.Listener") as mock_listener_cls,
         ):
             from kvm_serial.backend.mouse import MouseListener
@@ -96,7 +96,7 @@ class TestMouse:
             return expected_data[:7] if len(expected_data) > 7 else expected_data.ljust(7, b"\x00")
 
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
@@ -158,7 +158,7 @@ class TestMouse:
             - on_click returns True
         """
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
@@ -211,7 +211,7 @@ class TestMouse:
             - on_scroll returns True
         """
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
@@ -264,7 +264,7 @@ class TestMouseMain:
         Test mouse_main: mocks Serial and MouseListener, simulates thread loop and KeyboardInterrupt.
         """
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
             patch("kvm_serial.backend.mouse.MouseListener") as mock_mouse_listener_cls,
         ):
@@ -296,7 +296,7 @@ class TestMouseMain:
         Test mouse_main: MouseListener.start raises KeyboardInterrupt, should exit gracefully.
         """
         with (
-            patch.dict(sys.modules, mouse_mocks),
+            patch.dict("sys.modules", mouse_mocks),
             patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
             patch("kvm_serial.backend.mouse.MouseListener") as mock_mouse_listener_cls,
         ):

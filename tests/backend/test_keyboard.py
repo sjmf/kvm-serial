@@ -34,7 +34,7 @@ class TestKeyboardMain:
             - KeyboardListener is instantiated with correct args
             - start() and thread.join() are called
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend import keyboard as kb_mod
 
             # Prepare sys.argv for the script

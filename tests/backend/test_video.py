@@ -17,7 +17,7 @@ class TestCameraProperties:
     def test_camera_properties_initialization(self, sys_modules_patch):
         """Test basic initialization of CameraProperties"""
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.video import CameraProperties
 
             props = CameraProperties(
@@ -32,7 +32,7 @@ class TestCameraProperties:
 
     def test_camera_properties_str(self, sys_modules_patch):
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.video import CameraProperties
 
             """Test string representation of CameraProperties"""
@@ -48,7 +48,7 @@ class TestCaptureDevice:
     def test_capture_device_initialization(self, sys_modules_patch):
         """Test basic initialization of CaptureDevice"""
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.video import CaptureDevice
 
             device = CaptureDevice()
@@ -60,7 +60,7 @@ class TestCaptureDevice:
     def test_capture_device_thread_requirement(self, sys_modules_patch):
         """Test that non-threaded CaptureDevice raises exception on run"""
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.video import CaptureDevice, CaptureDeviceException
 
             device = CaptureDevice(threaded=False)
@@ -71,7 +71,7 @@ class TestCaptureDevice:
     def test_capture_device_with_camera(self, mock_video_capture, sys_modules_patch):
         """Test CaptureDevice initialization with a camera"""
 
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.video import CaptureDevice
 
             mock_cam = MagicMock()

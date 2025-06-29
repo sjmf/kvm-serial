@@ -24,7 +24,7 @@ class TestTTYOperation:
         """
         Fixture that creates and configures a TtyOp instance for testing.
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations.ttyop import TtyOp
 
             op = TtyOp(mock_serial)
@@ -35,7 +35,7 @@ class TestTTYOperation:
         """
         Test that the 'name' property of TtyOp returns 'tty'.
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             assert op.name == "tty"
 
     def test_ttyop_input_loop(self, op, sys_modules_patch):
@@ -51,7 +51,7 @@ class TestTTYOperation:
 
         # Patch _parse_key for two iterations, and time.sleep for checking
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch.object(op, "_parse_key", side_effect=[True, False]),
             patch("time.sleep") as mock_sleep,
         ):
@@ -73,7 +73,7 @@ class TestTTYOperation:
         """
 
         # Patch termios.error to the class, and tty.setcbreak to raise it
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             import termios, tty
 
             with (
@@ -97,7 +97,7 @@ class TestTTYOperation:
             - hid_serial_out.release is called once
             - _parse_key returns True
         """
-        with patch.dict(sys.modules, sys_modules_patch):
+        with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.utils import ascii_to_scancode as mock_scancode
 
             mock_scancode.return_value = [0, 0, 42, 0, 0, 0, 0, 0]
@@ -135,7 +135,7 @@ class TestTTYOperation:
         """
 
         with (
-            patch.dict(sys.modules, sys_modules_patch),
+            patch.dict("sys.modules", sys_modules_patch),
             patch("kvm_serial.backend.implementations.ttyop.TtyOp") as mock_op,
         ):
             # Import main_tty after patching TtyOp so the patch is in effect
