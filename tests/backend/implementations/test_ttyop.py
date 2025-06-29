@@ -3,13 +3,14 @@ import pytest
 from unittest.mock import patch, MagicMock
 from tests._utilities import MockSerial, mock_serial
 
+CLASS_PATH = "kvm_serial.backend.implementations.ttyop"
+
 
 @pytest.fixture
 def sys_modules_patch():
     return {
         "tty": MagicMock(),
         "termios": MagicMock(),
-        "kvm_serial.utils": MagicMock(),
     }
 
 
@@ -84,7 +85,7 @@ class TestTTYOperation:
                     op.run()
                     assert "Run this app from a terminal!" in str(e.value)
 
-    def test_ttyop_parse_key(self, op, caplog, sys_modules_patch):
+    def test_ttyop_parse_key(self, caplog, sys_modules_patch, mock_serial):
         """
         Test that _parse_key reads a character, converts it to a scancode, logs, and sends it.
         Mocks:
@@ -97,10 +98,17 @@ class TestTTYOperation:
             - hid_serial_out.release is called once
             - _parse_key returns True
         """
-        with patch.dict("sys.modules", sys_modules_patch):
-            from kvm_serial.utils import ascii_to_scancode as mock_scancode
-
+        with (
+            patch.dict("sys.modules", sys_modules_patch),
+            patch(f"{CLASS_PATH}.ascii_to_scancode") as mock_scancode,
+        ):
             mock_scancode.return_value = [0, 0, 42, 0, 0, 0, 0, 0]
+            from kvm_serial.backend.implementations.ttyop import TtyOp
+
+            # We cannot use the op mock here, because ascii_to_scancode will already be initialised
+            # when TtyOp is, resulting in a patching failure. We must re-create it here.
+            op = TtyOp(mock_serial)
+            op.hid_serial_out = MagicMock()
 
             with patch.object(sys.stdin, "read", lambda n=-1: "a"):
                 with caplog.at_level("DEBUG"):
@@ -121,8 +129,6 @@ class TestTTYOperation:
             )
             op.hid_serial_out.release.assert_called_once()
 
-            mock_scancode.reset_mock()
-
     def test_legacy_main_tty(self, mock_serial, sys_modules_patch):
         """
         Test that main_tty instantiates TtyOp, calls run, and returns None.
@@ -136,7 +142,7 @@ class TestTTYOperation:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.ttyop.TtyOp") as mock_op,
+            patch(f"{CLASS_PATH}.TtyOp") as mock_op,
         ):
             # Import main_tty after patching TtyOp so the patch is in effect
             from kvm_serial.backend.implementations import ttyop
