@@ -1,4 +1,3 @@
-import sys
 from pytest import fixture
 from tests._utilities import MockSerial, mock_serial
 from unittest.mock import MagicMock, patch
