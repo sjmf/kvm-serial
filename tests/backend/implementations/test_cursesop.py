@@ -42,6 +42,7 @@ def sys_modules_patch():
     curses.error = MockCursesError
     return {
         "curses": curses,
+        "serial": MagicMock(),
     }
 
 
@@ -54,6 +55,17 @@ def mock_term():
 @patch("serial.Serial", MockSerial)
 class TestCursesOperation:
 
+    def _get_op_unsafe(self, mock_ser):
+        """
+        UNSAFE method to get CursesOp implementation
+        Use fixture if in doubt.
+        """
+        from kvm_serial.backend.implementations.cursesop import CursesOp
+
+        op = CursesOp(mock_ser)
+        op.hid_serial_out = MagicMock()
+        return op
+
     @fixture
     def op(self, mock_serial, sys_modules_patch):
         with (
@@ -62,10 +74,7 @@ class TestCursesOperation:
             patch("kvm_serial.utils.scancode_to_ascii") as mock_scancode,
             patch("kvm_serial.utils.build_scancode") as mock_build,
         ):
-            from kvm_serial.backend.implementations.cursesop import CursesOp
-
-            op = CursesOp(mock_serial)
-            op.hid_serial_out = MagicMock()
+            op = self._get_op_unsafe(mock_serial)
 
             # Store the mocked utils on the op object (a hack!)
             # We *have* to patch kvm_serial.utils here, as it's next to impossible to patch later
