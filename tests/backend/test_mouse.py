@@ -9,6 +9,9 @@ def sys_modules_patch():
     # Define a simple Monitor namedtuple for mocking get_monitors
     Monitor = namedtuple("Monitor", ["x", "y", "width", "height", "is_primary"])
     primary_monitor = Monitor(x=0, y=0, width=1920, height=1080, is_primary=True)
+
+    # Mock modules which include Pynput imports before importing
+    # These DO NOT WORK headless, i.e. in Github Actions runner
     return {
         "serial": MagicMock(),
         "screeninfo": MagicMock(),
@@ -17,7 +20,6 @@ def sys_modules_patch():
         "pynput.mouse": MagicMock(),
         "pynput.mouse.Button": MagicMock(),
         "pynput.mouse.Listener": MagicMock(),
-        "kvm_serial.utils.communication": MagicMock(),
     }
 
 
@@ -25,8 +27,6 @@ def sys_modules_patch():
 @patch("serial.Serial", MockSerial)
 class TestMouse:
 
-    # Mock modules which include Pynput imports before importing
-    # These DO NOT WORK headless, i.e. in Github Actions runner
     def test_mouse_listener(self, mock_serial, sys_modules_patch):
         """Test basic MouseListener initialization"""
 
@@ -36,7 +36,7 @@ class TestMouse:
         ):
             from kvm_serial.backend.mouse import MouseListener
 
-            listener = MouseListener(mock_serial)
+            MouseListener(mock_serial)
             mock_datacomm.assert_called_once_with(mock_serial)
 
     def test_thread_calls(self, mock_serial, sys_modules_patch):
@@ -49,14 +49,13 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.Listener") as mock_listener_cls,
+            patch("kvm_serial.backend.mouse.Listener") as mock_thread,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
-            mock_thread = MagicMock()
-            mock_listener_cls.return_value = mock_thread
-
             listener = MouseListener(mock_serial)
+            listener.thread = mock_thread
+
             listener.run()
             mock_thread.start.assert_called_once()
             mock_thread.join.assert_called_once()
@@ -71,7 +70,6 @@ class TestMouse:
             mock_thread.stop.assert_called_once()
             mock_thread.join.assert_called_once()
             mock_thread.reset_mock()
-            mock_listener_cls.reset_mock()
 
     def test_on_move(self, mock_serial, sys_modules_patch):
         """
@@ -98,16 +96,13 @@ class TestMouse:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
-            # Set up the mock DataComm instance
-            mock_comm = MagicMock()
-            mock_datacomm.return_value = mock_comm
-
             # Set up a MouseListener with known screen size
             listener = MouseListener(mock_serial)
+            listener.comm = mock_comm
             listener.width = 1920
             listener.height = 1080
 
@@ -160,15 +155,16 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
-            mock_comm = MagicMock()
-            mock_datacomm.return_value = mock_comm
             listener = MouseListener(mock_serial)
+
+            listener.comm = mock_comm
             listener.width = 1920
             listener.height = 1080
+
             # Mock button values
             left_button = MagicMock()
             right_button = MagicMock()
@@ -213,15 +209,15 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
-            mock_comm = MagicMock()
-            mock_datacomm.return_value = mock_comm
             listener = MouseListener(mock_serial)
+            listener.comm = mock_comm
             listener.width = 1920
             listener.height = 1080
+
             # Test scroll up
             result_up = listener.on_scroll(100, 200, 0, 1)
             expected_data_up = bytearray(b"\x01\x00\x00\x00\x01")
@@ -250,6 +246,7 @@ class TestMouse:
 
 # ---
 # Test for mouse_main
+@patch("serial.Serial", MockSerial)
 class TestMouseMain:
     @pytest.fixture
     def mock_args(self):
@@ -267,29 +264,24 @@ class TestMouseMain:
         with (
             patch.dict("sys.modules", sys_modules_patch),
             patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
-            patch("kvm_serial.backend.mouse.MouseListener") as mock_mouse_listener_cls,
+            patch("kvm_serial.backend.mouse.MouseListener") as mock_listener,
         ):
-            mock_parse_args.return_value = mock_args
-            # Prepare mock Serial and MouseListener
-            mock_serial = MagicMock()
-            mock_serial_cls.return_value = mock_serial
-            mock_listener = MagicMock()
             # Simulate thread.is_alive() True once, then False
             mock_listener.thread.is_alive.side_effect = [True, False]
-            mock_mouse_listener_cls.return_value = mock_listener
+            mock_parse_args.return_value = mock_args
 
             # Patching done, import the class:
             from kvm_serial.backend.mouse import mouse_main
 
             mouse_main()
 
-        # Check Serial and MouseListener were called with correct args
-        mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
-        mock_mouse_listener_cls.assert_called_once_with(mock_serial, block=True)
-        # MouseListener.start() should be called
-        mock_listener.start.assert_called_once()
-        # MouseListener.thread.join should be called at least once
-        assert mock_listener.thread.join.call_count >= 1
+            # Check Serial and MouseListener were called with correct args
+            mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
+            mock_listener.assert_called_once_with(mock_serial, block=True)
+            # MouseListener.start() should be called
+            mock_listener.start.assert_called_once()
+            # MouseListener.thread.join should be called at least once
+            assert mock_listener.thread.join.call_count >= 1
 
     @patch("argparse.ArgumentParser.parse_args")
     def test_mouse_main_keyboardinterrupt_on_start(
