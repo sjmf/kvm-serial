@@ -7,7 +7,9 @@ CLASS_PATH = "kvm_serial.backend.implementations.baseop"
 
 @fixture
 def sys_modules_patch():
-    return {}
+    return {
+        "serial": MagicMock(),
+    }
 
 
 class TestKeyboardOpImplementation:
