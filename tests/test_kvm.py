@@ -7,6 +7,7 @@ import sys
     sys.modules,
     {
         "tk": MagicMock(),
+        "_tkinter": MagicMock(),
         "cv2": MagicMock(),
         "numpy": MagicMock(),
     },
