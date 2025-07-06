@@ -22,9 +22,9 @@ jobs:
 
       - name: Run tests
         run: >
-          pytest --cov --cov-branch --cov-report=xml --junitxml=./junit.xml
-            --ignore=tests/test_kvm.py
-            --ignore=tests/backend/test_mouse.py 
+          pytest tests/backend/ --cov --cov-append --cov-branch --cov-report=xml 
+            --junitxml=./junit.xml 
+            --ignore=tests/backend/test_mouse.py
 
       - name: Upload test results to Codecov
         if: ${{ !cancelled() }}
