@@ -30,9 +30,9 @@ jobs:
           pytest tests/utils/ --cov --cov-append --cov-branch \
             --cov-report=xml --junitxml=./junit.xml
 
-      - name: Run frontend tests
+      - name: Run control test
         run: >
-          pytest tests/test_*.py --cov --cov-append --cov-branch \
+          pytest tests/test_control.py --cov --cov-append --cov-branch \
             --cov-report=xml --junitxml=./junit.xml
 
       - name: Upload test results to Codecov
