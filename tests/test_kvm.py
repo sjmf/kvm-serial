@@ -6,6 +6,7 @@ import sys
 @patch.dict(
     sys.modules,
     {
+        "tk": MagicMock(),
         "cv2": MagicMock(),
         "numpy": MagicMock(),
     },
