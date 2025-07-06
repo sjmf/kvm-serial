@@ -1,6 +1,5 @@
 import sys
 import glob
-import serial
 import termios
 import logging
 from serial import Serial, SerialException
@@ -107,7 +106,7 @@ def list_serial_ports():
     for port in ports:
         try:
             # Only import if working
-            s = serial.Serial(port)
+            s = Serial(port)
             s.close()
             result.append(port)
         except (OSError, ImportError, FileNotFoundError, SerialException) as e:
