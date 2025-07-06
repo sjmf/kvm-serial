@@ -257,18 +257,25 @@ class TestMouseMain:
         return args
 
     @patch("argparse.ArgumentParser.parse_args")
-    def test_mouse_main_basic(self, mock_parse_args, mock_args, sys_modules_patch):
+    def test_mouse_main_basic(self, mock_parse_args, mock_args, mock_serial, sys_modules_patch):
         """
         Test mouse_main: mocks Serial and MouseListener, simulates thread loop and KeyboardInterrupt.
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
             patch("kvm_serial.backend.mouse.Serial") as mock_serial_cls,
-            patch("kvm_serial.backend.mouse.MouseListener") as mock_listener,
+            patch("kvm_serial.backend.mouse.MouseListener") as mock_listener_cls,
         ):
+            mock_listener_instance = MagicMock()
+            mock_thread = MagicMock()
             # Simulate thread.is_alive() True once, then False
-            mock_listener.thread.is_alive.side_effect = [True, False]
+            mock_thread.is_alive.side_effect = [True, False]
+            mock_listener_instance.thread = mock_thread
+            mock_listener_cls.return_value = mock_listener_instance
+
             mock_parse_args.return_value = mock_args
+
+            serial_instance = mock_serial_cls.return_value
 
             # Patching done, import the class:
             from kvm_serial.backend.mouse import mouse_main
@@ -277,11 +284,11 @@ class TestMouseMain:
 
             # Check Serial and MouseListener were called with correct args
             mock_serial_cls.assert_called_once_with("/dev/ttyUSB0", 115200)
-            mock_listener.assert_called_once_with(mock_serial, block=True)
+            mock_listener_cls.assert_called_once_with(serial_instance, block=True)
             # MouseListener.start() should be called
-            mock_listener.start.assert_called_once()
+            mock_listener_instance.start.assert_called_once()
             # MouseListener.thread.join should be called at least once
-            assert mock_listener.thread.join.call_count >= 1
+            assert mock_thread.join.call_count >= 1
 
     @patch("argparse.ArgumentParser.parse_args")
     def test_mouse_main_keyboardinterrupt_on_start(
