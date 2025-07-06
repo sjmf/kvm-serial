@@ -4,7 +4,7 @@ from curses import error as CursesError
 import logging
 
 from kvm_serial.utils import ascii_to_scancode, build_scancode, scancode_to_ascii
-from .baseop import KeyboardOp
+from kvm_serial.backend.implementations.baseop import KeyboardOp
 
 logger = logging.getLogger(__name__)
 
