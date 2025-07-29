@@ -151,10 +151,13 @@ class CaptureDevice(InputHandler):
             logger.info(f"Camera released. Destroying video window '{windowTitle}'...")
             cv2.destroyWindow(windowTitle)
 
-    def getFrame(self):
+    def getFrame(self, resize: tuple | None = None):
         if not self.cam:
             raise CaptureDeviceException("No camera configured. Call setCamera(index).")
         _, frame = self.cam.read()
+        if resize:
+            frame = cv2.resize(frame, resize)
+        frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         return frame
 
 
