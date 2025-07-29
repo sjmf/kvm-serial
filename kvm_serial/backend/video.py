@@ -4,7 +4,7 @@ import cv2
 import numpy
 import threading
 import logging
-from .inputhandler import InputHandler
+from kvm_serial.backend.inputhandler import InputHandler
 
 logger = logging.getLogger(__name__)
 
@@ -135,7 +135,7 @@ class CaptureDevice(InputHandler):
             self.running = True
             while self.cam.isOpened():
                 # Display the captured frame
-                _, frame = self.cam.read()
+                frame = self.getFrame()
                 cv2.imshow(windowTitle, frame)
 
                 # Default is 'ESC' to exit the loop
@@ -151,7 +151,23 @@ class CaptureDevice(InputHandler):
             logger.info(f"Camera released. Destroying video window '{windowTitle}'...")
             cv2.destroyWindow(windowTitle)
 
+    def getFrame(self):
+        if not self.cam:
+            raise CaptureDeviceException("No camera configured. Call setCamera(index).")
+        _, frame = self.cam.read()
+        return frame
+
 
 if __name__ == "__main__":
-    cap = CaptureDevice(fullscreen=False)
-    cap.capture()
+    cap = CaptureDevice()
+    cap.setCamera(1)
+    out = cap.getFrame()
+
+    # Test capture device as a script: render as ascii art in terminal
+    import numpy as np
+
+    term_width = 200
+    out = np.array([[[y[1]] for y in x] for x in out])  # Drop colour channels
+    out = cv2.adaptiveThreshold(out, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
+    out = cv2.resize(out, (term_width, int(out.shape[0] * (term_width / out.shape[1] / 2))))
+    print("\n".join(["".join(["@%#*+=-:. "[pixel // 32] for pixel in row]) for row in out]))

@@ -79,4 +79,19 @@ class TestCaptureDevice:
             assert device.cam == mock_cam
             assert device.thread is not None
 
+    def test_capture_device_get_frame(self, sys_modules_patch):
+        """Test retrieval of a single frame"""
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.video import CaptureDevice, CaptureDeviceException
+
+            mock_cam = MagicMock()
+            mock_cam.read.side_effect = [(None, "correct")]
+            device = CaptureDevice(cam=None, threaded=False)
+
+            with pytest.raises(CaptureDeviceException):
+                device.getFrame()
+
+            device.cam = mock_cam
+            assert device.getFrame() == "correct"
+
     # TODO: Implement further tests
