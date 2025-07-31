@@ -103,13 +103,13 @@ class TestMouse:
             # Set up a MouseListener with known screen size
             listener = MouseListener(mock_serial)
             listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener._width = 1920
+            listener._height = 1080
 
             # Case 1: Center of the screen (positive dx/dy)
             x, y = 960, 540
             result = listener.on_move(x, y)
-            expected_data = calculate_expected_data(x, y, listener.width, listener.height)
+            expected_data = calculate_expected_data(x, y, listener._width, listener._height)
             mock_comm.send.assert_called_once_with(expected_data, cmd=b"\x04")
             assert result is True
             mock_comm.send.reset_mock()
@@ -118,7 +118,7 @@ class TestMouse:
             x_neg, y_neg = -100, 540
             result_neg = listener.on_move(x_neg, y_neg)
             expected_data_neg = calculate_expected_data(
-                x_neg, y_neg, listener.width, listener.height
+                x_neg, y_neg, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg, cmd=b"\x04")
             assert result_neg is True
@@ -128,7 +128,7 @@ class TestMouse:
             x_neg2, y_neg2 = 960, -100
             result_neg2 = listener.on_move(x_neg2, y_neg2)
             expected_data_neg2 = calculate_expected_data(
-                x_neg2, y_neg2, listener.width, listener.height
+                x_neg2, y_neg2, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg2, cmd=b"\x04")
             assert result_neg2 is True
@@ -138,7 +138,7 @@ class TestMouse:
             x_neg3, y_neg3 = -100, -100
             result_neg3 = listener.on_move(x_neg3, y_neg3)
             expected_data_neg3 = calculate_expected_data(
-                x_neg3, y_neg3, listener.width, listener.height
+                x_neg3, y_neg3, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg3, cmd=b"\x04")
             assert result_neg3 is True
@@ -162,8 +162,8 @@ class TestMouse:
             listener = MouseListener(mock_serial)
 
             listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener._width = 1920
+            listener._height = 1080
 
             # Mock button values
             left_button = MagicMock()
@@ -215,8 +215,8 @@ class TestMouse:
 
             listener = MouseListener(mock_serial)
             listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener._width = 1920
+            listener._height = 1080
 
             # Test scroll up
             result_up = listener.on_scroll(100, 200, 0, 1)

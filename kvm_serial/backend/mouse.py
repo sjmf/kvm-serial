@@ -30,8 +30,24 @@ class MouseListener(InputHandler):
 
         # Get screen dimensions
         monitor = get_monitors()[0]
-        self.width = monitor.width
-        self.height = monitor.height
+        self._width = monitor.width
+        self._height = monitor.height
+
+        @property
+        def width(self):
+            return self._width
+
+        @width.setter
+        def width(self, value):
+            self._width = value
+
+        @property
+        def height(self):
+            return self._height
+
+        @height.setter
+        def height(self, value):
+            self._height = value
 
     def run(self):
         self.thread.start()
@@ -49,8 +65,8 @@ class MouseListener(InputHandler):
         data = bytearray(b"\x02\x00")  # Absolute coordinates (0x02); No mouse buttons (0x0)
 
         # Scale coordinates to device range
-        dx = int((4096 * x) // self.width)
-        dy = int((4096 * y) // self.height)
+        dx = int((4096 * x) // self._width)
+        dy = int((4096 * y) // self._height)
 
         # Handle negative coordinates (e.g., dual monitor setups)
         if dx < 0:

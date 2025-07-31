@@ -2,7 +2,7 @@
 import sys
 import os
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import messagebox
 import logging
 import configparser
 from typing import List, Callable
@@ -55,9 +55,13 @@ class KVMGui(tk.Tk):
     kb_backend_var: tk.StringVar
     serial_port_var: tk.StringVar
     video_device_var: tk.StringVar
+
     baud_rate_var: tk.IntVar
     window_var: tk.BooleanVar
     verbose_var: tk.BooleanVar
+
+    pos_x: tk.IntVar
+    pos_y: tk.IntVar
 
     def __init__(self) -> None:
         super().__init__()
@@ -89,11 +93,15 @@ class KVMGui(tk.Tk):
         self.window_var = tk.BooleanVar(value=False)
         self.verbose_var = tk.BooleanVar(value=False)
 
+        self.pos_x = tk.IntVar(value=0)
+        self.pos_y = tk.IntVar(value=0)
+
         # Menu Bar
         menubar = tk.Menu(self)
 
         # File Menu
         file_menu = tk.Menu(menubar, tearoff=0)
+        file_menu.add_command(label="Save Configuration", command=self._save_settings)
         file_menu.add_command(label="Quit", command=self.quit)
         menubar.add_cascade(label="File", menu=file_menu)
 
@@ -142,7 +150,9 @@ class KVMGui(tk.Tk):
             self, width=self.canvas_width, height=self.canvas_height, bg="black"
         )
         self.main_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+
         self.bind("<Configure>", self._on_resize)
+        self.bind("<Motion>", self._on_mouse_motion)
 
         # Run deferred tasks
         self.after(
@@ -280,18 +290,20 @@ class KVMGui(tk.Tk):
         if idx >= 0 and idx < len(self.video_devices):
             video_str = f"Video: {str(self.video_devices[idx])}"
             if hasattr(self, "_actual_fps"):
-                video_str += f" ({self._actual_fps:.1f} fps)"
+                video_str += f" [{self._actual_fps:.1f} fps]"
             status_parts.append(video_str)
         else:
             status_parts.append("Video: Idle")
 
+        mouse_pos = f"[x:{self.pos_x.get()} y:{self.pos_y.get()}]"
+
         if self.mouse_var.get():
-            status_parts.append(f"Mouse: Captured")
+            status_parts.append(f"Mouse: {mouse_pos} Captured")
         else:
-            status_parts.append("Mouse: Idle")
+            status_parts.append(f"Mouse: {mouse_pos} Idle")
 
         self.status_var.set(" | ".join(status_parts))
-        self.after(500, self._update_status_bar)
+        self.after(250, self._update_status_bar)
 
     @chainable
     def _update_video(self, chain: List[Callable] = []) -> None:
@@ -341,6 +353,21 @@ class KVMGui(tk.Tk):
                 self.canvas_width = new_width
                 self.canvas_height = new_height
                 self.main_canvas.config(width=self.canvas_width, height=self.canvas_height)
+
+    def _on_mouse_motion(self, event):
+        # Bound to movement event. Only update inside canvas
+        def inside_x(event):
+            return event.x >= 0 and event.x <= self.canvas_width
+
+        def inside_y(event):
+            return event.y >= 0 and event.y <= self.canvas_height
+
+        if inside_x(event) and inside_y(event):
+            self.pos_x.set(event.x)
+            self.pos_y.set(event.y)
+            self.mouse_var.set(True)
+        else:
+            self.mouse_var.set(False)
 
 
 def main():
