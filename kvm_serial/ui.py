@@ -151,8 +151,20 @@ class KVMGui(tk.Tk):
         )
         self.main_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
 
+        # Input event handling
         self.bind("<Configure>", self._on_resize)
-        self.bind("<Motion>", self._on_mouse_motion)
+        self.bind("<Motion>", self._on_mouse_move)
+        self.bind("<Button-1>", self._on_mouse_event)
+        self.bind("<Button-2>", self._on_mouse_event)
+        self.bind("<Button-3>", self._on_mouse_event)
+        self.bind("<ButtonRelease-1>", self._on_mouse_event)
+        self.bind("<ButtonRelease-2>", self._on_mouse_event)
+        self.bind("<ButtonRelease-3>", self._on_mouse_event)
+        self.bind("<MouseWheel>", self._on_mouse_scroll)
+        self.bind("<KeyPress>", self._on_key_event)
+        self.bind("<KeyRelease>", self._on_key_event)
+        self.bind("<FocusIn>", self._on_focus_in)
+        self.bind("<FocusOut>", self._on_focus_out)
 
         # Run deferred tasks
         self.after(
@@ -354,7 +366,7 @@ class KVMGui(tk.Tk):
                 self.canvas_height = new_height
                 self.main_canvas.config(width=self.canvas_width, height=self.canvas_height)
 
-    def _on_mouse_motion(self, event):
+    def _on_mouse_move(self, event):
         # Bound to movement event. Only update inside canvas
         def inside_x(event):
             return event.x >= 0 and event.x <= self.canvas_width
@@ -368,6 +380,34 @@ class KVMGui(tk.Tk):
             self.mouse_var.set(True)
         else:
             self.mouse_var.set(False)
+
+    def _on_mouse_event(self, event):
+        if event.type == tk.EventType.ButtonPress:
+            if event.num == 1:
+                logging.info(f"Left click at {event.x}, {event.y}")
+            elif event.num == 2:
+                logging.info(f"Right click at {event.x}, {event.y}")
+            elif event.num == 3:
+                logging.info(f"Middle click at {event.x}, {event.y}")
+        elif event.type == tk.EventType.ButtonRelease:
+            logging.info(f"Mouse button {event.num} released at {event.x}, {event.y}")
+
+    def _on_mouse_scroll(self, event):
+        logging.info(f"Mouse wheel scroll delta {event.delta} at {event.x}, {event.y}")
+
+    def _on_key_event(self, event):
+        if event.type == tk.EventType.KeyPress:
+            logging.info(f"Key pressed: {event.keysym} (char: {event.char})")
+        elif event.type == tk.EventType.KeyRelease:
+            logging.info(f"Key released: {event.keysym} (char: {event.char})")
+
+    def _on_focus_in(self, event):
+        logging.info("Window focused")
+        self.keyboard_var.set(True)
+
+    def _on_focus_out(self, event):
+        logging.info("Window unfocused")
+        self.keyboard_var.set(False)
 
 
 def main():
