@@ -22,9 +22,9 @@ class TestKeyboardOpImplementation:
             patch.dict("sys.modules", sys_modules_patch),
             patch("kvm_serial.utils.communication.DataComm") as mock_datacomm,
         ):
-            from kvm_serial.backend.implementations.baseop import KeyboardOp
+            from kvm_serial.backend.implementations.baseop import BaseOp
 
-            class ConcreteKeyboardOp(KeyboardOp):
+            class ConcreteKeyboardOp(BaseOp):
                 """Concrete implementation of KeyboardOp for testing"""
 
                 def run(self):

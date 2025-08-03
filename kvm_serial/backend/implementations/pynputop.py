@@ -2,7 +2,7 @@
 import logging
 from pynput.keyboard import Key, KeyCode, Listener
 from kvm_serial.utils import ascii_to_scancode, merge_scancodes
-from .baseop import KeyboardOp
+from .baseop import BaseOp
 
 logger = logging.getLogger(__name__)
 
@@ -59,7 +59,7 @@ KEYS_WITH_CODES = {
 }
 
 
-class PynputOp(KeyboardOp):
+class PynputOp(BaseOp):
     @property
     def name(self):
         return "pynput"

@@ -5,12 +5,12 @@ import termios
 import logging
 import time
 from kvm_serial.utils import ascii_to_scancode
-from .baseop import KeyboardOp
+from .baseop import BaseOp
 
 logger = logging.getLogger(__name__)
 
 
-class TtyOp(KeyboardOp):
+class TtyOp(BaseOp):
     """
     TTY operation mode: basic mode supporting pasted text, no modifier keys.
 

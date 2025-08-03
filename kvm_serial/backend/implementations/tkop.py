@@ -1,7 +1,7 @@
 # passthrough implementation
 import logging
 from kvm_serial.utils import ascii_to_scancode, merge_scancodes
-from .baseop import KeyboardOp
+from .baseop import BaseOp
 
 import tkinter as tk
 from tkinter import EventType
@@ -57,7 +57,7 @@ KEYS_WITH_CODES = {
 }
 
 
-class TkOp(KeyboardOp):
+class TkOp(BaseOp):
     """
     Tk operation mode: parse Tk keys to hid_serial_out
     """

@@ -121,7 +121,7 @@ class TestKeyboardMain:
                 importlib.reload(kb_mod)
                 # Now, KeyboardOp should be the mock from implementations.baseop
                 assert hasattr(kb_mod, "KeyboardOp")
-                assert kb_mod.KeyboardOp is mock_keyboardop
+                assert kb_mod.BaseOp is mock_keyboardop
         finally:
             # Restore sys.modules to its original state
             sys.modules.pop("implementations.baseop", None)

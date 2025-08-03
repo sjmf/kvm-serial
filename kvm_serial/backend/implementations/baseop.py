@@ -3,9 +3,9 @@ from serial import Serial
 from kvm_serial.utils.communication import DataComm
 
 
-class KeyboardOp(ABC):
+class BaseOp(ABC):
     """
-    Abstract base class for Keyboard input capture implementations.
+    Abstract base class for input capture implementations.
     All implementations must provide a run() method that takes a serial_port argument.
     """
 
