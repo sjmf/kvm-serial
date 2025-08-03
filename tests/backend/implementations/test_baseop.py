@@ -12,8 +12,8 @@ def sys_modules_patch():
     }
 
 
-class TestKeyboardOpImplementation:
-    """Test suite for KeyboardOp base class implementation"""
+class TestBaseOpImplementation:
+    """Test suite for BaseOp base class implementation"""
 
     def test_baseop_init(self, mock_serial, sys_modules_patch):
 
@@ -24,8 +24,8 @@ class TestKeyboardOpImplementation:
         ):
             from kvm_serial.backend.implementations.baseop import BaseOp
 
-            class ConcreteKeyboardOp(BaseOp):
-                """Concrete implementation of KeyboardOp for testing"""
+            class ConcreteBaseOp(BaseOp):
+                """Concrete implementation of BaseOp for testing"""
 
                 def run(self):
                     return True
@@ -38,7 +38,7 @@ class TestKeyboardOpImplementation:
                     return "test_keyboard"
 
             # Create instance
-            op = ConcreteKeyboardOp(mock_serial)
+            op = ConcreteBaseOp(mock_serial)
 
             # Verify initialization
             assert op.serial_port == mock_serial
