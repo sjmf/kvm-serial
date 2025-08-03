@@ -3,10 +3,11 @@ import sys
 import os
 import tkinter as tk
 from tkinter import messagebox
-import logging
 from typing import List, Callable
 from functools import wraps
 from PIL import Image, ImageTk
+from serial import Serial
+import logging
 import time
 
 try:
@@ -64,10 +65,14 @@ class KVMGui(tk.Tk):
     pos_x: tk.IntVar
     pos_y: tk.IntVar
 
+    keyboard_op: TkOp
+    serial_port: Serial | None
+
     def __init__(self) -> None:
         super().__init__()
 
         self.video_device = CaptureDevice()
+        self.serial_port = None
 
         # Dropdown values
         self.baud_rates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
@@ -200,6 +205,10 @@ class KVMGui(tk.Tk):
 
     def _on_serial_port_selected(self, port):
         self.serial_port_var.set(port)
+        if self.serial_port is not None:
+            self.serial_port.close()
+        self.serial_port = Serial(port, self.baud_rate_var.get())
+        self.keyboard_op = TkOp(self.serial_port)
 
     def _on_video_device_selected(self, device):
         self.video_device_var.set(device)
@@ -244,6 +253,8 @@ class KVMGui(tk.Tk):
         if kvm.get("baud_rate") and int(kvm.get("baud_rate", "")) in self.baud_rates:
             self.baud_rate_var.set(int(kvm.get("baud_rate", "")))
 
+        self._on_serial_port_selected(self.serial_port_var.get())
+
         if kvm.get("video_device") is not None:
             try:
                 # Set video device by its index
@@ -276,13 +287,14 @@ class KVMGui(tk.Tk):
         # Track status bar updates
         status_parts = []
 
-        if self.serial_port_var.get():
-            status_parts.append(f"Serial: {self.serial_port_var.get()}")
+        status_parts.append(f"Serial: {self.serial_port_var.get()}")
 
-        if self.keyboard_var.get():
-            status_parts.append(f"Keyboard: Captured")
-        else:
-            status_parts.append("Keyboard: Idle")
+        captured = "Captured" if self.keyboard_var.get() else "Idle"
+        status_parts.append(f"Keyboard: {captured}")
+
+        mouse_pos = f"[x:{self.pos_x.get()} y:{self.pos_y.get()}]"
+        captured = "Captured" if self.mouse_var.get() else "Idle"
+        status_parts.append(f"Mouse: {mouse_pos} {captured}")
 
         idx = self.video_var.get()
         if idx >= 0 and idx < len(self.video_devices):
@@ -292,13 +304,6 @@ class KVMGui(tk.Tk):
             status_parts.append(video_str)
         else:
             status_parts.append("Video: Idle")
-
-        mouse_pos = f"[x:{self.pos_x.get()} y:{self.pos_y.get()}]"
-
-        if self.mouse_var.get():
-            status_parts.append(f"Mouse: {mouse_pos} Captured")
-        else:
-            status_parts.append(f"Mouse: {mouse_pos} Idle")
 
         self.status_var.set(" | ".join(status_parts))
         self.after(250, self._update_status_bar)
@@ -382,10 +387,9 @@ class KVMGui(tk.Tk):
         logging.info(f"Mouse wheel scroll delta {event.delta} at {event.x}, {event.y}")
 
     def _on_key_event(self, event):
-        if event.type == tk.EventType.KeyPress:
-            logging.info(f"Key pressed: {event.keysym} (char: {event.char})")
-        elif event.type == tk.EventType.KeyRelease:
-            logging.info(f"Key released: {event.keysym} (char: {event.char})")
+        pressed = "pressed" if event.type == tk.EventType.KeyPress else "released"
+        logging.info(f"Key {pressed}: {event.keysym} (char: {event.char})")
+        self.keyboard_op.parse_key(event)
 
     def _on_focus_in(self, event):
         logging.info("Window focused")
