@@ -370,7 +370,10 @@ class KVMGui(tk.Tk):
         if self.video_device.cam is None:
             self.video_device.setCamera(idx)
 
-        frame = self.video_device.getFrame(resize=(self.canvas_width, self.canvas_height))
+        frame = self.video_device.getFrame(
+            resize=(self.canvas_width, self.canvas_height),
+            convert_color_space=True,
+        )
         try:
             # Convert frame to PhotoImage and display on canvas
             image = Image.fromarray(frame)
