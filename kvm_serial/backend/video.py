@@ -167,9 +167,10 @@ if __name__ == "__main__":
     out = cap.getFrame()
 
     # Test capture device as a script: render as ascii art in terminal
+    import sys
     import numpy as np
 
-    term_width = 200
+    term_width = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     out = np.array([[[y[1]] for y in x] for x in out])  # Drop colour channels
     out = cv2.adaptiveThreshold(out, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
     out = cv2.resize(out, (term_width, int(out.shape[0] * (term_width / out.shape[1] / 2))))
