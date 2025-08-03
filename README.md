@@ -21,6 +21,8 @@ This Python module includes several methods to capture keyboard scan codes from 
 to the local computer where the script is running, and send them via Serial UART to the device which
 the USB HID keyboard is listening on. For most purposes, the default mode will suffice.
 
+The `kvm_serial` package provides options for running a GUI for basic usage, or as a script providing many flexible options.
+
 ## GUI Usage
 
 Run the GUI using `python -m kvm_serial`:

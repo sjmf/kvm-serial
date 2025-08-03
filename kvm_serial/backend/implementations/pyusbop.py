@@ -6,12 +6,12 @@ from usb.util import find_descriptor, endpoint_direction, endpoint_type, dispose
 from usb.util import ENDPOINT_IN, ENDPOINT_TYPE_INTR
 from typing import Callable
 from kvm_serial.utils import scancode_to_ascii
-from .baseop import KeyboardOp
+from .baseop import BaseOp
 
 logger = logging.getLogger(__name__)
 
 
-class PyUSBOp(KeyboardOp):
+class PyUSBOp(BaseOp):
     """
     PyUSB operation mode: supports all modifier keys, requires superuser.
 

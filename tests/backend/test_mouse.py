@@ -32,7 +32,7 @@ class TestMouse:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
@@ -96,20 +96,20 @@ class TestMouse:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
             # Set up a MouseListener with known screen size
             listener = MouseListener(mock_serial)
-            listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener.op.hid_serial_out = mock_comm
+            listener._width = 1920
+            listener._height = 1080
 
             # Case 1: Center of the screen (positive dx/dy)
             x, y = 960, 540
             result = listener.on_move(x, y)
-            expected_data = calculate_expected_data(x, y, listener.width, listener.height)
+            expected_data = calculate_expected_data(x, y, listener._width, listener._height)
             mock_comm.send.assert_called_once_with(expected_data, cmd=b"\x04")
             assert result is True
             mock_comm.send.reset_mock()
@@ -118,7 +118,7 @@ class TestMouse:
             x_neg, y_neg = -100, 540
             result_neg = listener.on_move(x_neg, y_neg)
             expected_data_neg = calculate_expected_data(
-                x_neg, y_neg, listener.width, listener.height
+                x_neg, y_neg, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg, cmd=b"\x04")
             assert result_neg is True
@@ -128,7 +128,7 @@ class TestMouse:
             x_neg2, y_neg2 = 960, -100
             result_neg2 = listener.on_move(x_neg2, y_neg2)
             expected_data_neg2 = calculate_expected_data(
-                x_neg2, y_neg2, listener.width, listener.height
+                x_neg2, y_neg2, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg2, cmd=b"\x04")
             assert result_neg2 is True
@@ -138,7 +138,7 @@ class TestMouse:
             x_neg3, y_neg3 = -100, -100
             result_neg3 = listener.on_move(x_neg3, y_neg3)
             expected_data_neg3 = calculate_expected_data(
-                x_neg3, y_neg3, listener.width, listener.height
+                x_neg3, y_neg3, listener._width, listener._height
             )
             mock_comm.send.assert_called_once_with(expected_data_neg3, cmd=b"\x04")
             assert result_neg3 is True
@@ -155,23 +155,24 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
+            from kvm_serial.backend.implementations.mouseop import MouseButton
 
             listener = MouseListener(mock_serial)
 
-            listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener.op.hid_serial_out = mock_comm
+            listener._width = 1920
+            listener._height = 1080
 
             # Mock button values
             left_button = MagicMock()
             right_button = MagicMock()
             # Patch control_chars to accept our mock buttons
-            listener.control_chars = {
-                left_button: b"\x01",
-                right_button: b"\x02",
+            listener.pynput_button_mapping = {  # type: ignore
+                left_button: MouseButton.LEFT,
+                right_button: MouseButton.RIGHT,
             }
             # Test left button press
             result_press = listener.on_click(100, 200, left_button, True)
@@ -209,14 +210,14 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
             listener = MouseListener(mock_serial)
-            listener.comm = mock_comm
-            listener.width = 1920
-            listener.height = 1080
+            listener.op.hid_serial_out = mock_comm
+            listener._width = 1920
+            listener._height = 1080
 
             # Test scroll up
             result_up = listener.on_scroll(100, 200, 0, 1)

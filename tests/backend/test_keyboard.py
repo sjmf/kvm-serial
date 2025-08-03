@@ -64,9 +64,9 @@ class TestKeyboardMain:
             ):
                 kb_mod.keyboard_main()
 
-    def test_keyboard_module_fallback_import(self, monkeypatch):
+    def test_keyboard_module_fallback_import(self, monkeypatch, sys_modules_patch):
         """
-        Test that keyboard.py falls back to importing implementations.baseop.KeyboardOp
+        Test that keyboard.py falls back to importing implementations.baseop.BaseOp
         if kvm_serial.backend.implementations.baseop import fails with ModuleNotFoundError.
 
         This is a horrible test that by necessity has to mess around with both
@@ -74,15 +74,14 @@ class TestKeyboardMain:
 
         Mocks:
             - builtins.__import__: Raises ModuleNotFoundError for kvm_serial.backend.implementations.baseop
-            - sys.modules: Injects a mock implementations.baseop.KeyboardOp
+            - sys.modules: Injects a mock implementations.baseop.BaseOp
             - KeyboardListener: Mocked to avoid running threads
             - logging.basicConfig: Avoids side effects
         Asserts:
-            - The fallback import path is used (implementations.baseop.KeyboardOp)
+            - The fallback import path is used (implementations.baseop.BaseOp)
             - KeyboardListener can still be constructed and used
         """
         import importlib
-        from unittest.mock import MagicMock, patch
 
         # Save original sys.modules entries to restore after test
         orig_kvm_serial = sys.modules.get("kvm_serial")
@@ -103,9 +102,9 @@ class TestKeyboardMain:
 
             monkeypatch.setattr("builtins.__import__", import_side_effect)
 
-            # Inject a mock implementations.baseop.KeyboardOp
-            mock_keyboardop = MagicMock()
-            sys.modules["implementations.baseop"] = MagicMock(KeyboardOp=mock_keyboardop)
+            # Inject a mock implementations.baseop.BaseOp
+            mock_baseop = MagicMock()
+            sys.modules["implementations.baseop"] = MagicMock(BaseOp=mock_baseop)
 
             # Patch KeyboardListener and logging.basicConfig
             from kvm_serial.backend import keyboard as kb_mod
@@ -119,9 +118,9 @@ class TestKeyboardMain:
             ):
                 # Reload the module to trigger the import logic
                 importlib.reload(kb_mod)
-                # Now, KeyboardOp should be the mock from implementations.baseop
-                assert hasattr(kb_mod, "KeyboardOp")
-                assert kb_mod.KeyboardOp is mock_keyboardop
+                # Now, BaseOp should be the mock from implementations.baseop
+                assert hasattr(kb_mod, "BaseOp")
+                assert kb_mod.BaseOp is mock_baseop
         finally:
             # Restore sys.modules to its original state
             sys.modules.pop("implementations.baseop", None)

@@ -151,11 +151,19 @@ class CaptureDevice(InputHandler):
             logger.info(f"Camera released. Destroying video window '{windowTitle}'...")
             cv2.destroyWindow(windowTitle)
 
-    def getFrame(self):
+    def getFrame(self, resize: tuple | None = None, convert_color_space: bool = False):
         if not self.cam:
             raise CaptureDeviceException("No camera configured. Call setCamera(index).")
         _, frame = self.cam.read()
-        return frame
+        try:
+            if resize:
+                frame = cv2.resize(frame, resize)
+            if convert_color_space:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            return frame
+        except cv2.error as e:
+            logging.error(e)
+            raise e
 
 
 if __name__ == "__main__":
@@ -164,9 +172,10 @@ if __name__ == "__main__":
     out = cap.getFrame()
 
     # Test capture device as a script: render as ascii art in terminal
+    import sys
     import numpy as np
 
-    term_width = 200
+    term_width = int(sys.argv[1]) if len(sys.argv) > 1 else 200
     out = np.array([[[y[1]] for y in x] for x in out])  # Drop colour channels
     out = cv2.adaptiveThreshold(out, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
     out = cv2.resize(out, (term_width, int(out.shape[0] * (term_width / out.shape[1] / 2))))

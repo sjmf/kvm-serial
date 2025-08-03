@@ -4,7 +4,7 @@ from curses import error as CursesError
 import logging
 
 from kvm_serial.utils import ascii_to_scancode, build_scancode, scancode_to_ascii
-from kvm_serial.backend.implementations.baseop import KeyboardOp
+from kvm_serial.backend.implementations.baseop import BaseOp
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +67,7 @@ CONTROL_CHARACTERS = {
 }
 
 
-class CursesOp(KeyboardOp):
+class CursesOp(BaseOp):
     def __init__(self, serial_port):
         super().__init__(serial_port=serial_port)
         self.sc = None

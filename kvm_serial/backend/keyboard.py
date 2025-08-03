@@ -4,13 +4,13 @@ from enum import Enum
 from .inputhandler import InputHandler
 
 try:
-    from kvm_serial.backend.implementations.baseop import KeyboardOp
+    from kvm_serial.backend.implementations.baseop import BaseOp
 except ModuleNotFoundError:
     # Allow running as a script directly
     import os, sys
 
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from implementations.baseop import KeyboardOp
+    from implementations.baseop import BaseOp
 
 
 class Mode(Enum):
@@ -50,7 +50,7 @@ class KeyboardListener(InputHandler):
 
     def run_keyboard(self):
         # Select operation mode
-        keyboard_handler: KeyboardOp
+        keyboard_handler: BaseOp
 
         if self.mode is Mode.NONE:
             return  # noop
