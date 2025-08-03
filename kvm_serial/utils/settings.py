@@ -5,7 +5,7 @@ from typing import Dict, Any
 
 
 def load_settings(
-    config_file: str, section: str, defaults: Dict[str, Any] = None
+    config_file: str, section: str, defaults: Dict[str, Any] | None = None
 ) -> Dict[str, Any]:
     """
     Load settings from an INI file. Returns a dict of settings for the given section.
