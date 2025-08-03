@@ -111,6 +111,7 @@ class KVMGui(tk.Tk):
         self.status_bar_height = self.status_bar_default_height
         self.title("Serial KVM")
         self.resizable(True, True)
+        self.minsize(400, 320)
         self.geometry(f"{self.canvas_width}x{self.canvas_height + self.status_bar_height}")
 
         # UI element backing data vars
@@ -482,7 +483,9 @@ class KVMGui(tk.Tk):
         if event.widget == self:
             new_width = event.width
             new_height = event.height - self.status_bar_height
-            if new_width != self.canvas_width or new_height != self.canvas_height:
+            if (new_width != self.canvas_width or new_height != self.canvas_height) and (
+                new_width > 1 and new_height > 1
+            ):
                 self.canvas_width = new_width
                 self.canvas_height = new_height
                 self.main_canvas.config(width=self.canvas_width, height=self.canvas_height)
@@ -509,7 +512,8 @@ class KVMGui(tk.Tk):
         self.pos_y.set(event.y)
         self.mouse_var.set(True)
 
-        self.mouse_op.on_move(event.x, event.y, self.canvas_width, self.canvas_height)  # type: ignore
+        if self.mouse_op:
+            self.mouse_op.on_move(event.x, event.y, self.canvas_width, self.canvas_height)
 
     def _on_mouse_event(self, event):
         """
@@ -521,12 +525,13 @@ class KVMGui(tk.Tk):
         pressed = "pressed" if event.type == tk.EventType.ButtonPress else "released"
         logging.info(f"Mouse {btn[event.num]} {pressed} at {event.x}, {event.y}")
 
-        self.mouse_op.on_click(  # type: ignore
-            event.x,
-            event.y,
-            MouseButton[btn[event.num]],
-            event.type == tk.EventType.ButtonPress,
-        )
+        if self.mouse_op:
+            self.mouse_op.on_click(
+                event.x,
+                event.y,
+                MouseButton[btn[event.num]],
+                event.type == tk.EventType.ButtonPress,
+            )
 
     def _on_mouse_scroll(self, event):
         """
@@ -536,7 +541,8 @@ class KVMGui(tk.Tk):
         """
         logging.info(f"Mouse wheel scroll delta {event.delta} at {event.x}, {event.y}")
 
-        self.mouse_op.on_scroll(event.x, event.y, 0, 0)  # type: ignore
+        if self.mouse_op:
+            self.mouse_op.on_scroll(event.x, event.y, 0, 0)
 
     def _on_key_event(self, event):
         """
@@ -546,7 +552,9 @@ class KVMGui(tk.Tk):
         """
         pressed = "pressed" if event.type == tk.EventType.KeyPress else "released"
         logging.info(f"Key {pressed}: {event.keysym} (char: {event.char})")
-        self.keyboard_op.parse_key(event)  # type: ignore
+
+        if self.keyboard_op:
+            self.keyboard_op.parse_key(event)
 
     def _on_focus_in(self, event):
         """
