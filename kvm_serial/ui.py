@@ -154,15 +154,15 @@ class KVMGui(tk.Tk):
         self.config(menu=menubar)
 
         # Status Bar
-        self.status_var = tk.StringVar(value="Initialising...")
-        self.status_bar = tk.Label(
-            self,
-            textvariable=self.status_var,
-            bd=1,
-            relief=tk.SUNKEN,
-            anchor=tk.W,
-            height=1,  # height in text lines, not pixels
-        )
+        self.status_bar = tk.Frame(self, bd=1, relief=tk.SUNKEN, height=1)
+        self.status_serial_label = tk.Label(self.status_bar, anchor=tk.W)
+        self.status_keyboard_label = tk.Label(self.status_bar, anchor=tk.W)
+        self.status_mouse_label = tk.Label(self.status_bar, anchor=tk.W)
+        self.status_video_label = tk.Label(self.status_bar, anchor=tk.W)
+        self.status_serial_label.pack(side=tk.LEFT, padx=8)
+        self.status_keyboard_label.pack(side=tk.LEFT, padx=8)
+        self.status_mouse_label.pack(side=tk.LEFT, padx=8)
+        self.status_video_label.pack(side=tk.LEFT, padx=8)
         if self.show_status_var.get():
             self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
@@ -328,28 +328,22 @@ class KVMGui(tk.Tk):
             self.after(1000, self._update_status_bar)
             return
 
-        # Track status bar updates
-        status_parts = []
-
-        status_parts.append(f"Serial: {self.serial_port_var.get()}")
-
+        # Update each status bar part
+        self.status_serial_label.config(text=f"Serial: {self.serial_port_var.get()}")
         captured = "Captured" if self.keyboard_var.get() else "Idle"
-        status_parts.append(f"Keyboard: {captured}")
-
+        self.status_keyboard_label.config(text=f"Keyboard: {captured}")
         mouse_pos = f"[x:{self.pos_x.get()} y:{self.pos_y.get()}]"
         captured = "Captured" if self.mouse_var.get() else "Idle"
-        status_parts.append(f"Mouse: {mouse_pos} {captured}")
-
+        self.status_mouse_label.config(text=f"Mouse: {mouse_pos} {captured}")
         idx = self.video_var.get()
         if idx >= 0 and idx < len(self.video_devices):
             video_str = f"Video: {str(self.video_devices[idx])}"
             if hasattr(self, "_actual_fps"):
                 video_str += f" [{self._actual_fps:.1f} fps]"
-            status_parts.append(video_str)
+            self.status_video_label.config(text=video_str)
         else:
-            status_parts.append("Video: Idle")
+            self.status_video_label.config(text="Video: Idle")
 
-        self.status_var.set(" | ".join(status_parts))
         self.after(250, self._update_status_bar)
 
     @chainable
