@@ -12,12 +12,14 @@ import time
 try:
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
+    from kvm_serial.backend.implementations.tkop import TkOp
     import kvm_serial.utils.settings as settings_util
 except ModuleNotFoundError:
     # Allow running as a script directly
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
+    from backend.implementations.tkop import TkOp
     import utils.settings as settings_util
 
 logger = logging.getLogger(__name__)
@@ -44,7 +46,6 @@ class KVMGui(tk.Tk):
 
     CONFIG_FILE = ".kvm_settings.ini"
 
-    kb_backends: list[str]
     baud_rates: list[int]
     serial_ports: list[str]
     video_devices: list[CameraProperties]
@@ -53,7 +54,6 @@ class KVMGui(tk.Tk):
     video_var: tk.IntVar
     mouse_var: tk.BooleanVar
 
-    kb_backend_var: tk.StringVar
     serial_port_var: tk.StringVar
     video_device_var: tk.StringVar
 
@@ -70,7 +70,6 @@ class KVMGui(tk.Tk):
         self.video_device = CaptureDevice()
 
         # Dropdown values
-        self.kb_backends = ["pynput", "usb"]  # "curses", "tty", are not useful for GUI mode
         self.baud_rates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
         self.serial_ports = []
         self.video_devices = []
@@ -87,7 +86,6 @@ class KVMGui(tk.Tk):
         self.keyboard_var = tk.BooleanVar(value=False)
         self.video_var = tk.IntVar(value=-1)
         self.mouse_var = tk.BooleanVar(value=False)
-        self.kb_backend_var = tk.StringVar(value=self.kb_backends[0])
         self.serial_port_var = tk.StringVar(value="Loading serial...")
         self.video_device_var = tk.StringVar(value="Loading cameras...")
         self.baud_rate_var = tk.IntVar(value=self.baud_rates[3])
@@ -109,13 +107,6 @@ class KVMGui(tk.Tk):
         # Options Menu
         options_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Options", menu=options_menu)
-
-        # Keyboard Backend submenu
-        self.kb_menu = tk.Menu(options_menu, tearoff=0)
-        self.kb_backend_var = tk.StringVar(value=self.kb_backends[0])
-        for kb in self.kb_backends:
-            self.kb_menu.add_radiobutton(label=kb, variable=self.kb_backend_var, value=kb)
-        options_menu.add_cascade(label="Keyboard Backend", menu=self.kb_menu)
 
         # Baud Rate submenu
         self.baud_menu = tk.Menu(options_menu, tearoff=0)
@@ -248,10 +239,11 @@ class KVMGui(tk.Tk):
     def _load_settings(self, chain: List[Callable] = []) -> None:
         kvm = settings_util.load_settings(self.CONFIG_FILE, "KVM")
         # Only set if present in current options
-        if kvm.get("kb_backend", "") in self.kb_backends:
-            self.kb_backend_var.set(kvm.get("kb_backend", ""))
         if kvm.get("serial_port") in self.serial_ports:
             self.serial_port_var.set(kvm.get("serial_port", ""))
+        if kvm.get("baud_rate") and int(kvm.get("baud_rate", "")) in self.baud_rates:
+            self.baud_rate_var.set(int(kvm.get("baud_rate", "")))
+
         if kvm.get("video_device") is not None:
             try:
                 # Set video device by its index
@@ -261,8 +253,6 @@ class KVMGui(tk.Tk):
                     self.video_var.set(idx)
             except (ValueError, TypeError):
                 pass
-        if kvm.get("baud_rate") and int(kvm.get("baud_rate", "")) in self.baud_rates:
-            self.baud_rate_var.set(int(kvm.get("baud_rate", "")))
 
         # Booleans
         self.window_var.set(kvm.get("windowed", "False") == "True")
@@ -272,7 +262,6 @@ class KVMGui(tk.Tk):
     @chainable
     def _save_settings(self, chain: List[Callable] = []) -> None:
         settings_dict = {
-            "kb_backend": self.kb_backend_var.get(),
             "serial_port": self.serial_port_var.get(),
             "video_device": str(self.video_var.get()),
             "baud_rate": str(self.baud_rate_var.get()),
@@ -286,8 +275,12 @@ class KVMGui(tk.Tk):
     def _update_status_bar(self, chain: List[Callable] = []) -> None:
         # Track status bar updates
         status_parts = []
+
+        if self.serial_port_var.get():
+            status_parts.append(f"Serial: {self.serial_port_var.get()}")
+
         if self.keyboard_var.get():
-            status_parts.append(f"Keyboard: {self.kb_backend_var.get()}")
+            status_parts.append(f"Keyboard: Captured")
         else:
             status_parts.append("Keyboard: Idle")
 
