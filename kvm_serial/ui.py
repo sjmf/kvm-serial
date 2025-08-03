@@ -14,6 +14,7 @@ try:
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
     from kvm_serial.backend.implementations.tkop import TkOp
+    from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
     import kvm_serial.utils.settings as settings_util
 except ModuleNotFoundError:
     # Allow running as a script directly
@@ -21,6 +22,7 @@ except ModuleNotFoundError:
     from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
     from backend.implementations.tkop import TkOp
+    from backend.implementations.mouseop import MouseOp, MouseButton
     import utils.settings as settings_util
 
 logger = logging.getLogger(__name__)
@@ -66,6 +68,7 @@ class KVMGui(tk.Tk):
     pos_y: tk.IntVar
 
     keyboard_op: TkOp
+    mouse_op: MouseOp
     serial_port: Serial | None
 
     def __init__(self) -> None:
@@ -207,8 +210,11 @@ class KVMGui(tk.Tk):
         self.serial_port_var.set(port)
         if self.serial_port is not None:
             self.serial_port.close()
+            self.serial_port = None
+
         self.serial_port = Serial(port, self.baud_rate_var.get())
         self.keyboard_op = TkOp(self.serial_port)
+        self.mouse_op = MouseOp(self.serial_port)
 
     def _on_video_device_selected(self, device):
         self.video_device_var.set(device)
@@ -365,26 +371,32 @@ class KVMGui(tk.Tk):
         def inside_y(event):
             return event.y >= 0 and event.y <= self.canvas_height
 
-        if inside_x(event) and inside_y(event):
-            self.pos_x.set(event.x)
-            self.pos_y.set(event.y)
-            self.mouse_var.set(True)
-        else:
+        if not inside_x(event) or not inside_y(event):
             self.mouse_var.set(False)
+            return
+
+        self.pos_x.set(event.x)
+        self.pos_y.set(event.y)
+        self.mouse_var.set(True)
+
+        self.mouse_op.on_move(event.x, event.y, self.canvas_width, self.canvas_height)
 
     def _on_mouse_event(self, event):
-        if event.type == tk.EventType.ButtonPress:
-            if event.num == 1:
-                logging.info(f"Left click at {event.x}, {event.y}")
-            elif event.num == 2:
-                logging.info(f"Right click at {event.x}, {event.y}")
-            elif event.num == 3:
-                logging.info(f"Middle click at {event.x}, {event.y}")
-        elif event.type == tk.EventType.ButtonRelease:
-            logging.info(f"Mouse button {event.num} released at {event.x}, {event.y}")
+        btn = ["RELEASE", "LEFT", "RIGHT", "MIDDLE"]
+        pressed = "pressed" if event.type == tk.EventType.ButtonPress else "released"
+        logging.info(f"Mouse {btn[event.num]} {pressed} at {event.x}, {event.y}")
+
+        self.mouse_op.on_click(
+            event.x,
+            event.y,
+            MouseButton[btn[event.num]],
+            event.type == tk.EventType.ButtonPress,
+        )
 
     def _on_mouse_scroll(self, event):
         logging.info(f"Mouse wheel scroll delta {event.delta} at {event.x}, {event.y}")
+
+        self.mouse_op.on_scroll(event.x, event.y, 0, 0)
 
     def _on_key_event(self, event):
         pressed = "pressed" if event.type == tk.EventType.KeyPress else "released"
