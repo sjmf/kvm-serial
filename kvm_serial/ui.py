@@ -39,7 +39,7 @@ def chainable(func):
         if chain:
             next_func = chain.pop(0)
             # Schedule the next function in the chain using Tkinter's event loop
-            self.after(10, lambda: next_func(chain))
+            self.after(0, lambda: next_func(chain))
         return result
 
     return wrapper
@@ -62,20 +62,24 @@ class KVMGui(tk.Tk):
 
     baud_rate_var: tk.IntVar
     window_var: tk.BooleanVar
+    show_status_var: tk.BooleanVar
+    status_var: tk.StringVar
     verbose_var: tk.BooleanVar
 
     pos_x: tk.IntVar
     pos_y: tk.IntVar
 
-    keyboard_op: TkOp
-    mouse_op: MouseOp
     serial_port: Serial | None
+    keyboard_op: TkOp | None
+    mouse_op: MouseOp | None
 
     def __init__(self) -> None:
         super().__init__()
 
         self.video_device = CaptureDevice()
         self.serial_port = None
+        self.mouse_op = None
+        self.keyboard_op = None
 
         # Dropdown values
         self.baud_rates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
@@ -85,7 +89,8 @@ class KVMGui(tk.Tk):
         # Window characteristics
         self.canvas_width = 1280
         self.canvas_height = 720
-        self.status_bar_height = 24  # Typical status bar height in pixels
+        self.status_bar_default_height = 24  # Typical status bar height in pixels
+        self.status_bar_height = self.status_bar_default_height
         self.title("Serial KVM")
         self.resizable(True, True)
         self.geometry(f"{self.canvas_width}x{self.canvas_height + self.status_bar_height}")
@@ -98,6 +103,7 @@ class KVMGui(tk.Tk):
         self.video_device_var = tk.StringVar(value="Loading cameras...")
         self.baud_rate_var = tk.IntVar(value=self.baud_rates[3])
         self.window_var = tk.BooleanVar(value=False)
+        self.show_status_var = tk.BooleanVar(value=True)
         self.verbose_var = tk.BooleanVar(value=False)
 
         self.pos_x = tk.IntVar(value=0)
@@ -115,6 +121,15 @@ class KVMGui(tk.Tk):
         # Options Menu
         options_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Options", menu=options_menu)
+
+        # View Menu
+        view_menu = tk.Menu(menubar, tearoff=0)
+        view_menu.add_checkbutton(
+            label="Show Status Bar",
+            variable=self.show_status_var,
+            command=self._toggle_status_bar,
+        )
+        menubar.add_cascade(label="View", menu=view_menu)
 
         # Baud Rate submenu
         self.baud_menu = tk.Menu(options_menu, tearoff=0)
@@ -140,7 +155,7 @@ class KVMGui(tk.Tk):
 
         # Status Bar
         self.status_var = tk.StringVar(value="Initialising...")
-        status_bar = tk.Label(
+        self.status_bar = tk.Label(
             self,
             textvariable=self.status_var,
             bd=1,
@@ -148,7 +163,8 @@ class KVMGui(tk.Tk):
             anchor=tk.W,
             height=1,  # height in text lines, not pixels
         )
-        status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+        if self.show_status_var.get():
+            self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
 
         # Main Window Area (black canvas)
         self.main_canvas = tk.Canvas(
@@ -179,6 +195,7 @@ class KVMGui(tk.Tk):
                 self._populate_video_devices,
                 self._populate_serial_ports,
                 self._load_settings,
+                self._toggle_status_bar,
                 self._update_status_bar,
                 self._update_video,
             ],
@@ -289,6 +306,7 @@ class KVMGui(tk.Tk):
         # Booleans
         self.window_var.set(kvm.get("windowed", "False") == "True")
         self.verbose_var.set(kvm.get("verbose", "False") == "True")
+        self.show_status_var.set(kvm.get("statusbar", "False") == "True")
         logging.info("Settings loaded from INI file.")
 
     @chainable
@@ -298,6 +316,7 @@ class KVMGui(tk.Tk):
             "video_device": str(self.video_var.get()),
             "baud_rate": str(self.baud_rate_var.get()),
             "windowed": str(self.window_var.get()),
+            "statusbar": str(self.show_status_var.get()),
             "verbose": str(self.verbose_var.get()),
         }
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
@@ -305,6 +324,10 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _update_status_bar(self, chain: List[Callable] = []) -> None:
+        if not self.show_status_var.get():
+            self.after(1000, self._update_status_bar)
+            return
+
         # Track status bar updates
         status_parts = []
 
@@ -328,6 +351,22 @@ class KVMGui(tk.Tk):
 
         self.status_var.set(" | ".join(status_parts))
         self.after(250, self._update_status_bar)
+
+    @chainable
+    def _toggle_status_bar(self, chain: List[Callable] = []) -> None:
+        if self.show_status_var.get():
+            self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
+            self.status_bar_height = self.status_bar_default_height
+        else:
+            self.status_bar.pack_forget()
+            self.status_bar_height = 0
+
+        # Adjust canvas height
+        new_canvas_height = self.winfo_height() - self.status_bar_height
+        if new_canvas_height < 1:
+            new_canvas_height = 1
+        self.canvas_height = new_canvas_height
+        self.main_canvas.config(height=self.canvas_height)
 
     @chainable
     def _update_video(self, chain: List[Callable] = []) -> None:
