@@ -35,6 +35,12 @@ def chainable(func):
 
     @wraps(func)
     def wrapper(self, chain: List[Callable] = [], *args, **kwargs):
+        """
+        Wrapper for chainable functions. Executes the function and, if a chain is provided,
+        schedules the next function in the chain using Tkinter's event loop.
+        Args:
+            chain (List[Callable]): List of callables to execute in sequence.
+        """
         result = func(self, chain, *args, **kwargs)
         if chain:
             next_func = chain.pop(0)
@@ -46,6 +52,15 @@ def chainable(func):
 
 
 class KVMGui(tk.Tk):
+    """
+    Main GUI class for the Serial KVM application.
+
+    A graphical user interface (GUI) for controlling a CH9329-based software KVM (Keyboard, Video, Mouse) switch.
+
+    Provides a Tkinter-based interface for configuring and controlling serial, video, keyboard,
+    and mouse devices. Handles device selection, status display, event processing, and persistent
+    settings management for the SerialKVM tool.
+    """
 
     CONFIG_FILE = ".kvm_settings.ini"
 
@@ -74,6 +89,9 @@ class KVMGui(tk.Tk):
     mouse_op: MouseOp | None
 
     def __init__(self) -> None:
+        """
+        Initialize the KVMGui application window, UI elements, variables, menus, and event bindings.
+        """
         super().__init__()
 
         self.video_device = CaptureDevice()
@@ -205,9 +223,17 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _run_chained(self, chain: List[Callable] = []) -> None:
+        """
+        Placeholder for running a chain of deferred startup tasks using the chainable decorator.
+        Args:
+            chain (List[Callable]): List of callables to execute in sequence.
+        """
         pass
 
     def _populate_serial_port_menu(self):
+        """
+        Populate the serial port dropdown menu with available serial ports.
+        """
         self.serial_port_menu.delete(0, tk.END)
         for port in self.serial_ports:
             self.serial_port_menu.add_radiobutton(
@@ -218,6 +244,9 @@ class KVMGui(tk.Tk):
             )
 
     def _populate_video_device_menu(self):
+        """
+        Populate the video device dropdown menu with available video devices.
+        """
         self.video_device_menu.delete(0, tk.END)
         for device in self.video_devices:
             label = str(device)
@@ -229,6 +258,12 @@ class KVMGui(tk.Tk):
             )
 
     def _on_serial_port_selected(self, port):
+        """
+        Handle selection of a serial port, update the serial port variable, and initialise
+        keyboard and mouse operations.
+        Args:
+            port (str): The selected serial port.
+        """
         self.serial_port_var.set(port)
         if self.serial_port is not None:
             self.serial_port.close()
@@ -239,6 +274,12 @@ class KVMGui(tk.Tk):
         self.mouse_op = MouseOp(self.serial_port)
 
     def _on_baud_rate_selected(self, baud):
+        """
+        Handle selection of a baud rate, update the baud rate variable, and reinitialise the serial
+        port and operations classes that rely on it.
+        Args:
+            baud (int): The selected baud rate.
+        """
         self.baud_rate_var.set(baud)
         if self.serial_port is not None:
             self.serial_port.close()
@@ -249,6 +290,11 @@ class KVMGui(tk.Tk):
         self.mouse_op = MouseOp(self.serial_port)
 
     def _on_video_device_selected(self, device):
+        """
+        Handle selection of a video device, update the video device variable, and set the camera index.
+        Args:
+            device (str): The selected video device label.
+        """
         self.video_device_var.set(device)
         idx = int(self.video_device_var.get()[0])
         self.video_device.setCamera(idx)
@@ -259,6 +305,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _populate_serial_ports(self, chain: List[Callable] = []) -> None:
+        """
+        Populate the list of available serial ports and update the UI. Show an error if none are found.
+        """
         # Populate the serial devices dropdown
         self.serial_ports = list_serial_ports()
         logging.info(self.serial_ports)
@@ -270,6 +319,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _populate_video_devices(self, chain: List[Callable] = []) -> None:
+        """
+        Populate the list of available video devices and update the UI. Show an error if none are found.
+        """
         # Populate the video devices dropdown
         self.video_devices = CaptureDevice.getCameras()
         video_strings = [str(v) for v in self.video_devices]
@@ -284,6 +336,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _load_settings(self, chain: List[Callable] = []) -> None:
+        """
+        Load application settings from the configuration file and apply them to the UI and device selections.
+        """
         kvm = settings_util.load_settings(self.CONFIG_FILE, "KVM")
         # Only set if present in current options
         if kvm.get("serial_port") in self.serial_ports:
@@ -311,6 +366,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _save_settings(self, chain: List[Callable] = []) -> None:
+        """
+        Save current application settings to the configuration file.
+        """
         settings_dict = {
             "serial_port": self.serial_port_var.get(),
             "video_device": str(self.video_var.get()),
@@ -324,6 +382,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _update_status_bar(self, chain: List[Callable] = []) -> None:
+        """
+        Update the status bar with current serial, keyboard, mouse, and video device information.
+        """
         if not self.show_status_var.get():
             self.after(1000, self._update_status_bar)
             return
@@ -348,6 +409,9 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _toggle_status_bar(self, chain: List[Callable] = []) -> None:
+        """
+        Show or hide the status bar and adjust the main canvas height accordingly.
+        """
         if self.show_status_var.get():
             self.status_bar.pack(side=tk.BOTTOM, fill=tk.X)
             self.status_bar_height = self.status_bar_default_height
@@ -364,6 +428,10 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _update_video(self, chain: List[Callable] = []) -> None:
+        """
+        Update the main canvas with the latest video frame from the selected camera device,
+        maintaining the correct frame rate if possible, but not blocking the UI if not.
+        """
         idx = self.video_var.get()
         start_time = time.time()
 
@@ -405,6 +473,11 @@ class KVMGui(tk.Tk):
         self.after(wait_ms, self._update_video)  # use camera fps
 
     def _on_resize(self, event):
+        """
+        Handle window resize events and update the canvas size accordingly.
+        Args:
+            event: Tkinter event object containing new window dimensions.
+        """
         # Only update if the size actually changed
         if event.widget == self:
             new_width = event.width
@@ -415,6 +488,12 @@ class KVMGui(tk.Tk):
                 self.main_canvas.config(width=self.canvas_width, height=self.canvas_height)
 
     def _on_mouse_move(self, event):
+        """
+        Handle mouse movement events within the canvas, update mouse position, and trigger mouse operations.
+        Args:
+            event: Tkinter event object containing mouse coordinates.
+        """
+
         # Bound to movement event. Only update inside canvas
         def inside_x(event):
             return event.x >= 0 and event.x <= self.canvas_width
@@ -430,14 +509,19 @@ class KVMGui(tk.Tk):
         self.pos_y.set(event.y)
         self.mouse_var.set(True)
 
-        self.mouse_op.on_move(event.x, event.y, self.canvas_width, self.canvas_height)
+        self.mouse_op.on_move(event.x, event.y, self.canvas_width, self.canvas_height)  # type: ignore
 
     def _on_mouse_event(self, event):
+        """
+        Handle mouse button press and release events, logging and triggering mouse operations.
+        Args:
+            event: Tkinter event object containing mouse button and position.
+        """
         btn = ["RELEASE", "LEFT", "RIGHT", "MIDDLE"]
         pressed = "pressed" if event.type == tk.EventType.ButtonPress else "released"
         logging.info(f"Mouse {btn[event.num]} {pressed} at {event.x}, {event.y}")
 
-        self.mouse_op.on_click(
+        self.mouse_op.on_click(  # type: ignore
             event.x,
             event.y,
             MouseButton[btn[event.num]],
@@ -445,25 +529,48 @@ class KVMGui(tk.Tk):
         )
 
     def _on_mouse_scroll(self, event):
+        """
+        Handle mouse wheel scroll events and trigger mouse scroll operations.
+        Args:
+            event: Tkinter event object containing scroll delta and position.
+        """
         logging.info(f"Mouse wheel scroll delta {event.delta} at {event.x}, {event.y}")
 
-        self.mouse_op.on_scroll(event.x, event.y, 0, 0)
+        self.mouse_op.on_scroll(event.x, event.y, 0, 0)  # type: ignore
 
     def _on_key_event(self, event):
+        """
+        Handle key press and release events, logging and triggering keyboard operations.
+        Args:
+            event: Tkinter event object containing key information.
+        """
         pressed = "pressed" if event.type == tk.EventType.KeyPress else "released"
         logging.info(f"Key {pressed}: {event.keysym} (char: {event.char})")
-        self.keyboard_op.parse_key(event)
+        self.keyboard_op.parse_key(event)  # type: ignore
 
     def _on_focus_in(self, event):
+        """
+        Handle window focus-in events, updating keyboard capture state.
+        Args:
+            event: Tkinter event object.
+        """
         logging.info("Window focused")
         self.keyboard_var.set(True)
 
     def _on_focus_out(self, event):
+        """
+        Handle window focus-out events, updating keyboard capture state.
+        Args:
+            event: Tkinter event object.
+        """
         logging.info("Window unfocused")
         self.keyboard_var.set(False)
 
 
 def main():
+    """
+    Entry point for the application. Configures logging and starts the KVMGui main loop.
+    """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = KVMGui()
     app.mainloop()
