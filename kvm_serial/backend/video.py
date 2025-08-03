@@ -155,11 +155,15 @@ class CaptureDevice(InputHandler):
         if not self.cam:
             raise CaptureDeviceException("No camera configured. Call setCamera(index).")
         _, frame = self.cam.read()
-        if resize:
-            frame = cv2.resize(frame, resize)
-        if convert_color_space:
-            frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-        return frame
+        try:
+            if resize:
+                frame = cv2.resize(frame, resize)
+            if convert_color_space:
+                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            return frame
+        except cv2.error as e:
+            logging.error(e)
+            raise e
 
 
 if __name__ == "__main__":
