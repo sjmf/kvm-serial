@@ -32,7 +32,7 @@ class TestMouse:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_datacomm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
@@ -96,13 +96,13 @@ class TestMouse:
 
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
             # Set up a MouseListener with known screen size
             listener = MouseListener(mock_serial)
-            listener.comm = mock_comm
+            listener.op.hid_serial_out = mock_comm
             listener._width = 1920
             listener._height = 1080
 
@@ -155,13 +155,14 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
+            from kvm_serial.backend.implementations.mouseop import MouseButton
 
             listener = MouseListener(mock_serial)
 
-            listener.comm = mock_comm
+            listener.op.hid_serial_out = mock_comm
             listener._width = 1920
             listener._height = 1080
 
@@ -169,9 +170,9 @@ class TestMouse:
             left_button = MagicMock()
             right_button = MagicMock()
             # Patch control_chars to accept our mock buttons
-            listener.control_chars = {
-                left_button: b"\x01",
-                right_button: b"\x02",
+            listener.pynput_button_mapping = {  # type: ignore
+                left_button: MouseButton.LEFT,
+                right_button: MouseButton.RIGHT,
             }
             # Test left button press
             result_press = listener.on_click(100, 200, left_button, True)
@@ -209,12 +210,12 @@ class TestMouse:
         """
         with (
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.DataComm") as mock_comm,
+            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
         ):
             from kvm_serial.backend.mouse import MouseListener
 
             listener = MouseListener(mock_serial)
-            listener.comm = mock_comm
+            listener.op.hid_serial_out = mock_comm
             listener._width = 1920
             listener._height = 1080
 
