@@ -120,7 +120,12 @@ class KVMGui(tk.Tk):
         self.baud_menu = tk.Menu(options_menu, tearoff=0)
         self.baud_rate_var = tk.IntVar(value=self.baud_rates[0])
         for rate in self.baud_rates:
-            self.baud_menu.add_radiobutton(label=str(rate), variable=self.baud_rate_var, value=rate)
+            self.baud_menu.add_radiobutton(
+                label=str(rate),
+                variable=self.baud_rate_var,
+                value=rate,
+                command=lambda r=rate: self._on_baud_rate_selected(r),
+            )
         options_menu.add_cascade(label="Baud Rate", menu=self.baud_menu)
 
         # Serial Port submenu
@@ -213,6 +218,16 @@ class KVMGui(tk.Tk):
             self.serial_port = None
 
         self.serial_port = Serial(port, self.baud_rate_var.get())
+        self.keyboard_op = TkOp(self.serial_port)
+        self.mouse_op = MouseOp(self.serial_port)
+
+    def _on_baud_rate_selected(self, baud):
+        self.baud_rate_var.set(baud)
+        if self.serial_port is not None:
+            self.serial_port.close()
+            self.serial_port = None
+
+        self.serial_port = Serial(self.serial_port_var.get(), baud)
         self.keyboard_op = TkOp(self.serial_port)
         self.mouse_op = MouseOp(self.serial_port)
 
