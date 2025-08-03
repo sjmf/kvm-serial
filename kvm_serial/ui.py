@@ -80,6 +80,7 @@ class KVMGui(tk.Tk):
     show_status_var: tk.BooleanVar
     status_var: tk.StringVar
     verbose_var: tk.BooleanVar
+    hide_mouse_var: tk.BooleanVar
 
     pos_x: tk.IntVar
     pos_y: tk.IntVar
@@ -124,6 +125,7 @@ class KVMGui(tk.Tk):
         self.window_var = tk.BooleanVar(value=False)
         self.show_status_var = tk.BooleanVar(value=True)
         self.verbose_var = tk.BooleanVar(value=False)
+        self.hide_mouse_var = tk.BooleanVar(value=False)
 
         self.pos_x = tk.IntVar(value=0)
         self.pos_y = tk.IntVar(value=0)
@@ -140,6 +142,13 @@ class KVMGui(tk.Tk):
         # Options Menu
         options_menu = tk.Menu(menubar, tearoff=0)
         menubar.add_cascade(label="Options", menu=options_menu)
+
+        # Hide Mouse Pointer option
+        options_menu.add_checkbutton(
+            label="Hide Mouse Pointer",
+            variable=self.hide_mouse_var,
+            command=self._update_mouse_cursor,
+        )
 
         # View Menu
         view_menu = tk.Menu(menubar, tearoff=0)
@@ -190,6 +199,8 @@ class KVMGui(tk.Tk):
             self, width=self.canvas_width, height=self.canvas_height, bg="black"
         )
         self.main_canvas.pack(side=tk.TOP, fill=tk.BOTH, expand=True)
+        self.main_canvas.bind("<Enter>", self._update_mouse_cursor)
+        self.main_canvas.bind("<Leave>", self._update_mouse_cursor)
 
         # Input event handling
         self.bind("<Configure>", self._on_resize)
@@ -472,6 +483,15 @@ class KVMGui(tk.Tk):
             self._last_frame_time = now
 
         self.after(wait_ms, self._update_video)  # use camera fps
+
+    def _update_mouse_cursor(self, event=None):
+        """
+        Update the mouse cursor on the main canvas depending on the hide_mouse_var state.
+        """
+        if self.hide_mouse_var.get():
+            self.main_canvas.config(cursor="none")
+        else:
+            self.main_canvas.config(cursor="arrow")
 
     def _on_resize(self, event):
         """
