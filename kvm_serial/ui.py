@@ -4,7 +4,6 @@ import os
 import tkinter as tk
 from tkinter import messagebox
 import logging
-import configparser
 from typing import List, Callable
 from functools import wraps
 from PIL import Image, ImageTk
@@ -13,11 +12,13 @@ import time
 try:
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
+    import kvm_serial.utils.settings as settings_util
 except ModuleNotFoundError:
     # Allow running as a script directly
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
+    import utils.settings as settings_util
 
 logger = logging.getLogger(__name__)
 
@@ -245,14 +246,7 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _load_settings(self, chain: List[Callable] = []) -> None:
-        config = configparser.ConfigParser()
-        if not os.path.exists(self.CONFIG_FILE):
-            return
-        config.read(self.CONFIG_FILE)
-        if "KVM" not in config:
-            return
-        kvm = config["KVM"]
-
+        kvm = settings_util.load_settings(self.CONFIG_FILE, "KVM")
         # Only set if present in current options
         if kvm.get("kb_backend", "") in self.kb_backends:
             self.kb_backend_var.set(kvm.get("kb_backend", ""))
@@ -260,6 +254,7 @@ class KVMGui(tk.Tk):
             self.serial_port_var.set(kvm.get("serial_port", ""))
         if kvm.get("video_device") is not None:
             try:
+                # Set video device by its index
                 idx = int(kvm.get("video_device", ""))
                 if 0 <= idx < len(self.video_devices):
                     self.video_device_var.set(str(self.video_devices[idx]))
@@ -276,8 +271,7 @@ class KVMGui(tk.Tk):
 
     @chainable
     def _save_settings(self, chain: List[Callable] = []) -> None:
-        config = configparser.ConfigParser()
-        config["KVM"] = {
+        settings_dict = {
             "kb_backend": self.kb_backend_var.get(),
             "serial_port": self.serial_port_var.get(),
             "video_device": str(self.video_var.get()),
@@ -285,8 +279,7 @@ class KVMGui(tk.Tk):
             "windowed": str(self.window_var.get()),
             "verbose": str(self.verbose_var.get()),
         }
-        with open(self.CONFIG_FILE, "w") as f:
-            config.write(f)
+        settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
 
     @chainable
