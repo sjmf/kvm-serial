@@ -117,9 +117,9 @@ class KVMQtGui(QMainWindow):
     mouse_var: bool
 
     serial_port_var: str
+    baud_rate_var: int
     video_device_var: str
 
-    baud_rate_var: int
     window_var: bool
     show_status_var: bool
     status_var: str
@@ -253,7 +253,7 @@ class KVMQtGui(QMainWindow):
 
         # Load serial port setting (only if present in current options)
         if kvm.get("serial_port") in self.serial_ports:
-            self.serial_port_var = kvm.get("serial_port")
+            self.serial_port_var = kvm.get("serial_port", self.serial_ports[-1])
             # Update menu selection
             for action in self.serial_port_menu.actions():
                 action.setChecked(action.text() == self.serial_port_var)
