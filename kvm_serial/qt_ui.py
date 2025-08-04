@@ -20,11 +20,13 @@ from PyQt5.QtWidgets import (
 
 try:
     import kvm_serial.utils.settings as settings_util
+    from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
 except ModuleNotFoundError:
     # Allow running as a script directly
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     import utils.settings as settings_util
+    from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
 
 
@@ -165,6 +167,20 @@ class KVMQtGui(QMainWindow):
             self.canvas_width, self.canvas_height + self.status_bar_height
         )  # 720 + 24 status bar height
 
+        # Initialize state variables
+        self.keyboard_var = False
+        self.video_var = -1
+        self.mouse_var = False
+        self.serial_port_var = "Loading serial..."
+        self.video_device_var = "Loading cameras..."
+        self.baud_rate_var = self.baud_rates[3]  # Default to 9600
+        self.window_var = False
+        self.show_status_var = True
+        self.verbose_var = False
+        self.hide_mouse_var = False
+        self.pos_x = 0
+        self.pos_y = 0
+
         # Dropdown values
         self.video_device_idx: int = 0  # type annotation for loaded index
         self.camera_initialized: bool = False  # type annotation for camera state
@@ -187,6 +203,15 @@ class KVMQtGui(QMainWindow):
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self.close)
         file_menu.addAction(quit_action)
+
+        # Options Menu
+        options_menu = menubar.addMenu("Options")
+
+        # Serial Port submenu
+        self.serial_port_menu = options_menu.addMenu("Serial Port")
+
+        # Baud Rate submenu
+        self.baud_rate_menu = options_menu.addMenu("Baud Rate")
 
         # Video Display Area (QGraphicsView)
         self.video_scene = QGraphicsScene(self)
@@ -216,8 +241,9 @@ class KVMQtGui(QMainWindow):
         self.frame_count = 0
         self.fps_calculation_start = time.time()
 
-        # Defer settings load
-        QTimer.singleShot(0, lambda: self._load_settings(self.CONFIG_FILE))
+        # Defer initialization tasks
+        QTimer.singleShot(0, self._initialize_devices)
+        QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
 
     def _load_settings(self, config_file: str):
         """
@@ -230,6 +256,89 @@ class KVMQtGui(QMainWindow):
     def save_settings(self):
         # Placeholder for save logic
         QMessageBox.information(self, "Save", "Configuration saved (placeholder)")
+
+    def _initialize_devices(self):
+        """
+        Initialize and populate device lists (serial ports, video devices)
+        """
+        self._populate_serial_ports()
+        self._populate_baud_rates()
+
+    def _populate_serial_ports(self):
+        """
+        Populate the list of available serial ports and update the menu.
+        """
+        try:
+            self.serial_ports = list_serial_ports()
+            logging.info(f"Found serial ports: {self.serial_ports}")
+            self._populate_serial_port_menu()
+
+            if len(self.serial_ports) == 0:
+                QMessageBox.warning(self, "Start-up Warning", "No serial ports found.")
+                self.serial_port_var = "None found"
+            else:
+                # Default to the last port found
+                self.serial_port_var = self.serial_ports[-1]
+
+        except Exception as e:
+            logging.error(f"Error discovering serial ports: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to discover serial ports: {e}")
+            self.serial_ports = []
+            self.serial_port_var = "Error"
+
+    def _populate_serial_port_menu(self):
+        """
+        Populate the serial port dropdown menu with available serial ports.
+        """
+        self.serial_port_menu.clear()
+        for port in self.serial_ports:
+            action = QAction(port, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, p=port: self._on_serial_port_selected(p))
+            self.serial_port_menu.addAction(action)
+
+            # Check the current selection
+            if port == self.serial_port_var:
+                action.setChecked(True)
+
+    def _populate_baud_rates(self):
+        """
+        Populate the baud rate menu with available baud rates.
+        """
+        self.baud_rate_menu.clear()
+        for rate in self.baud_rates:
+            action = QAction(str(rate), self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, r=rate: self._on_baud_rate_selected(r))
+            self.baud_rate_menu.addAction(action)
+
+            # Check the current selection
+            if rate == self.baud_rate_var:
+                action.setChecked(True)
+
+    def _on_serial_port_selected(self, port):
+        """
+        Handle selection of a serial port.
+        """
+        # Uncheck all other serial port actions
+        for action in self.serial_port_menu.actions():
+            action.setChecked(action.text() == port)
+
+        self.serial_port_var = port
+        logging.info(f"Selected serial port: {port}")
+        # TODO: Initialize serial operations when implemented
+
+    def _on_baud_rate_selected(self, baud_rate):
+        """
+        Handle selection of a baud rate.
+        """
+        # Uncheck all other baud rate actions
+        for action in self.baud_rate_menu.actions():
+            action.setChecked(action.text() == str(baud_rate))
+
+        self.baud_rate_var = baud_rate
+        logging.info(f"Selected baud rate: {baud_rate}")
+        # TODO: Reinitialize serial operations when implemented
 
     def _request_video_frame(self):
         """
