@@ -250,8 +250,31 @@ class KVMQtGui(QMainWindow):
         Load settings and set variables (deferred).
         """
         kvm = settings_util.load_settings(config_file, "KVM")
+
+        # Load serial port setting (only if present in current options)
+        if kvm.get("serial_port") in self.serial_ports:
+            self.serial_port_var = kvm.get("serial_port")
+            # Update menu selection
+            for action in self.serial_port_menu.actions():
+                action.setChecked(action.text() == self.serial_port_var)
+
+        # Load baud rate setting (only if valid)
+        if kvm.get("baud_rate") and int(kvm.get("baud_rate", "")) in self.baud_rates:
+            self.baud_rate_var = int(kvm.get("baud_rate", ""))
+            # Update menu selection
+            for action in self.baud_rate_menu.actions():
+                action.setChecked(action.text() == str(self.baud_rate_var))
+
+        # Load video device setting
         self.video_device_idx = int(kvm.get("video_device", 0))
         self.video_worker.set_camera_index(self.video_device_idx)
+
+        # Load other boolean settings
+        self.window_var = kvm.get("windowed", "False") == "True"
+        self.verbose_var = kvm.get("verbose", "False") == "True"
+        self.show_status_var = kvm.get("statusbar", "True") == "True"
+
+        logging.info("Settings loaded from configuration file.")
 
     def save_settings(self):
         # Placeholder for save logic
