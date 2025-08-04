@@ -213,6 +213,9 @@ class KVMQtGui(QMainWindow):
         # Baud Rate submenu
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
 
+        # Video Device submenu
+        self.video_device_menu = options_menu.addMenu("Video Device")
+
         # Video Display Area (QGraphicsView)
         self.video_scene = QGraphicsScene(self)
         self.video_view = QGraphicsView(self.video_scene, self)
@@ -266,8 +269,24 @@ class KVMQtGui(QMainWindow):
                 action.setChecked(action.text() == str(self.baud_rate_var))
 
         # Load video device setting
-        self.video_device_idx = int(kvm.get("video_device", 0))
-        self.video_worker.set_camera_index(self.video_device_idx)
+        if kvm.get("video_device") is not None:
+            try:
+                idx = int(kvm.get("video_device", 0))
+                if 0 <= idx < len(self.video_devices):
+                    self.video_var = idx
+                    self.video_device_var = str(self.video_devices[idx])
+                    self.video_worker.set_camera_index(idx)
+                    # Update menu selection
+                    for action in self.video_device_menu.actions():
+                        action.setChecked(action.text() == self.video_device_var)
+            except (ValueError, TypeError, IndexError):
+                logging.warning(
+                    f"Invalid video device index in settings: {kvm.get('video_device')}"
+                )
+        else:
+            # Use default (first device)
+            self.video_device_idx = 0
+            self.video_worker.set_camera_index(0)
 
         # Load other boolean settings
         self.window_var = kvm.get("windowed", "False") == "True"
@@ -286,6 +305,7 @@ class KVMQtGui(QMainWindow):
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
+        self._populate_video_devices()
 
     def _populate_serial_ports(self):
         """
@@ -362,6 +382,60 @@ class KVMQtGui(QMainWindow):
         self.baud_rate_var = baud_rate
         logging.info(f"Selected baud rate: {baud_rate}")
         # TODO: Reinitialize serial operations when implemented
+
+    def _populate_video_devices(self):
+        """
+        Populate the list of available video devices and update the menu.
+        """
+        try:
+            self.video_devices = CaptureDevice.getCameras()
+            video_strings = [str(v) for v in self.video_devices]
+            logging.info(f"Found video devices: {video_strings}")
+            self._populate_video_device_menu()
+
+            if len(self.video_devices) > 0:
+                self.video_device_var = str(self.video_devices[0])
+                self.video_var = 0  # Default to first device
+            else:
+                self.video_device_var = "None found"
+                QMessageBox.warning(self, "Start-up Warning", "No video devices found.")
+
+        except Exception as e:
+            logging.error(f"Error discovering video devices: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to discover video devices: {e}")
+            self.video_devices = []
+            self.video_device_var = "Error"
+
+    def _populate_video_device_menu(self):
+        """
+        Populate the video device dropdown menu with available video devices.
+        """
+        self.video_device_menu.clear()
+        for i, device in enumerate(self.video_devices):
+            label = str(device)
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.triggered.connect(
+                lambda _, idx=i, lbl=label: self._on_video_device_selected(idx, lbl)
+            )
+            self.video_device_menu.addAction(action)
+
+            # Check the current selection
+            if i == self.video_var:
+                action.setChecked(True)
+
+    def _on_video_device_selected(self, device_idx, device_label):
+        """
+        Handle selection of a video device.
+        """
+        # Uncheck all other video device actions
+        for action in self.video_device_menu.actions():
+            action.setChecked(action.text() == device_label)
+
+        self.video_device_var = device_label
+        self.video_var = device_idx
+        self.video_worker.set_camera_index(device_idx)
+        logging.info(f"Selected video device: {device_label} (index: {device_idx})")
 
     def _request_video_frame(self):
         """
