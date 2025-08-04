@@ -4,6 +4,7 @@ import sys
 import logging
 import time
 import cv2
+from serial import Serial
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
 from PyQt5.QtGui import QImage, QPixmap
 from PyQt5.QtWidgets import (
@@ -22,12 +23,17 @@ try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
+    from kvm_serial.backend.implementations.tkop import TkOp
+    from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
+
 except ModuleNotFoundError:
     # Allow running as a script directly
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
+    from backend.implementations.tkop import TkOp
+    from backend.implementations.mouseop import MouseOp, MouseButton
 
 
 class VideoCaptureWorker(QThread):
@@ -129,9 +135,9 @@ class KVMQtGui(QMainWindow):
     pos_x: int
     pos_y: int
 
-    serial_port: object | None
-    keyboard_op: object | None
-    mouse_op: object | None
+    serial_port: Serial | None
+    keyboard_op: TkOp | None
+    mouse_op: MouseOp | None
 
     canvas_width: int = 1280
     canvas_height: int = 720
@@ -293,6 +299,9 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
 
+        # Initialize serial operations with loaded settings
+        self._initialize_serial_operations()
+
         logging.info("Settings loaded from configuration file.")
 
     def save_settings(self):
@@ -369,7 +378,7 @@ class KVMQtGui(QMainWindow):
 
         self.serial_port_var = port
         logging.info(f"Selected serial port: {port}")
-        # TODO: Initialize serial operations when implemented
+        self._initialize_serial_operations()
 
     def _on_baud_rate_selected(self, baud_rate):
         """
@@ -381,7 +390,59 @@ class KVMQtGui(QMainWindow):
 
         self.baud_rate_var = baud_rate
         logging.info(f"Selected baud rate: {baud_rate}")
-        # TODO: Reinitialize serial operations when implemented
+        self._initialize_serial_operations()
+
+    def _initialize_serial_operations(self):
+        """
+        Initialize or reinitialize serial port and keyboard/mouse operations.
+        """
+        # Close existing serial connection if open
+        self._close_serial_port()
+
+        # Clear existing operations
+        self.keyboard_op = None
+        self.mouse_op = None
+
+        # Only initialize if we have both port and valid baud rate
+        if (
+            self.serial_port_var
+            and self.serial_port_var not in ["Loading serial...", "None found", "Error"]
+            and self.baud_rate_var in self.baud_rates
+        ):
+
+            try:
+                # Initialize serial port
+                self.serial_port = Serial(self.serial_port_var, self.baud_rate_var)
+                logging.info(
+                    f"Opened serial port {self.serial_port_var} at {self.baud_rate_var} baud"
+                )
+
+                # Initialize keyboard and mouse operations
+                self.keyboard_op = TkOp(self.serial_port)
+                self.mouse_op = MouseOp(self.serial_port)
+                logging.info("Initialized keyboard and mouse operations")
+
+            except Exception as e:
+                logging.error(f"Failed to initialize serial operations: {e}")
+                QMessageBox.critical(
+                    self, "Serial Error", f"Failed to open serial port {self.serial_port_var}:\n{e}"
+                )
+                # Reset to None if initialization failed
+                self.serial_port = None
+                self.keyboard_op = None
+                self.mouse_op = None
+
+    def _close_serial_port(self):
+        """
+        Utility method to safely close the serial port connection.
+        """
+        if self.serial_port is not None:
+            try:
+                self.serial_port.close()
+                logging.info("Closed serial port connection")
+            except Exception as e:
+                logging.error(f"Error closing serial port: {e}")
+            self.serial_port = None
 
     def _populate_video_devices(self):
         """
@@ -541,9 +602,14 @@ class KVMQtGui(QMainWindow):
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
+        # Stop video components
         self.video_update_timer.stop()
         self.video_worker.quit()
         self.video_worker.wait()
+
+        # Close serial port if open
+        self._close_serial_port()
+
         event.accept()
 
 
