@@ -23,7 +23,7 @@ try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
-    from kvm_serial.backend.implementations.tkop import TkOp
+    from kvm_serial.backend.implementations.qtop import QtOp
     from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
 
 except ModuleNotFoundError:
@@ -32,7 +32,7 @@ except ModuleNotFoundError:
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
     from backend.video import CameraProperties, CaptureDevice
-    from backend.implementations.tkop import TkOp
+    from backend.implementations.qtop import QtOp
     from backend.implementations.mouseop import MouseOp, MouseButton
 
 
@@ -136,7 +136,7 @@ class KVMQtGui(QMainWindow):
     pos_y: int
 
     serial_port: Serial | None
-    keyboard_op: TkOp | None
+    keyboard_op: QtOp | None
     mouse_op: MouseOp | None
 
     canvas_width: int = 1280
@@ -418,7 +418,7 @@ class KVMQtGui(QMainWindow):
                 )
 
                 # Initialize keyboard and mouse operations
-                self.keyboard_op = TkOp(self.serial_port)
+                self.keyboard_op = QtOp(self.serial_port)
                 self.mouse_op = MouseOp(self.serial_port)
                 logging.info("Initialized keyboard and mouse operations")
 
