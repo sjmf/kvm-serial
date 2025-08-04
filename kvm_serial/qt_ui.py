@@ -38,9 +38,9 @@ class KVMQtGui(QMainWindow):
 
     CONFIG_FILE: str = ".kvm_settings.ini"
 
-    baud_rates: list[int]
-    serial_ports: list[str]
-    video_devices: list
+    baud_rates: list[int] = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
+    serial_ports: list[str] = []
+    video_devices: list = []
 
     keyboard_var: bool
     video_var: int
@@ -63,6 +63,12 @@ class KVMQtGui(QMainWindow):
     keyboard_op: object | None
     mouse_op: object | None
 
+    canvas_width: int = 1280
+    canvas_height: int = 720
+    canvas_min_width: int = 512
+    canvas_min_height: int = 320
+    status_bar_default_height: int = 24  # Typical status bar height in pixels
+
     video_view: QGraphicsView
     video_scene: QGraphicsScene
     video_pixmap_item: QGraphicsPixmapItem
@@ -75,26 +81,19 @@ class KVMQtGui(QMainWindow):
         super().__init__()
 
         # IO
-        self.video_device = CaptureDevice()
         self.serial_port = None
         self.mouse_op = None
         self.keyboard_op = None
 
         # Window characteristics
-        self.canvas_width = 1280
-        self.canvas_height = 720
-        self.status_bar_default_height = 24  # Typical status bar height in pixels
         self.status_bar_height = self.status_bar_default_height
         self.setWindowTitle("Serial KVM")
-        self.setMinimumSize(400, 320)
+        self.setMinimumSize(self.canvas_min_width, self.canvas_min_height)
         self.resize(
             self.canvas_width, self.canvas_height + self.status_bar_height
         )  # 720 + 24 status bar height
 
         # Dropdown values
-        self.baud_rates = [1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200]
-        self.serial_ports = []
-        self.video_devices = []
         self.video_device_idx: int = 0  # type annotation for loaded index
         self.camera_initialized: bool = False  # type annotation for camera state
 
@@ -134,7 +133,7 @@ class KVMQtGui(QMainWindow):
         self.video_scene = QGraphicsScene(self)
         self.video_view = QGraphicsView(self.video_scene, self)
         self.video_view.setStyleSheet("background-color: black;")
-        self.video_view.setGeometry(0, 0, 1280, 720)
+        self.video_view.setGeometry(0, 0, self.canvas_width, self.canvas_height)
         self.video_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.video_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         self.video_pixmap_item = QGraphicsPixmapItem()
