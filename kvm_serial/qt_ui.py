@@ -145,19 +145,13 @@ class KVMQtGui(QMainWindow):
         self.video_timer.timeout.connect(self.update_video_frame)
         self.video_timer.start(33)  # ~30 fps
 
-    def _load_settings(self):
+    def _load_settings(self, config_file: str):
         """
         Load settings and set variables (deferred).
         """
-        try:
-            import kvm_serial.utils.settings as settings_util
-        except ModuleNotFoundError:
-            import utils.settings as settings_util
-        kvm = settings_util.load_settings(self.CONFIG_FILE, "KVM")
-        self.video_device_idx = (
-            int(kvm.get("video_device", 0)) if kvm.get("video_device") is not None else 0
-        )
-        self.camera_initialized = False
+        kvm = settings_util.load_settings(config_file, "KVM")
+        self.video_device_idx = int(kvm.get("video_device", 0))
+        self.video_worker.set_camera_index(self.video_device_idx)
 
     def save_settings(self):
         # Placeholder for save logic
