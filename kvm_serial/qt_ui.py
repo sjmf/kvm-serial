@@ -5,8 +5,8 @@ import logging
 import time
 import cv2
 from serial import Serial
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
-from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
+from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -154,6 +154,9 @@ class KVMQtGui(QMainWindow):
     frame_drop_threshold: float = 0.05  # Drop frames if capture takes too long (50ms)
     last_capture_request: float = 0.0  # Track when we last requested a frame
 
+    # Utility dictionary for Mouse button handling
+    BUTTON_MAP: dict = {Qt.MiddleButton: "MIDDLE", Qt.LeftButton: "LEFT", Qt.RightButton: "RIGHT"}
+
     def __init__(self) -> None:
         """
         Initialize the KVMQtGui application window, UI elements, variables, menus, and event bindings.
@@ -232,6 +235,10 @@ class KVMQtGui(QMainWindow):
         self.video_pixmap_item = QGraphicsPixmapItem()
         self.video_scene.addItem(self.video_pixmap_item)
         self.setCentralWidget(self.video_view)
+
+        # Install event filter to intercept graphics view events
+        self.video_scene.installEventFilter(self)
+        self.video_view.setMouseTracking(True)
 
         # Initialize video capture worker thread
         self.video_worker = VideoCaptureWorker(self.canvas_width, self.canvas_height, 0)
@@ -617,17 +624,81 @@ class KVMQtGui(QMainWindow):
             # Update video view size
             self.video_view.setGeometry(0, 0, new_width, new_height)
 
+    def eventFilter(self, source, event):
+        """
+        Handle mouse movement events within the video_scene, update mouse position.
+        This filter receives all events and could be used for other things too.
+
+        Args:
+            event: QEvent object – an event that was fired.
+        """
+        if source == self.video_scene:
+            if event.type() == QEvent.GraphicsSceneMouseMove:
+                pos = event.scenePos()
+                self._on_mouse_move(pos.x(), pos.y())
+            elif event.type() == QEvent.GraphicsSceneMousePress:
+                pos = event.scenePos()
+                self._on_mouse_click(pos.x(), pos.y(), event.button(), down=True)
+            elif event.type() == QEvent.GraphicsSceneMouseRelease:
+                pos = event.scenePos()
+                self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
+
+        # Let event continue to original handler
+        return super().eventFilter(source, event)
+
+    def _on_mouse_click(self, x, y, button, down=True):
+        """
+        Handle mouse button press and release events, logging and triggering mouse operations.
+        Args:
+            event: QMouseEvent object containing mouse button and position.
+        """
+        pressed = "pressed" if down else "released"
+        logging.info(f"Mouse {self.BUTTON_MAP[button]} {pressed} at {x},{y}")
+
+        if self.mouse_op:
+            self.mouse_op.on_click(x, y, MouseButton[self.BUTTON_MAP[button]], down)
+
+    def _on_mouse_move(self, x, y):
+
+        self.pos_x = x
+        self.pos_y = y
+        self.mouse_var = True
+
+        logging.info(f"Mouse at ({self.pos_x}, {self.pos_y})")
+
+        if self.mouse_op:
+            self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
+
+    def wheelEvent(self, event: QWheelEvent):
+        """
+        Handle mouse wheel scroll events and trigger mouse scroll operations.
+        Args:
+            event: Tkinter event object containing scroll delta and position.
+        """
+        x = event.x()
+        y = event.y()
+        dx = event.angleDelta().x()
+        dy = event.angleDelta().y()
+
+        logging.info(f"Mouse wheel scroll delta {dx} {dy} at {x}, {y}")
+
+        if self.mouse_op:
+            self.mouse_op.on_scroll(x, y, dx, dy)
+
+        super().wheelEvent(event)
+
     def keyPressEvent(self, event: QKeyEvent):
         """
         Handle KeyPress events, logging and triggering keyboard operations.
         Args:
             event: QKeyEvent event object containing key information.
         """
-        super().keyPressEvent(event)
         logging.debug(f"Key pressed: {event.key()}")
 
         if self.keyboard_op:
             self.keyboard_op.parse_key(event)
+
+        super().keyPressEvent(event)
 
     def keyReleaseEvent(self, event: QKeyEvent):
         """
@@ -635,11 +706,12 @@ class KVMQtGui(QMainWindow):
         Args:
             event: QKeyEvent event object containing key information.
         """
-        super().keyReleaseEvent(event)
         logging.debug(f"Key released: {event.key()}")
 
         if self.keyboard_op:
             self.keyboard_op.parse_key(event)
+
+        super().keyReleaseEvent(event)
 
     def focusInEvent(self, event: QFocusEvent):
         logging.info("Window focused")
