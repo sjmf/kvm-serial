@@ -203,7 +203,7 @@ class KVMQtGui(QMainWindow):
         # File Menu
         file_menu = menubar.addMenu("File")
         save_action = QAction("Save Configuration", self)
-        save_action.triggered.connect(self.save_settings)
+        save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
         quit_action = QAction("Quit", self)
@@ -304,9 +304,21 @@ class KVMQtGui(QMainWindow):
 
         logging.info("Settings loaded from configuration file.")
 
-    def save_settings(self):
-        # Placeholder for save logic
-        QMessageBox.information(self, "Save", "Configuration saved (placeholder)")
+    def _save_settings(self):
+        """
+        Save current application settings to the configuration file.
+        """
+        settings_dict = {
+            "serial_port": self.serial_port_var,
+            "video_device": str(self.video_var),
+            "baud_rate": str(self.baud_rate_var),
+            "windowed": str(self.window_var),
+            "statusbar": str(self.show_status_var),
+            "verbose": str(self.verbose_var),
+        }
+        settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
+        logging.info("Settings saved to INI file.")
+        QMessageBox.information(self, "Save", "Configuration saved.")
 
     def _initialize_devices(self):
         """
