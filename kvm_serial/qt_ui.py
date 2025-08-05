@@ -6,7 +6,7 @@ import time
 import cv2
 from serial import Serial
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
-from PyQt5.QtGui import QImage, QPixmap, QKeyEvent
+from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -640,6 +640,16 @@ class KVMQtGui(QMainWindow):
 
         if self.keyboard_op:
             self.keyboard_op.parse_key(event)
+
+    def focusInEvent(self, event: QFocusEvent):
+        logging.info("Window focused")
+        self.keyboard_var = True
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event: QFocusEvent):
+        logging.info("Window unfocused")
+        self.keyboard_var = False
+        super().focusOutEvent(event)
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
