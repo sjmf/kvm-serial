@@ -79,12 +79,13 @@ class QtOp(BaseOp):
             bool: True if key was processed successfully
         """
         # Determine if this is a press or release
-        is_press = event.type() == QKeyEvent.KeyPress
-
-        if is_press:
+        if event.type() == QKeyEvent.KeyPress:
             self._on_press(event)
-        else:
+        elif event.type() == QKeyEvent.KeyRelease:
             self._on_release(event)
+        else:
+            logging.warning(f"Got unknown event of kind {type(event)}. Ignoring.")
+            return False
 
         return True
 

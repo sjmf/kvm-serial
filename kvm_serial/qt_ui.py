@@ -6,7 +6,7 @@ import time
 import cv2
 from serial import Serial
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker
-from PyQt5.QtGui import QImage, QPixmap
+from PyQt5.QtGui import QImage, QPixmap, QKeyEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -253,6 +253,9 @@ class KVMQtGui(QMainWindow):
         # Defer initialization tasks
         QTimer.singleShot(0, self._initialize_devices)
         QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
+
+        # Make sure the window can receive key events
+        self.setFocusPolicy(Qt.StrongFocus)
 
     def _load_settings(self, config_file: str):
         """
@@ -594,6 +597,8 @@ class KVMQtGui(QMainWindow):
     def resizeEvent(self, event):
         """
         Handle window resize events and update video capture size accordingly.
+        Args:
+            event: Qt event object containing new window dimensions.
         """
         super().resizeEvent(event)
 
@@ -611,6 +616,30 @@ class KVMQtGui(QMainWindow):
 
             # Update video view size
             self.video_view.setGeometry(0, 0, new_width, new_height)
+
+    def keyPressEvent(self, event: QKeyEvent):
+        """
+        Handle KeyPress events, logging and triggering keyboard operations.
+        Args:
+            event: QKeyEvent event object containing key information.
+        """
+        super().keyPressEvent(event)
+        logging.debug(f"Key pressed: {event.key()}")
+
+        if self.keyboard_op:
+            self.keyboard_op.parse_key(event)
+
+    def keyReleaseEvent(self, event: QKeyEvent):
+        """
+        Handle KeyRelease events.
+        Args:
+            event: QKeyEvent event object containing key information.
+        """
+        super().keyReleaseEvent(event)
+        logging.debug(f"Key released: {event.key()}")
+
+        if self.keyboard_op:
+            self.keyboard_op.parse_key(event)
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
