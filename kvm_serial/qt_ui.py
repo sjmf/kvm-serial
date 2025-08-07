@@ -51,7 +51,7 @@ class VideoCaptureWorker(QThread):
         self.video_device = CaptureDevice()
         self.canvas_width = canvas_width
         self.canvas_height = canvas_height
-        self.camera_initialized = False
+        self.camera_initialised = False
         self.video_device_idx = video_device_idx
         self.mutex = QMutex()
         self.should_capture = False
@@ -62,7 +62,7 @@ class VideoCaptureWorker(QThread):
     def set_camera_index(self, idx):
         with QMutexLocker(self.mutex):
             self.video_device_idx = idx
-            self.camera_initialized = False
+            self.camera_initialised = False
 
     def set_canvas_size(self, width, height):
         with QMutexLocker(self.mutex):
@@ -76,11 +76,11 @@ class VideoCaptureWorker(QThread):
     def _capture_frame(self):
         """Internal method to capture a single frame"""
         with QMutexLocker(self.mutex):
-            # Initialize camera if needed
-            if not self.camera_initialized:
+            # Initialise camera if needed
+            if not self.camera_initialised:
                 try:
                     self.video_device.setCamera(self.video_device_idx)
-                    self.camera_initialized = True
+                    self.camera_initialised = True
                 except Exception as e:
                     logging.error(f"Failed to set camera index {self.video_device_idx}: {e}")
                     return
@@ -119,26 +119,27 @@ class KVMQtGui(QMainWindow):
     serial_ports: list[str] = []
     video_devices: list = []
 
-    keyboard_var: bool
-    video_var: int
-    mouse_var: bool
+    keyboard_var: bool = False
+    video_var: int = -1
+    mouse_var: bool = False
 
-    serial_port_var: str
-    baud_rate_var: int
-    video_device_var: str
+    serial_port_var: str = "Loading serial..."
+    baud_rate_var: int = -1
+    video_device_var: str = "Loading cameras..."
 
-    window_var: bool
-    show_status_var: bool
+    window_var: bool = False
+    show_status_var: bool = True
     status_var: str
-    verbose_var: bool
-    hide_mouse_var: bool
+    verbose_var: bool = False
+    hide_mouse_var: bool = False
 
-    pos_x: int
-    pos_y: int
+    pos_x: int = 0
+    pos_y: int = 0
 
-    serial_port: Serial | None
-    keyboard_op: QtOp | None
-    mouse_op: MouseOp | None
+    # IO
+    serial_port: Serial | None = None
+    keyboard_op: QtOp | None = None
+    mouse_op: MouseOp | None = None
 
     # Dimensions
     canvas_width: int = 1280
@@ -147,6 +148,9 @@ class KVMQtGui(QMainWindow):
     canvas_min_height: int = 320
     status_bar_default_height: int = 24  # Typical status bar height in pixels
 
+    # Video
+    camera_initialised: bool = False  # Camera state
+    video_device_idx: int = 0  # Loaded index
     video_view: QGraphicsView
     video_scene: QGraphicsScene
     video_pixmap_item: QGraphicsPixmapItem
@@ -168,15 +172,21 @@ class KVMQtGui(QMainWindow):
 
     def __init__(self) -> None:
         """
-        Initialize the KVMQtGui application window, UI elements, variables, menus, and event bindings.
+        Initialise the KVMQtGui application window, UI elements, variables, menus, and event bindings.
         """
         super().__init__()
 
-        # IO
-        self.serial_port = None
-        self.mouse_op = None
-        self.keyboard_op = None
+        # Initialise state variables
+        self.baud_rate_var = self.baud_rates[3]  # Default to 9600
 
+        # Perform initialisation
+        self.__init_window()
+        self.__init_menu()
+        self.__init_status_bar()
+        self.__init_video()
+        self.__init_timers()
+
+    def __init_window(self):
         # Window characteristics
         self.status_bar_height = self.status_bar_default_height
         self.setWindowTitle("Serial KVM")
@@ -185,24 +195,10 @@ class KVMQtGui(QMainWindow):
             self.canvas_width, self.canvas_height + self.status_bar_height
         )  # 720 + 24 status bar height
 
-        # Initialize state variables
-        self.keyboard_var = False
-        self.video_var = -1
-        self.mouse_var = False
-        self.serial_port_var = "Loading serial..."
-        self.video_device_var = "Loading cameras..."
-        self.baud_rate_var = self.baud_rates[3]  # Default to 9600
-        self.window_var = False
-        self.show_status_var = True
-        self.verbose_var = False
-        self.hide_mouse_var = False
-        self.pos_x = 0
-        self.pos_y = 0
+        # Make sure the window can receive key events
+        self.setFocusPolicy(Qt.StrongFocus)
 
-        # Dropdown values
-        self.video_device_idx: int = 0  # type annotation for loaded index
-        self.camera_initialized: bool = False  # type annotation for camera state
-
+    def __init_status_bar(self):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
@@ -229,6 +225,7 @@ class KVMQtGui(QMainWindow):
             label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             label.setStyleSheet("QLabel { border: 1px solid gray; }")
 
+    def __init_menu(self):
         # Menu Bar
         menubar = QMenuBar(self)
         self.setMenuBar(menubar)
@@ -255,6 +252,7 @@ class KVMQtGui(QMainWindow):
         # Video Device submenu
         self.video_device_menu = options_menu.addMenu("Video Device")
 
+    def __init_video(self):
         # Video Display Area (QGraphicsView)
         self.video_scene = QGraphicsScene(self)
         self.video_view = QGraphicsView(self.video_scene, self)
@@ -270,11 +268,12 @@ class KVMQtGui(QMainWindow):
         self.video_scene.installEventFilter(self)
         self.video_view.setMouseTracking(True)
 
-        # Initialize video capture worker thread
+        # Initialise video capture worker thread
         self.video_worker = VideoCaptureWorker(self.canvas_width, self.canvas_height, 0)
         self.video_worker.frame_ready.connect(self._on_frame_ready)
         self.video_worker.start()
 
+    def __init_timers(self):
         # Set up QTimer for frame updates (integrates with Qt event loop)
         self.video_update_timer = QTimer()
         self.video_update_timer.timeout.connect(self._request_video_frame)
@@ -287,8 +286,8 @@ class KVMQtGui(QMainWindow):
         self.frame_count = 0
         self.fps_calculation_start = time.time()
 
-        # Defer initialization tasks
-        QTimer.singleShot(0, self._initialize_devices)
+        # Defer initialisation tasks
+        QTimer.singleShot(0, self.__init_devices)
         QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
 
         # Status bar timer
@@ -296,8 +295,13 @@ class KVMQtGui(QMainWindow):
         self.status_timer.timeout.connect(self._update_status_bar)
         self.status_timer.start(500)  # Update every half second
 
-        # Make sure the window can receive key events
-        self.setFocusPolicy(Qt.StrongFocus)
+    def __init_devices(self):
+        """
+        Initialise and populate device lists (serial ports, video devices)
+        """
+        self._populate_serial_ports()
+        self._populate_baud_rates()
+        self._populate_video_devices()
 
     def _update_status_bar(self):
         """
@@ -307,7 +311,9 @@ class KVMQtGui(QMainWindow):
             return
 
         # Update each status bar part
-        self.status_serial_label.setText(f"Serial: {self.serial_port_var}")
+        self.status_serial_label.setText(
+            f"Serial: {self.serial_port_var} @{self.baud_rate_var} baud"
+        )
 
         captured = "Captured" if self.keyboard_var else "Idle"
         self.status_keyboard_label.setText(f"Keyboard: {captured}")
@@ -368,8 +374,8 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
 
-        # Initialize serial operations with loaded settings
-        self._initialize_serial_operations()
+        # Initialise serial operations with loaded settings
+        self.__init_serial()
 
         logging.info("Settings loaded from configuration file.")
 
@@ -388,14 +394,6 @@ class KVMQtGui(QMainWindow):
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
         QMessageBox.information(self, "Save", "Configuration saved.")
-
-    def _initialize_devices(self):
-        """
-        Initialize and populate device lists (serial ports, video devices)
-        """
-        self._populate_serial_ports()
-        self._populate_baud_rates()
-        self._populate_video_devices()
 
     def _populate_serial_ports(self):
         """
@@ -459,7 +457,7 @@ class KVMQtGui(QMainWindow):
 
         self.serial_port_var = port
         logging.info(f"Selected serial port: {port}")
-        self._initialize_serial_operations()
+        self.__init_serial()
 
     def _on_baud_rate_selected(self, baud_rate):
         """
@@ -471,11 +469,11 @@ class KVMQtGui(QMainWindow):
 
         self.baud_rate_var = baud_rate
         logging.info(f"Selected baud rate: {baud_rate}")
-        self._initialize_serial_operations()
+        self.__init_serial()
 
-    def _initialize_serial_operations(self):
+    def __init_serial(self):
         """
-        Initialize or reinitialize serial port and keyboard/mouse operations.
+        Initialise or reinitialise serial port and keyboard/mouse operations.
         """
         # Close existing serial connection if open
         self._close_serial_port()
@@ -484,7 +482,7 @@ class KVMQtGui(QMainWindow):
         self.keyboard_op = None
         self.mouse_op = None
 
-        # Only initialize if we have both port and valid baud rate
+        # Only initialise if we have both port and valid baud rate
         if (
             self.serial_port_var
             and self.serial_port_var not in ["Loading serial...", "None found", "Error"]
@@ -492,19 +490,19 @@ class KVMQtGui(QMainWindow):
         ):
 
             try:
-                # Initialize serial port
+                # Initialise serial port
                 self.serial_port = Serial(self.serial_port_var, self.baud_rate_var)
                 logging.info(
                     f"Opened serial port {self.serial_port_var} at {self.baud_rate_var} baud"
                 )
 
-                # Initialize keyboard and mouse operations
+                # Initialise keyboard and mouse operations
                 self.keyboard_op = QtOp(self.serial_port)
                 self.mouse_op = MouseOp(self.serial_port)
-                logging.info("Initialized keyboard and mouse operations")
+                logging.info("Initialised keyboard and mouse operations")
 
             except Exception as e:
-                logging.error(f"Failed to initialize serial operations: {e}")
+                logging.error(f"Failed to initialise serial operations: {e}")
                 QMessageBox.critical(
                     self, "Serial Error", f"Failed to open serial port {self.serial_port_var}:\n{e}"
                 )
