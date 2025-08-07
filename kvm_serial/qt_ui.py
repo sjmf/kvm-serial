@@ -198,6 +198,56 @@ class KVMQtGui(QMainWindow):
         # Make sure the window can receive key events
         self.setFocusPolicy(Qt.StrongFocus)
 
+    def __init_menu(self):
+        # Menu Bar
+        menubar = self.menuBar()
+        # self.setMenuBar(menubar)
+
+        # File Menu
+        file_menu = menubar.addMenu("File")
+        save_action = QAction("Save Configuration", self)
+        save_action.triggered.connect(self._save_settings)
+        file_menu.addAction(save_action)
+
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self.close)
+        file_menu.addAction(quit_action)
+
+        # Options Menu
+        options_menu = menubar.addMenu("Options")
+
+        # Hide Mouse Pointer option
+        mouse_action = QAction("Hide Mouse Pointer", self)
+        mouse_action.setCheckable(True)
+
+        def _toggle_mouse():
+            logging.info("Toggling mouse pointer visibility")
+            self.hide_mouse_var = not self.hide_mouse_var
+
+        mouse_action.triggered.connect(_toggle_mouse)
+        options_menu.addAction(mouse_action)
+
+        # Serial Port, Baud, and Video submenus
+        self.serial_port_menu = options_menu.addMenu("Serial Port")
+        self.baud_rate_menu = options_menu.addMenu("Baud Rate")
+        self.video_device_menu = options_menu.addMenu("Video Device")
+
+        # View menu
+        view_menu = menubar.addMenu("View")
+        status_action = QAction("Show Status Bar", self)
+        status_action.setCheckable(True)
+        status_action.setChecked(self.show_status_var)
+
+        def _toggle_status():
+            logging.info("Toggling status bar visibility")
+            self.show_status_var = not self.show_status_var
+            self.status_bar.setVisible(self.show_status_var)
+
+        status_action.triggered.connect(_toggle_status)
+        view_menu.addAction(status_action)
+
+        logging.debug(f"Menus created")
+
     def __init_status_bar(self):
         # Status Bar
         self.status_bar = QStatusBar()
@@ -224,33 +274,6 @@ class KVMQtGui(QMainWindow):
         ]:
             label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
             label.setStyleSheet("QLabel { border: 1px solid gray; }")
-
-    def __init_menu(self):
-        # Menu Bar
-        menubar = QMenuBar(self)
-        self.setMenuBar(menubar)
-
-        # File Menu
-        file_menu = menubar.addMenu("File")
-        save_action = QAction("Save Configuration", self)
-        save_action.triggered.connect(self._save_settings)
-        file_menu.addAction(save_action)
-
-        quit_action = QAction("Quit", self)
-        quit_action.triggered.connect(self.close)
-        file_menu.addAction(quit_action)
-
-        # Options Menu
-        options_menu = menubar.addMenu("Options")
-
-        # Serial Port submenu
-        self.serial_port_menu = options_menu.addMenu("Serial Port")
-
-        # Baud Rate submenu
-        self.baud_rate_menu = options_menu.addMenu("Baud Rate")
-
-        # Video Device submenu
-        self.video_device_menu = options_menu.addMenu("Video Device")
 
     def __init_video(self):
         # Video Display Area (QGraphicsView)
