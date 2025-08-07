@@ -10,6 +10,7 @@ from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
+    QLabel,
     QAction,
     QMenuBar,
     QStatusBar,
@@ -139,6 +140,7 @@ class KVMQtGui(QMainWindow):
     keyboard_op: QtOp | None
     mouse_op: MouseOp | None
 
+    # Dimensions
     canvas_width: int = 1280
     canvas_height: int = 720
     canvas_min_width: int = 512
@@ -153,6 +155,13 @@ class KVMQtGui(QMainWindow):
     target_fps: int = 30
     frame_drop_threshold: float = 0.05  # Drop frames if capture takes too long (50ms)
     last_capture_request: float = 0.0  # Track when we last requested a frame
+
+    # Status bar labels
+    status_bar: QStatusBar
+    status_serial_label: QLabel
+    status_keyboard_label: QLabel
+    status_mouse_label: QLabel
+    status_video_label: QLabel
 
     # Utility dictionary for Mouse button handling
     BUTTON_MAP: dict = {Qt.MiddleButton: "MIDDLE", Qt.LeftButton: "LEFT", Qt.RightButton: "RIGHT"}
@@ -197,7 +206,28 @@ class KVMQtGui(QMainWindow):
         # Status Bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
-        self.status_bar.showMessage("Ready")
+
+        # Create 4 labels for the sections
+        self.status_serial_label = QLabel(self.serial_port_var)
+        self.status_keyboard_label = QLabel("Keyboard: Idle")
+        self.status_mouse_label = QLabel("Mouse: Idle")
+        self.status_video_label = QLabel(self.video_device_var)
+
+        # Add labels to status bar with equal stretch
+        self.status_bar.addWidget(self.status_serial_label, 1)
+        self.status_bar.addWidget(self.status_keyboard_label, 1)
+        self.status_bar.addWidget(self.status_mouse_label, 1)
+        self.status_bar.addWidget(self.status_video_label, 1)
+
+        # Style the labels for better visibility
+        for label in [
+            self.status_serial_label,
+            self.status_keyboard_label,
+            self.status_mouse_label,
+            self.status_video_label,
+        ]:
+            label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            label.setStyleSheet("QLabel { border: 1px solid gray; }")
 
         # Menu Bar
         menubar = QMenuBar(self)
@@ -261,8 +291,37 @@ class KVMQtGui(QMainWindow):
         QTimer.singleShot(0, self._initialize_devices)
         QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
 
+        # Status bar timer
+        self.status_timer = QTimer()
+        self.status_timer.timeout.connect(self._update_status_bar)
+        self.status_timer.start(500)  # Update every half second
+
         # Make sure the window can receive key events
         self.setFocusPolicy(Qt.StrongFocus)
+
+    def _update_status_bar(self):
+        """
+        Update the status bar with current serial, keyboard, mouse, and video device information.
+        """
+        if not self.show_status_var:
+            return
+
+        # Update each status bar part
+        self.status_serial_label.setText(f"Serial: {self.serial_port_var}")
+
+        captured = "Captured" if self.keyboard_var else "Idle"
+        self.status_keyboard_label.setText(f"Keyboard: {captured}")
+
+        self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
+        idx = self.video_var
+
+        if idx >= 0 and idx < len(self.video_devices):
+            video_str = f"Video: {str(self.video_devices[idx])}"
+            if hasattr(self, "_actual_fps"):
+                video_str += f" [{self._actual_fps:.1f} fps]"
+            self.status_video_label.setText(video_str)
+        else:
+            self.status_video_label.setText("Video: Idle")
 
     def _load_settings(self, config_file: str):
         """
@@ -594,7 +653,7 @@ class KVMQtGui(QMainWindow):
                 self.fps_calculation_start = current_time
 
                 # Update status bar with FPS info
-                self.status_bar.showMessage(f"Video FPS: {self.actual_fps:.1f}")
+                self.video_device_var = f"Video FPS: {self.actual_fps:.1f}"
 
             self.last_frame_time = current_time
 
@@ -660,11 +719,12 @@ class KVMQtGui(QMainWindow):
 
     def _on_mouse_move(self, x, y):
 
-        self.pos_x = x
-        self.pos_y = y
+        self.pos_x = int(x)
+        self.pos_y = int(y)
         self.mouse_var = True
 
         logging.info(f"Mouse at ({self.pos_x}, {self.pos_y})")
+        self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
 
         if self.mouse_op:
             self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
