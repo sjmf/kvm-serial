@@ -265,16 +265,12 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
+
         # Hide Mouse Pointer option
-        mouse_action = QAction("Hide Mouse Pointer", self)
-        mouse_action.setCheckable(True)
-
-        def _toggle_mouse():
-            logging.info("Toggling mouse pointer visibility")
-            self.hide_mouse_var = not self.hide_mouse_var
-
-        mouse_action.triggered.connect(_toggle_mouse)
-        options_menu.addAction(mouse_action)
+        self.mouse_action = QAction("Hide Mouse Pointer", self)
+        self.mouse_action.setCheckable(True)
+        self.mouse_action.triggered.connect(self._toggle_mouse)
+        options_menu.addAction(self.mouse_action)
 
         # Serial Port, Baud, and Video submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
@@ -463,6 +459,16 @@ class KVMQtGui(QMainWindow):
         self.window_var = kvm.get("windowed", "False") == "True"
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
+        self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
+        # Apply mouse cursor state if needed
+        if hasattr(self, "video_view"):
+            if self.hide_mouse_var:
+                self.video_view.setCursor(Qt.CursorShape.BlankCursor)
+            else:
+                self.video_view.setCursor(Qt.CursorShape.ArrowCursor)
+        # Set the checked state of the menu item if it exists
+        if hasattr(self, "mouse_action"):
+            self.mouse_action.setChecked(self.hide_mouse_var)
 
         # Initialise serial operations with loaded settings
         self.__init_serial()
@@ -480,6 +486,7 @@ class KVMQtGui(QMainWindow):
             "windowed": str(self.window_var),
             "statusbar": str(self.show_status_var),
             "verbose": str(self.verbose_var),
+            "hide_mouse": str(self.hide_mouse_var),
         }
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
@@ -840,6 +847,14 @@ class KVMQtGui(QMainWindow):
 
         if self.mouse_op:
             self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
+
+    def _toggle_mouse(self):
+        logging.info("Toggling mouse pointer visibility")
+        self.hide_mouse_var = not self.hide_mouse_var
+        if self.hide_mouse_var:
+            self.video_view.setCursor(Qt.CursorShape.BlankCursor)
+        else:
+            self.video_view.setCursor(Qt.CursorShape.ArrowCursor)
 
     def wheelEvent(self, event: QWheelEvent):
         """
