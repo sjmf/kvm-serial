@@ -4,6 +4,7 @@ import sys
 import logging
 import time
 import cv2
+from typing import cast
 from serial import Serial
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
 from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent
@@ -13,6 +14,7 @@ from PyQt5.QtWidgets import (
     QLabel,
     QAction,
     QMenuBar,
+    QMenu,
     QStatusBar,
     QMessageBox,
     QGraphicsView,
@@ -105,15 +107,13 @@ class VideoCaptureWorker(QThread):
 # Subclass QGraphicsView so clicks inside the view can receive focus and
 # emit signals that the main window can wire into its focus handlers.
 class VideoGraphicsView(QGraphicsView):
-    from PyQt5.QtCore import pyqtSignal
-
     focusGained = pyqtSignal()
     focusLost = pyqtSignal()
 
     def __init__(self, scene=None, parent=None):
         super().__init__(scene, parent)
         # Accept focus on click so the view becomes the focus widget when clicked
-        self.setFocusPolicy(Qt.ClickFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         self.setMouseTracking(True)
 
     def mousePressEvent(self, event):
@@ -202,7 +202,11 @@ class KVMQtGui(QMainWindow):
     status_video_label: QLabel
 
     # Utility dictionary for Mouse button handling
-    BUTTON_MAP: dict = {Qt.MiddleButton: "MIDDLE", Qt.LeftButton: "LEFT", Qt.RightButton: "RIGHT"}
+    BUTTON_MAP: dict = {
+        Qt.MouseButton.MiddleButton: "MIDDLE",
+        Qt.MouseButton.LeftButton: "LEFT",
+        Qt.MouseButton.RightButton: "RIGHT",
+    }
 
     def __init__(self) -> None:
         """
@@ -230,25 +234,36 @@ class KVMQtGui(QMainWindow):
         )  # 720 + 24 status bar height
 
         # Make sure the window can receive key events
-        self.setFocusPolicy(Qt.StrongFocus)
+        self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
 
     def __init_menu(self):
+
         # Menu Bar
         menubar = self.menuBar()
         # self.setMenuBar(menubar)
 
+        if menubar is None:
+            raise TypeError("menubar must be QMenu, not None")
+
+        # addMenu returning None is extremely unlikely in normal desktop apps.
+        # The static type stubs for PyQt sometimes mark returns Optional, so
+        # type-checkers warn even though runtime None is unlikely.
+        # So, while we do check for menubar being None, we can just cast the menus.
+
         # File Menu
         file_menu = menubar.addMenu("File")
+        file_menu = cast(QMenu, file_menu)  # addMenu type annotation is Optional
         save_action = QAction("Save Configuration", self)
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
         quit_action = QAction("Quit", self)
-        quit_action.triggered.connect(self.close)
+        quit_action.triggered.connect(self._on_quit)
         file_menu.addAction(quit_action)
 
         # Options Menu
         options_menu = menubar.addMenu("Options")
+        options_menu = cast(QMenu, options_menu)  # hush PyLance
 
         # Hide Mouse Pointer option
         mouse_action = QAction("Hide Mouse Pointer", self)
@@ -268,6 +283,7 @@ class KVMQtGui(QMainWindow):
 
         # View menu
         view_menu = menubar.addMenu("View")
+        view_menu = cast(QMenu, view_menu)  # hush PyLance
         status_action = QAction("Show Status Bar", self)
         status_action.setCheckable(True)
         status_action.setChecked(self.show_status_var)
@@ -306,7 +322,7 @@ class KVMQtGui(QMainWindow):
             self.status_mouse_label,
             self.status_video_label,
         ]:
-            label.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+            label.setAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
             label.setStyleSheet("QLabel { border: 1px solid gray; }")
 
     def __init_video(self):
@@ -316,8 +332,8 @@ class KVMQtGui(QMainWindow):
         self.video_view = VideoGraphicsView(self.video_scene, self)
         self.video_view.setStyleSheet("background-color: black;")
         self.video_view.setGeometry(0, 0, self.canvas_width, self.canvas_height)
-        self.video_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        self.video_view.setVerticalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.video_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self.video_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.video_pixmap_item = QGraphicsPixmapItem()
         self.video_scene.addItem(self.video_pixmap_item)
         self.setCentralWidget(self.video_view)
@@ -401,6 +417,13 @@ class KVMQtGui(QMainWindow):
         Load settings and set variables (deferred).
         """
         kvm = settings_util.load_settings(config_file, "KVM")
+
+        if (
+            self.video_device_menu is None
+            or self.baud_rate_menu is None
+            or self.serial_port_menu is None
+        ):
+            raise TypeError("Initialise all menus before calling _load_settings")
 
         # Load serial port setting (only if present in current options)
         if kvm.get("serial_port") in self.serial_ports:
@@ -488,6 +511,11 @@ class KVMQtGui(QMainWindow):
         """
         Populate the serial port dropdown menu with available serial ports.
         """
+        if self.serial_port_menu is None:
+            raise TypeError(
+                "Initialise serial_port_menu before calling _populate_serial_port_menu()"
+            )
+
         self.serial_port_menu.clear()
         for port in self.serial_ports:
             action = QAction(port, self)
@@ -503,6 +531,9 @@ class KVMQtGui(QMainWindow):
         """
         Populate the baud rate menu with available baud rates.
         """
+        if self.baud_rate_menu is None:
+            raise TypeError("Initialise baud_rate_menu before calling _populate_baud_rates()")
+
         self.baud_rate_menu.clear()
         for rate in self.baud_rates:
             action = QAction(str(rate), self)
@@ -518,6 +549,9 @@ class KVMQtGui(QMainWindow):
         """
         Handle selection of a serial port.
         """
+        if self.serial_port_menu is None:
+            raise TypeError("Initialise serial_port_menu before calling _on_serial_port_selected()")
+
         # Uncheck all other serial port actions
         for action in self.serial_port_menu.actions():
             action.setChecked(action.text() == port)
@@ -530,6 +564,9 @@ class KVMQtGui(QMainWindow):
         """
         Handle selection of a baud rate.
         """
+        if self.baud_rate_menu is None:
+            raise TypeError("Initialise baud_rate_menu before calling _on_baud_rate_selected()")
+
         # Uncheck all other baud rate actions
         for action in self.baud_rate_menu.actions():
             action.setChecked(action.text() == str(baud_rate))
@@ -617,6 +654,11 @@ class KVMQtGui(QMainWindow):
         """
         Populate the video device dropdown menu with available video devices.
         """
+        if self.video_device_menu is None:
+            raise TypeError(
+                "Initialise video_device_menu before calling _populate_video_device_menu()"
+            )
+
         self.video_device_menu.clear()
         for i, device in enumerate(self.video_devices):
             label = str(device)
@@ -635,6 +677,11 @@ class KVMQtGui(QMainWindow):
         """
         Handle selection of a video device.
         """
+        if self.video_device_menu is None:
+            raise TypeError(
+                "Initialise video_device_menu before calling _on_video_device_selected()"
+            )
+
         # Uncheck all other video device actions
         for action in self.video_device_menu.actions():
             action.setChecked(action.text() == device_label)
@@ -757,13 +804,13 @@ class KVMQtGui(QMainWindow):
             event: QEvent object – an event that was fired.
         """
         if source == self.video_scene:
-            if event.type() == QEvent.GraphicsSceneMouseMove:
+            if event.type() == QEvent.Type.GraphicsSceneMouseMove:
                 pos = event.scenePos()
                 self._on_mouse_move(pos.x(), pos.y())
-            elif event.type() == QEvent.GraphicsSceneMousePress:
+            elif event.type() == QEvent.Type.GraphicsSceneMousePress:
                 pos = event.scenePos()
                 self._on_mouse_click(pos.x(), pos.y(), event.button(), down=True)
-            elif event.type() == QEvent.GraphicsSceneMouseRelease:
+            elif event.type() == QEvent.Type.GraphicsSceneMouseRelease:
                 pos = event.scenePos()
                 self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
 
@@ -869,6 +916,9 @@ class KVMQtGui(QMainWindow):
         self._close_serial_port()
 
         event.accept()
+
+    def _on_quit(self) -> None:
+        self.close()
 
 
 def main():
