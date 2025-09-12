@@ -102,6 +102,40 @@ class VideoCaptureWorker(QThread):
         self.exec_()
 
 
+# Subclass QGraphicsView so clicks inside the view can receive focus and
+# emit signals that the main window can wire into its focus handlers.
+class VideoGraphicsView(QGraphicsView):
+    from PyQt5.QtCore import pyqtSignal
+
+    focusGained = pyqtSignal()
+    focusLost = pyqtSignal()
+
+    def __init__(self, scene=None, parent=None):
+        super().__init__(scene, parent)
+        # Accept focus on click so the view becomes the focus widget when clicked
+        self.setFocusPolicy(Qt.ClickFocus)
+        self.setMouseTracking(True)
+
+    def mousePressEvent(self, event):
+        # Ensure the view receives focus when clicked so focus events fire
+        self.setFocus()
+        super().mousePressEvent(event)
+
+    def focusInEvent(self, event):
+        try:
+            self.focusGained.emit()
+        except Exception:
+            pass
+        super().focusInEvent(event)
+
+    def focusOutEvent(self, event):
+        try:
+            self.focusLost.emit()
+        except Exception:
+            pass
+        super().focusOutEvent(event)
+
+
 class KVMQtGui(QMainWindow):
     """
     Main GUI class for the Serial KVM application (Qt version).
@@ -278,7 +312,8 @@ class KVMQtGui(QMainWindow):
     def __init_video(self):
         # Video Display Area (QGraphicsView)
         self.video_scene = QGraphicsScene(self)
-        self.video_view = QGraphicsView(self.video_scene, self)
+        # Use subclassed view so clicks/focus inside the view can be handled explicitly
+        self.video_view = VideoGraphicsView(self.video_scene, self)
         self.video_view.setStyleSheet("background-color: black;")
         self.video_view.setGeometry(0, 0, self.canvas_width, self.canvas_height)
         self.video_view.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
@@ -295,6 +330,15 @@ class KVMQtGui(QMainWindow):
         self.video_worker = VideoCaptureWorker(self.canvas_width, self.canvas_height, 0)
         self.video_worker.frame_ready.connect(self._on_frame_ready)
         self.video_worker.start()
+
+        # Wire focus signals from the view back to the main window handlers.
+        # Connect view-local focus signals to dedicated handlers so the
+        # keyboard capture state is only affected by focusing inside the view.
+        try:
+            self.video_view.focusGained.connect(self._on_view_focus_gained)
+            self.video_view.focusLost.connect(self._on_view_focus_lost)
+        except Exception:
+            pass
 
     def __init_timers(self):
         # Set up QTimer for frame updates (integrates with Qt event loop)
@@ -796,13 +840,23 @@ class KVMQtGui(QMainWindow):
 
     def focusInEvent(self, event: QFocusEvent):
         logging.info("Window focused")
-        self.keyboard_var = True
-        super().focusInEvent(event)
+        # Do not change keyboard capture state here; the video view manages that.
+        super(KVMQtGui, self).focusInEvent(event)
 
     def focusOutEvent(self, event: QFocusEvent):
         logging.info("Window unfocused")
+        # Do not change keyboard capture state here; the video view manages that.
+        super(KVMQtGui, self).focusOutEvent(event)
+
+    # View-local focus handlers (only affect keyboard capture when the
+    # video view receives or loses focus).
+    def _on_view_focus_gained(self):
+        logging.info("Video view focused")
+        self.keyboard_var = True
+
+    def _on_view_focus_lost(self):
+        logging.info("Video view unfocused")
         self.keyboard_var = False
-        super().focusOutEvent(event)
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
