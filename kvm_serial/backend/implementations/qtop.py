@@ -1,5 +1,6 @@
 # Qt implementation
 import logging
+from typing import cast
 from kvm_serial.utils import ascii_to_scancode, merge_scancodes
 from .baseop import BaseOp
 
@@ -10,45 +11,45 @@ logger = logging.getLogger(__name__)
 
 # Qt modifier keys to HID modifier values
 MODIFIER_TO_VALUE = {
-    Qt.Key_Alt: 0x04,
-    Qt.Key_AltGr: 0x40,
-    Qt.Key_Shift: 0x02,
-    Qt.Key_Control: 0x01,
-    Qt.Key_Meta: 0x08,
-    Qt.Key_Super_L: 0x08,
-    Qt.Key_Super_R: 0x80,
+    Qt.Key.Key_Alt: 0x04,
+    Qt.Key.Key_AltGr: 0x40,
+    Qt.Key.Key_Shift: 0x02,
+    Qt.Key.Key_Control: 0x01,
+    Qt.Key.Key_Meta: 0x08,
+    Qt.Key.Key_Super_L: 0x08,
+    Qt.Key.Key_Super_R: 0x80,
 }
 
 # Qt special keys to HID scan codes
 KEYS_WITH_CODES = {
-    Qt.Key_Up: 0x52,
-    Qt.Key_Down: 0x51,
-    Qt.Key_Left: 0x50,
-    Qt.Key_Right: 0x4F,
-    Qt.Key_Home: 0x4A,
-    Qt.Key_PageUp: 0x4B,
-    Qt.Key_Delete: 0x4C,
-    Qt.Key_End: 0x4D,
-    Qt.Key_PageDown: 0x4E,
-    Qt.Key_Backspace: 0x2A,
-    Qt.Key_F1: 0x3B,
-    Qt.Key_F2: 0x3C,
-    Qt.Key_F3: 0x3D,
-    Qt.Key_F4: 0x3E,
-    Qt.Key_F5: 0x3F,
-    Qt.Key_F6: 0x40,
-    Qt.Key_F7: 0x41,
-    Qt.Key_F8: 0x42,
-    Qt.Key_F9: 0x43,
-    Qt.Key_F10: 0x44,
-    Qt.Key_F11: 0x57,
-    Qt.Key_F12: 0x58,
-    Qt.Key_Space: 0x2C,
-    Qt.Key_Tab: 0x2B,
-    Qt.Key_Return: 0x28,
-    Qt.Key_Enter: 0x28,
-    Qt.Key_CapsLock: 0x3A,
-    Qt.Key_Escape: 0x29,
+    Qt.Key.Key_Up: 0x52,
+    Qt.Key.Key_Down: 0x51,
+    Qt.Key.Key_Left: 0x50,
+    Qt.Key.Key_Right: 0x4F,
+    Qt.Key.Key_Home: 0x4A,
+    Qt.Key.Key_PageUp: 0x4B,
+    Qt.Key.Key_Delete: 0x4C,
+    Qt.Key.Key_End: 0x4D,
+    Qt.Key.Key_PageDown: 0x4E,
+    Qt.Key.Key_Backspace: 0x2A,
+    Qt.Key.Key_F1: 0x3B,
+    Qt.Key.Key_F2: 0x3C,
+    Qt.Key.Key_F3: 0x3D,
+    Qt.Key.Key_F4: 0x3E,
+    Qt.Key.Key_F5: 0x3F,
+    Qt.Key.Key_F6: 0x40,
+    Qt.Key.Key_F7: 0x41,
+    Qt.Key.Key_F8: 0x42,
+    Qt.Key.Key_F9: 0x43,
+    Qt.Key.Key_F10: 0x44,
+    Qt.Key.Key_F11: 0x57,
+    Qt.Key.Key_F12: 0x58,
+    Qt.Key.Key_Space: 0x2C,
+    Qt.Key.Key_Tab: 0x2B,
+    Qt.Key.Key_Return: 0x28,
+    Qt.Key.Key_Enter: 0x28,
+    Qt.Key.Key_CapsLock: 0x3A,
+    Qt.Key.Key_Escape: 0x29,
 }
 
 
@@ -79,9 +80,9 @@ class QtOp(BaseOp):
             bool: True if key was processed successfully
         """
         # Determine if this is a press or release
-        if event.type() == QKeyEvent.KeyPress:
+        if event.type() == QKeyEvent.Type.KeyPress:
             self._on_press(event)
-        elif event.type() == QKeyEvent.KeyRelease:
+        elif event.type() == QKeyEvent.Type.KeyRelease:
             self._on_release(event)
         else:
             logging.warning(f"Got unknown event of kind {type(event)}. Ignoring.")
@@ -89,7 +90,7 @@ class QtOp(BaseOp):
 
         return True
 
-    def _nonalphanumeric_key_to_scancode(self, qt_key: int):
+    def _nonalphanumeric_key_to_scancode(self, qt_key: Qt.Key):
         """
         Converts a non-alphanumeric Qt key to its corresponding scancode representation.
 
@@ -119,7 +120,7 @@ class QtOp(BaseOp):
         Args:
             event (QKeyEvent): Qt key event for the pressed key
         """
-        qt_key = event.key()
+        qt_key = cast(Qt.Key, event.key())
         scancode = [b for b in b"\x00" * 8]
 
         try:
