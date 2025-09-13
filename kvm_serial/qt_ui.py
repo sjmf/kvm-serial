@@ -265,6 +265,10 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
+        # Serial Port, Baud, and Video submenus
+        self.serial_port_menu = options_menu.addMenu("Serial Port")
+        self.baud_rate_menu = options_menu.addMenu("Baud Rate")
+        self.video_device_menu = options_menu.addMenu("Video Device")
 
         # Hide Mouse Pointer option
         self.mouse_action = QAction("Hide Mouse Pointer", self)
@@ -272,10 +276,12 @@ class KVMQtGui(QMainWindow):
         self.mouse_action.triggered.connect(self._toggle_mouse)
         options_menu.addAction(self.mouse_action)
 
-        # Serial Port, Baud, and Video submenus
-        self.serial_port_menu = options_menu.addMenu("Serial Port")
-        self.baud_rate_menu = options_menu.addMenu("Baud Rate")
-        self.video_device_menu = options_menu.addMenu("Video Device")
+        # Verbose Logging option
+        self.verbose_action = QAction("Verbose Logging", self)
+        self.verbose_action.setCheckable(True)
+        self.verbose_action.setChecked(self.verbose_var)
+        self.verbose_action.triggered.connect(self._toggle_verbose)
+        options_menu.addAction(self.verbose_action)
 
         # View menu
         view_menu = menubar.addMenu("View")
@@ -408,6 +414,17 @@ class KVMQtGui(QMainWindow):
         else:
             self.status_video_label.setText("Video: Idle")
 
+    def _toggle_verbose(self):
+        """Toggle verbose logging and update log level."""
+        self.verbose_var = not self.verbose_var
+        self.verbose_action.setChecked(self.verbose_var)
+        if self.verbose_var:
+            logging.getLogger().setLevel(logging.DEBUG)
+            logging.debug("Verbose logging enabled.")
+        else:
+            logging.getLogger().setLevel(logging.INFO)
+            logging.info("Verbose logging disabled.")
+
     def _load_settings(self, config_file: str):
         """
         Load settings and set variables (deferred).
@@ -460,6 +477,7 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
         self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
+        
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
             if self.hide_mouse_var:
@@ -842,7 +860,7 @@ class KVMQtGui(QMainWindow):
         self.pos_y = int(y)
         self.mouse_var = True
 
-        logging.info(f"Mouse at ({self.pos_x}, {self.pos_y})")
+        logging.debug(f"Mouse at ({self.pos_x}, {self.pos_y})")
         self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
 
         if self.mouse_op:
