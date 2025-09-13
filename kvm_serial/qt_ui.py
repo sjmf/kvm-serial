@@ -5,7 +5,7 @@ import logging
 import time
 import cv2
 from typing import cast
-from serial import Serial
+from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
 from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent
 from PyQt5.QtWidgets import (
@@ -166,6 +166,8 @@ class KVMQtGui(QMainWindow):
     status_var: str
     verbose_var: bool = False
     hide_mouse_var: bool = False
+
+    _quitting: bool = False
 
     pos_x: int = 0
     pos_y: int = 0
@@ -477,7 +479,7 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
         self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
-        
+
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
             if self.hide_mouse_var:
@@ -828,16 +830,24 @@ class KVMQtGui(QMainWindow):
         Args:
             event: QEvent object – an event that was fired.
         """
-        if source == self.video_scene:
-            if event.type() == QEvent.Type.GraphicsSceneMouseMove:
-                pos = event.scenePos()
-                self._on_mouse_move(pos.x(), pos.y())
-            elif event.type() == QEvent.Type.GraphicsSceneMousePress:
-                pos = event.scenePos()
-                self._on_mouse_click(pos.x(), pos.y(), event.button(), down=True)
-            elif event.type() == QEvent.Type.GraphicsSceneMouseRelease:
-                pos = event.scenePos()
-                self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
+
+        try:
+            if source == self.video_scene:
+                if event.type() == QEvent.Type.GraphicsSceneMouseMove:
+                    pos = event.scenePos()
+                    self._on_mouse_move(pos.x(), pos.y())
+                elif event.type() == QEvent.Type.GraphicsSceneMousePress:
+                    pos = event.scenePos()
+                    self._on_mouse_click(pos.x(), pos.y(), event.button(), down=True)
+                elif event.type() == QEvent.Type.GraphicsSceneMouseRelease:
+                    pos = event.scenePos()
+                    self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
+        except SerialException as e:
+            if self._quitting:
+                return True # Indicate the event should not be further processed
+            
+            QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
+            self._on_quit()
 
         # Let event continue to original handler
         return super().eventFilter(source, event)
@@ -901,7 +911,11 @@ class KVMQtGui(QMainWindow):
         logging.debug(f"Key pressed: {event.key()}")
 
         if self.keyboard_op:
-            self.keyboard_op.parse_key(event)
+            try:
+                self.keyboard_op.parse_key(event)
+            except SerialException as e:
+                QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
+                self._on_quit()
 
         super().keyPressEvent(event)
 
@@ -913,9 +927,13 @@ class KVMQtGui(QMainWindow):
         """
         logging.debug(f"Key released: {event.key()}")
 
-        if self.keyboard_op:
-            self.keyboard_op.parse_key(event)
-
+        try:
+            if self.keyboard_op:
+                self.keyboard_op.parse_key(event)
+        except SerialException as e:
+            QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
+            self._on_quit()
+            
         super().keyReleaseEvent(event)
 
     def focusInEvent(self, event: QFocusEvent):
@@ -951,6 +969,7 @@ class KVMQtGui(QMainWindow):
         event.accept()
 
     def _on_quit(self) -> None:
+        self._quitting = True
         self.close()
 
 
