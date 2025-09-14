@@ -13,7 +13,6 @@ from PyQt5.QtWidgets import (
     QMainWindow,
     QLabel,
     QAction,
-    QMenuBar,
     QMenu,
     QStatusBar,
     QMessageBox,
@@ -259,9 +258,15 @@ class KVMQtGui(QMainWindow):
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
+        # Quit
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._on_quit)
         file_menu.addAction(quit_action)
+
+        # About
+        about_action = QAction("About Serial KVM", self)
+        about_action.triggered.connect(self._show_about)
+        file_menu.addAction(about_action)
 
         # Options Menu
         options_menu = menubar.addMenu("Options")
@@ -851,8 +856,8 @@ class KVMQtGui(QMainWindow):
                     self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
         except SerialException as e:
             if self._quitting:
-                return True # Indicate the event should not be further processed
-            
+                return True  # Indicate the event should not be further processed
+
             QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
             self._on_quit()
 
@@ -940,7 +945,7 @@ class KVMQtGui(QMainWindow):
         except SerialException as e:
             QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
             self._on_quit()
-            
+
         super().keyReleaseEvent(event)
 
     def focusInEvent(self, event: QFocusEvent):
@@ -962,6 +967,32 @@ class KVMQtGui(QMainWindow):
     def _on_view_focus_lost(self):
         logging.info("Video view unfocused")
         self.keyboard_var = False
+
+    def _get_version(self):
+        import toml
+
+        try:
+            pyproject_path = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "pyproject.toml"
+            )
+            with open(pyproject_path, "r") as f:
+                data = toml.load(f)
+            return data["project"]["version"]
+        except Exception as e:
+            logging.warning(f"Could not read version from pyproject.toml: {e}")
+            return "?"
+
+    def _show_about(self):
+        version = self._get_version()
+        QMessageBox.about(
+            self,
+            "<h1>About Serial KVM</h1>",
+            f"<p><b>Serial KVM</b><br/>Version {version}</p>\n"
+            "<p>Keyboard/Mouse over Serial using CH9329.<p>\n"
+            "<p>(c) 2024-2025 Samantha Finnigan <a href='https://github.com/sjmf'>@sjmf</a> and contributors.</p>"
+            "<p>Available under <a href='https://github.com/sjmf/kvm-serial/blob/main/LICENSE.md'>"
+            "MIT License</a></p>",
+        )
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
