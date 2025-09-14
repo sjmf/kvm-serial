@@ -420,6 +420,9 @@ class KVMQtGui(QMainWindow):
         """Toggle verbose logging and update log level."""
         self.verbose_var = not self.verbose_var
         self.verbose_action.setChecked(self.verbose_var)
+        self._apply_log_level()
+
+    def _apply_log_level(self):
         if self.verbose_var:
             logging.getLogger().setLevel(logging.DEBUG)
             logging.debug("Verbose logging enabled.")
@@ -489,6 +492,10 @@ class KVMQtGui(QMainWindow):
         # Set the checked state of the menu item if it exists
         if hasattr(self, "mouse_action"):
             self.mouse_action.setChecked(self.hide_mouse_var)
+        # And for verbose logging
+        if hasattr(self, "verbose_action"):
+            self.verbose_action.setChecked(self.verbose_var)
+            self._apply_log_level()
 
         # Initialise serial operations with loaded settings
         self.__init_serial()
