@@ -7,7 +7,7 @@ import cv2
 from typing import cast
 from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
-from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent
+from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -19,6 +19,9 @@ from PyQt5.QtWidgets import (
     QGraphicsView,
     QGraphicsScene,
     QGraphicsPixmapItem,
+    QVBoxLayout,
+    QWidget,
+    QSizePolicy,
 )
 
 try:
@@ -44,6 +47,10 @@ class VideoCaptureWorker(QThread):
     Captures frames on-demand rather than continuously looping.
     """
 
+    # Initialize camera properties with defaults
+    camera_width: int = 1280
+    camera_height: int = 720
+
     frame_ready = pyqtSignal(object)
     capture_requested = pyqtSignal()
 
@@ -57,18 +64,42 @@ class VideoCaptureWorker(QThread):
         self.mutex = QMutex()
         self.should_capture = False
 
+        # Use actual camera properties
+        try:
+            self._set_camera_dims(video_device_idx)
+        except Exception as e:
+            logging.warning(f"Could not get initial camera properties: {e}")
+
         # Connect internal signal to capture method
         self.capture_requested.connect(self._capture_frame)
+
+    def _set_camera_dims(self, video_device_idx):
+        cameras = CaptureDevice.getCameras()
+        for camera in cameras:
+            if camera.index == video_device_idx:
+                self.camera_width = camera.width
+                self.camera_height = camera.height
+                return True
+        return False
 
     def set_camera_index(self, idx):
         with QMutexLocker(self.mutex):
             self.video_device_idx = idx
             self.camera_initialised = False
+            # Reset camera properties when setting new index
+            try:
+                if not self._set_camera_dims(self.video_device_idx):
+                    # No matching camera found
+                    self.camera_width = 1280
+                    self.camera_height = 720
+            except Exception as e:
+                logging.warning(f"Could not get camera dimensions: {e}")
 
     def set_canvas_size(self, width, height):
+        """Update the target size for video capture"""
         with QMutexLocker(self.mutex):
-            self.canvas_width = width
-            self.canvas_height = height
+            self.canvas_width = max(width, 1)
+            self.canvas_height = max(height, 1)
 
     def request_frame(self):
         """Request a frame capture from the main thread"""
@@ -76,6 +107,9 @@ class VideoCaptureWorker(QThread):
 
     def _capture_frame(self):
         """Internal method to capture a single frame"""
+        width = int(self.camera_width)
+        height = int(self.camera_height)
+        
         with QMutexLocker(self.mutex):
             # Initialise camera if needed
             if not self.camera_initialised:
@@ -90,7 +124,7 @@ class VideoCaptureWorker(QThread):
             try:
                 # Get frame without automatic color conversion for efficiency
                 frame = self.video_device.getFrame(
-                    resize=(self.canvas_width, self.canvas_height),
+                    resize=(width, height),
                     convert_color_space=False,  # Handle color conversion in display thread if needed
                 )
                 if frame is not None:
@@ -227,12 +261,19 @@ class KVMQtGui(QMainWindow):
 
     def __init_window(self):
         # Window characteristics
-        self.status_bar_height = self.status_bar_default_height
         self.setWindowTitle("Serial KVM")
         self.setMinimumSize(self.canvas_min_width, self.canvas_min_height)
-        self.resize(
-            self.canvas_width, self.canvas_height + self.status_bar_height
-        )  # 720 + 24 status bar height
+        self.resize(self.canvas_width, self.canvas_height + self.status_bar_default_height)
+
+        # Set up main layout
+        self.main_layout = QVBoxLayout()
+        self.main_layout.setContentsMargins(0, 0, 0, 0)
+        self.main_layout.setSpacing(0)
+
+        # Create central widget to hold layout
+        self.central_widget = QWidget()
+        self.central_widget.setLayout(self.main_layout)
+        self.setCentralWidget(self.central_widget)
 
         # Make sure the window can receive key events
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
@@ -310,7 +351,6 @@ class KVMQtGui(QMainWindow):
     def __init_status_bar(self):
         # Status Bar
         self.status_bar = QStatusBar()
-        self.setStatusBar(self.status_bar)
 
         # Create 4 labels for the sections
         self.status_serial_label = QLabel(self.serial_port_var)
@@ -323,6 +363,9 @@ class KVMQtGui(QMainWindow):
         self.status_bar.addWidget(self.status_keyboard_label, 1)
         self.status_bar.addWidget(self.status_mouse_label, 1)
         self.status_bar.addWidget(self.status_video_label, 1)
+
+        # Set as window's status bar
+        self.setStatusBar(self.status_bar)
 
         # Style the labels for better visibility
         for label in [
@@ -340,18 +383,37 @@ class KVMQtGui(QMainWindow):
         # Use subclassed view so clicks/focus inside the view can be handled explicitly
         self.video_view = VideoGraphicsView(self.video_scene, self)
         self.video_view.setStyleSheet("background-color: black;")
-        self.video_view.setGeometry(0, 0, self.canvas_width, self.canvas_height)
         self.video_view.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         self.video_view.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        # Make view resize its scene automatically
+        self.video_view.setViewportUpdateMode(QGraphicsView.ViewportUpdateMode.FullViewportUpdate)
+        self.video_view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
+        self.video_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+
         self.video_pixmap_item = QGraphicsPixmapItem()
         self.video_scene.addItem(self.video_pixmap_item)
-        self.setCentralWidget(self.video_view)
+
+        # Add video view to main layout
+        self.main_layout.addWidget(self.video_view, 1)  # 1 = stretch factor
 
         # Install event filter to intercept graphics view events
         self.video_scene.installEventFilter(self)
         self.video_view.setMouseTracking(True)
 
-        # Initialise video capture worker thread
+        # Give the window a chance to show and lay out its widgets
+        QApplication.processEvents()
+
+        # Get the actual size of the video view after layout
+        view_size = self.video_view.size()
+        if view_size.width() > 0 and view_size.height() > 0:
+            self.canvas_width = view_size.width()
+            self.canvas_height = view_size.height()
+        else:
+            # If view not sized yet, use default dimensions
+            self.canvas_width = 1280
+            self.canvas_height = 720
+
+        # Initialise video capture worker thread with actual view size
         self.video_worker = VideoCaptureWorker(self.canvas_width, self.canvas_height, 0)
         self.video_worker.frame_ready.connect(self._on_frame_ready)
         self.video_worker.start()
@@ -792,6 +854,13 @@ class KVMQtGui(QMainWindow):
             pixmap = QPixmap.fromImage(qimg)
             self.video_pixmap_item.setPixmap(pixmap)
 
+            # Update scene rect to match pixmap size
+            self.video_scene.setSceneRect(self.video_pixmap_item.boundingRect())
+            # Scale view to fit scene while preserving aspect ratio
+            self.video_view.fitInView(
+                self.video_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+
             # Update FPS calculation (rolling average over multiple frames)
             current_time = time.time()
             self.frame_count += 1
@@ -819,20 +888,12 @@ class KVMQtGui(QMainWindow):
         """
         super().resizeEvent(event)
 
-        # Get new size excluding status bar
-        new_size = event.size()
-        status_bar_height = self.status_bar.height() if self.status_bar.isVisible() else 0
-        new_width = new_size.width()
-        new_height = new_size.height() - status_bar_height
-
-        # Update canvas dimensions and inform worker thread
-        if new_width > 0 and new_height > 0:
-            self.canvas_width = new_width
-            self.canvas_height = new_height
-            self.video_worker.set_canvas_size(new_width, new_height)
-
-            # Update video view size
-            self.video_view.setGeometry(0, 0, new_width, new_height)
+        # Get new size from the video view's actual size
+        new_size = self.video_view.size()
+        if new_size.width() > 0 and new_size.height() > 0:
+            self.canvas_width = new_size.width()
+            self.canvas_height = new_size.height()
+            self.video_worker.set_canvas_size(self.canvas_width, self.canvas_height)
 
     def eventFilter(self, source, event):
         """
@@ -884,9 +945,13 @@ class KVMQtGui(QMainWindow):
 
         logging.debug(f"Mouse at ({self.pos_x}, {self.pos_y})")
         self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
-
+        
         if self.mouse_op:
-            self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
+            try:
+                self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
+            except OverflowError as e:
+                logging.error(e)
+                logging.error(f"{self.pos_x}, {self.pos_y}, {self.canvas_width}, {self.canvas_height}")
 
     def _toggle_mouse(self):
         logging.info("Toggling mouse pointer visibility")
