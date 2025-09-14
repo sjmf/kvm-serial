@@ -130,11 +130,14 @@ class QtOp(BaseOp):
             except KeyError:
                 # This may be an alphanumeric character instead
                 text = event.text()
+                if len(text) == 0:
+                    text = chr(qt_key) # Backup method as event.text() doesn't return for key combos
+
                 if text and len(text) == 1:
                     scancode = ascii_to_scancode(text)
                 else:
                     # Unmapped key - log and skip
-                    logger.warning(f"Unmapped Qt key: {qt_key} (0x{qt_key:x})")
+                    logger.warning(f"Unmapped Qt key: {qt_key} (0x{qt_key:x}) [{qt_key:b}]")
                     return
 
             scan_modifiers = merge_scancodes(self.modifier_map.values())
