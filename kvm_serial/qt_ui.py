@@ -915,7 +915,7 @@ class KVMQtGui(QMainWindow):
         Args:
             event: QKeyEvent event object containing key information.
         """
-        logging.debug(f"Key pressed: {event.key()}")
+        logging.debug(f"Key pressed: {event.key()} (0x{event.key():02x})")
 
         if self.keyboard_op:
             try:
@@ -932,7 +932,7 @@ class KVMQtGui(QMainWindow):
         Args:
             event: QKeyEvent event object containing key information.
         """
-        logging.debug(f"Key released: {event.key()}")
+        logging.debug(f"Key released: {event.key()} (0x{event.key():02x})")
 
         try:
             if self.keyboard_op:
