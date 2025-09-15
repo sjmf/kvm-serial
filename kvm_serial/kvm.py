@@ -167,7 +167,7 @@ class VideoGraphicsView(QGraphicsView):
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         scene_pos = self.mapToScene(event.pos())
         self.mouseMoved.emit(scene_pos.x(), scene_pos.y())
-        #logging.debug(f"View mouse move: {scene_pos.x():.1f}, {scene_pos.y():.1f}")
+        # logging.debug(f"View mouse move: {scene_pos.x():.1f}, {scene_pos.y():.1f}")
         return super().mouseMoveEvent(event)
 
     def focusInEvent(self, event: QFocusEvent) -> None:
