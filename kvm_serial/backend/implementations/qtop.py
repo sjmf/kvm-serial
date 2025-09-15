@@ -63,7 +63,8 @@ KEYS_WITH_CODES = {
     Qt.Key.Key_SysReq: 0x46,
     Qt.Key.Key_ScrollLock: 0x47,
     Qt.Key.Key_Pause: 0x48,
-    Qt.Key.Key_Insert: 0x49,
+    Qt.Key.Key_Insert: 0x49, # 0x1000006
+    0x1000058: 0x49,         # Also appears to be "Insert"
     Qt.Key.Key_Home: 0x4A,
     Qt.Key.Key_PageUp: 0x4B,
     Qt.Key.Key_Delete: 0x4C,
@@ -147,7 +148,7 @@ class QtOp(BaseOp):
         scancode = [b for b in b"\x00" * 8]
 
         if qt_key in MODIFIER_TO_VALUE:
-            value = MODIFIER_TO_VALUE[qt_key]
+            value = MODIFIER_TO_VALUE[int(qt_key)]
             scancode[0] = value
             self.modifier_map[qt_key] = scancode
         else:
@@ -175,13 +176,16 @@ class QtOp(BaseOp):
                 text = event.text()
                 if len(text) == 0:
                     # Backup method as event.text() doesn't return for key combos
-                    text = chr(qt_key).lower()
+                    try:
+                        text = chr(qt_key).lower()
+                    except ValueError:
+                        logger.warning(f"Potentially unhandled key: 0x{qt_key:x}")
 
                 if text and len(text) == 1:
                     scancode = ascii_to_scancode(text)
                 else:
                     # Unmapped key - log and skip
-                    logger.warning(f"Unmapped Qt key: {qt_key} (0x{qt_key:x}) [{qt_key:b}]")
+                    logger.warning(f"Unmapped Qt key: {qt_key} (0x{qt_key:x}) [0b{qt_key:b}]")
                     return
 
             scan_modifiers = merge_scancodes(self.modifier_map.values())
@@ -192,7 +196,7 @@ class QtOp(BaseOp):
             return
 
         # Send scancode over serial
-        logging.debug(f"{scancode}\t({', '.join([hex(i) for i in scancode])})")
+        logging.debug(f"{scancode}\t({', '.join([hex(i) for i in scancode])})\t0x{int(qt_key):x}")
         self.hid_serial_out.send_scancode(bytes(scancode))
 
     def _on_release(self, event: QKeyEvent):
