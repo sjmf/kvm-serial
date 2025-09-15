@@ -23,7 +23,6 @@ MODIFIER_TO_VALUE = {
 }
 
 KEYS_WITH_CODES = {
-    None: 0x00,
     Key.enter: 0x28,
     Key.esc: 0x29,
     Key.backspace: 0x2A,

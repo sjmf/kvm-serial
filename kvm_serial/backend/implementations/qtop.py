@@ -33,7 +33,6 @@ if sys.platform == "darwin":
 # Qt special keys to USB HID scan codes
 # NB: USB HID Scancodes DIFFER from PS/2 scan codes!
 KEYS_WITH_CODES = {
-    None: 0x00,
     ## Alphanumeric keys not listed - handled by character handling
     # Basic keys
     Qt.Key.Key_Enter: 0x28,
