@@ -63,8 +63,8 @@ KEYS_WITH_CODES = {
     Qt.Key.Key_SysReq: 0x46,
     Qt.Key.Key_ScrollLock: 0x47,
     Qt.Key.Key_Pause: 0x48,
-    Qt.Key.Key_Insert: 0x49, # 0x1000006
-    0x1000058: 0x49,         # Also appears to be "Insert"
+    Qt.Key.Key_Insert: 0x49,  # 0x1000006
+    0x1000058: 0x49,  # Also appears to be "Insert"
     Qt.Key.Key_Home: 0x4A,
     Qt.Key.Key_PageUp: 0x4B,
     Qt.Key.Key_Delete: 0x4C,
