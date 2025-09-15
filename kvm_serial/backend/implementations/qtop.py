@@ -132,7 +132,7 @@ class QtOp(BaseOp):
                 text = event.text()
                 if len(text) == 0:
                     # Backup method as event.text() doesn't return for key combos
-                    text = chr(qt_key)
+                    text = chr(qt_key).lower()
 
                 if text and len(text) == 1:
                     scancode = ascii_to_scancode(text)
