@@ -13,15 +13,15 @@ A Software KVM, using the CH9329 UART Serial to USB HID controller.
 [![Home-made serial KVM module](https://wp.finnigan.dev/wp-content/uploads/2023/11/mini-uart.jpg)](https://wp.finnigan.dev/?p=682)
 
 This python module can transmit keyboard and mouse input over a UART serial connection to a second 
-device, using a CH9329 module. You can find these from vendors on eBay and AliExpress for next to 
-nothing. However, there is very little software support available for these modules, and protocol 
-documentation is sparse.
+device, using a CH9329 module or cable. You can find these from vendors on eBay and AliExpress for 
+next to nothing. However, there is very little software support available for these modules, and 
+protocol documentation is sparse.
 
-This Python module includes several methods to capture keyboard scan codes from a keyboard attached
-to the local computer where the script is running, and send them via Serial UART to the device which
-the USB HID keyboard is listening on. For most purposes, the default mode will suffice.
+This Python module can capture keyboard scan codes from a keyboard attached to the local computer 
+where the script is running, and send them via Serial UART to the device which the CH9329 USB HID 
+keyboard is listening on. For most purposes, the default mode will suffice.
 
-The `kvm_serial` package provides options for running a GUI for basic usage, or as a script providing many flexible options.
+The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
 
 ## GUI Usage
 
