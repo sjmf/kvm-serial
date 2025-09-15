@@ -167,6 +167,7 @@ class VideoGraphicsView(QGraphicsView):
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         scene_pos = self.mapToScene(event.pos())
         self.mouseMoved.emit(scene_pos.x(), scene_pos.y())
+        #logging.debug(f"View mouse move: {scene_pos.x():.1f}, {scene_pos.y():.1f}")
         return super().mouseMoveEvent(event)
 
     def focusInEvent(self, event: QFocusEvent) -> None:
@@ -910,11 +911,6 @@ class KVMQtGui(QMainWindow):
         view_size = self.video_view.size()
         if view_size.width() > 0 and view_size.height() > 0:
             self.video_worker.set_canvas_size(view_size.width(), view_size.height())
-
-    def mouseMoveEvent(self, event):
-        pos = event.pos()
-        logging.debug(f"Main mouse move: {pos.x():.1f}, {pos.y():.1f}")
-        super().mouseMoveEvent(event)
 
     def _on_mouse_click(self, x, y, button, down=True):
         """
