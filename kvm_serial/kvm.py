@@ -140,17 +140,16 @@ class VideoCaptureWorker(QThread):
 # Subclass QGraphicsView so clicks inside the view can receive focus and
 # emit signals that the main window can wire into its focus handlers.
 class VideoGraphicsView(QGraphicsView):
-    focusGained = pyqtSignal()
-    focusLost = pyqtSignal()
-
     mousePressed = pyqtSignal(float, float, Qt.MouseButton, bool)
     mouseReleased = pyqtSignal(float, float, Qt.MouseButton, bool)
     mouseMoved = pyqtSignal(float, float)
 
     def __init__(self, scene=None, parent=None):
         super().__init__(scene, parent)
-        # Accept focus on click so the view becomes the focus widget when clicked
+        # Set click focus policy to maintain focus on Tab
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
+        # Remove this widget from the tab focus chain entirely
+        self.setFocusProxy(None)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Ensure the view receives focus when clicked so focus events fire
@@ -171,6 +170,7 @@ class VideoGraphicsView(QGraphicsView):
         return super().mouseMoveEvent(event)
 
     def focusInEvent(self, event: QFocusEvent) -> None:
+        logging.info("Video view focused")
         try:
             self.focusGained.emit()
         except Exception:
@@ -178,6 +178,7 @@ class VideoGraphicsView(QGraphicsView):
         return super().focusInEvent(event)
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
+        logging.info("Video view unfocused")
         try:
             self.focusLost.emit()
         except Exception:
@@ -203,6 +204,7 @@ class KVMQtGui(QMainWindow):
     video_devices: list = []
 
     keyboard_var: bool = False
+    keyboard_last: str = ""
     video_var: int = -1
     mouse_var: bool = False
 
@@ -437,8 +439,6 @@ class KVMQtGui(QMainWindow):
             self.video_view.mousePressed.connect(self._on_mouse_click)
             self.video_view.mouseReleased.connect(self._on_mouse_click)
             self.video_view.mouseMoved.connect(self._on_mouse_move)
-            self.video_view.focusGained.connect(self._on_view_focus_gained)
-            self.video_view.focusLost.connect(self._on_view_focus_lost)
         except Exception:
             pass
 
@@ -485,7 +485,7 @@ class KVMQtGui(QMainWindow):
         )
 
         captured = "Captured" if self.keyboard_var else "Idle"
-        self.status_keyboard_label.setText(f"Keyboard: {captured}")
+        self.status_keyboard_label.setText(f"Keyboard: {captured} {self.keyboard_last}")
 
         camera_width = self.video_worker.camera_width
         camera_height = self.video_worker.camera_height
@@ -984,7 +984,16 @@ class KVMQtGui(QMainWindow):
 
         if self.keyboard_op:
             try:
-                self.keyboard_op.parse_key(event)
+                # parse_key returns True on successful parse
+                self.keyboard_var = self.keyboard_op.parse_key(event)
+                if (
+                    event.type() == QEvent.Type.KeyPress
+                    and event.key() >= Qt.Key.Key_Space
+                    and event.key() <= Qt.Key.Key_AsciiTilde
+                ):
+                    self.keyboard_last = "alphanumeric"
+                else:
+                    self.keyboard_last = "modifier"
             except SerialException as e:
                 QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
                 self._on_quit()
@@ -1010,23 +1019,15 @@ class KVMQtGui(QMainWindow):
 
     def focusInEvent(self, event: QFocusEvent):
         logging.info("Window focused")
+        self.keyboard_var = True
         # Do not change keyboard capture state here; the video view manages that.
         super(KVMQtGui, self).focusInEvent(event)
 
     def focusOutEvent(self, event: QFocusEvent):
         logging.info("Window unfocused")
+        self.keyboard_var = False
         # Do not change keyboard capture state here; the video view manages that.
         super(KVMQtGui, self).focusOutEvent(event)
-
-    # View-local focus handlers (only affect keyboard capture when the
-    # video view receives or loses focus).
-    def _on_view_focus_gained(self):
-        logging.info("Video view focused")
-        self.keyboard_var = True
-
-    def _on_view_focus_lost(self):
-        logging.info("Video view unfocused")
-        self.keyboard_var = False
 
     def _get_version(self):
         import toml
