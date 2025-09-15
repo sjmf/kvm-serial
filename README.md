@@ -6,20 +6,18 @@
 [![Run Tests](https://img.shields.io/github/actions/workflow/status/sjmf/kvm-serial/test.yml?label=Unit%20Tests)](https://github.com/sjmf/kvm-serial/actions/workflows/test.yml)
 [![codecov](https://img.shields.io/codecov/c/gh/sjmf/kvm-serial)](https://codecov.io/gh/sjmf/kvm-serial)
 
-__PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling CH9329 hardware.__
-
 A Software KVM, using the CH9329 UART Serial to USB HID controller.
 
-[![Home-made serial KVM module](https://wp.finnigan.dev/wp-content/uploads/2023/11/mini-uart.jpg)](https://wp.finnigan.dev/?p=682)
+Control your computers using an emulated keyboard and mouse!
 
-This python module can transmit keyboard and mouse input over a UART serial connection to a second 
-device, using a CH9329 module or cable. You can find these from vendors on eBay and AliExpress for 
-next to nothing. However, there is very little software support available for these modules, and 
+This python module allows you to control to a second device using a CH9329 module (or cable) and 
+a video capture device. You can find these from vendors on eBay and AliExpress for a low price.
+However, there is very little software support available for these modules, and CH9329
 protocol documentation is sparse.
 
-This Python module can capture keyboard scan codes from a keyboard attached to the local computer 
-where the script is running, and send them via Serial UART to the device which the CH9329 USB HID 
-keyboard is listening on. For most purposes, the default mode will suffice.
+Running this package will capture keyboard and mouse inputs from the local computer 
+where the script is running, and send these over a serial UART connection to the CH9329 USB HID 
+module, which will send USB HID mouse and keyboard movements and scan codes to the remote.
 
 The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
 
@@ -27,29 +25,63 @@ The `kvm_serial` package provides options for running the GUI, or as a script pr
 
 Run the GUI using `python -m kvm_serial`:
 
-![KVM Window](https://wp.finnigan.dev/wp-content/uploads/2025/06/Screenshot-2025-06-12-at-23.56.28-2.png)
+![KVM Window](https://wp.finnigan.dev/wp-content/uploads/2025/09/output-4.gif)
+*The Serial KVM window running on OSX, controlling a Windows remote machine*
 
 The module can be [installed from PyPI](https://pypi.org/project/kvm-serial/) (`pip install kvm-serial`),
 or locally from a cloned git repo (`pip install -e .`).
 
-The video window is provided using OpenCV, and can be quit using `Ctrl+ESC`.
+The GUI app will do a lot of the work for you: it will enumerate video devices and serial ports, 
+and give you a window to interact with the guest in. Application settings can be changed from the 
+menus (File, Options, View), for example if the app doesn't select the correct devices by default.
+
+## Kit List
+
+This module requires a little bit of hardware to get going. You will need:
+
+* CH9329 module or cable
+* Video capture card (e.g. HDMI)
+
+You can likely get everything you need for under £30, which is incredible when compared to the 
+price of a KVM crash cart adapter.
+
+### CH9329 module/cable assembled as cables.
+
+_PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling CH9329 hardware._  
+
+[![Home-made serial KVM module](https://wp.finnigan.dev/wp-content/uploads/2023/11/mini-uart.jpg)](https://wp.finnigan.dev/?p=682)
+*A home-made serial KVM module: CH9329 module soldered to SILabs CP2102. CH340 works, too.*
+
+So, I don't have a specific vendor to recommend, but if you put "*CH9329 cable usb*" into a search 
+engine, you will find the right thing. Just make sure what you buy has "CH9329" in the name: a USB-A 
+to USB-A cable won't do, and can damage your machine.
+
+The modules have a USB-A male connector on one end, and serial connector on the other. The cables 
+have USB-A both ends, as they are already put together and should pretty much be plug-and-play: just 
+make sure it's the right way around. I just soldered a CH9329 module to a UART transceiver chip 
+myself, as above.
+
+### Video capture card
+
+You also need a capture card that takes the display output from your remote machine, and presents it 
+as a USB device to your local system. I found the "*UGREEN Video Capture Card HDMI to USB C Capture 
+Device*" was a good balance of price versus value. The more you spend on a capture device, the more
+responsive your video feed will likely be (to a point). HDMI and VGA hardware is available.
 
 ## Script Usage
 
-A script called `control.py` is also provided for use directly from the terminal. 
-(Actually, this is all the `kvm.py` GUI does: set up the parameters for the script and run it!)
+A script called `control.py` is also provided for use directly from the terminal, so you can also control remotes from a headless environment! (e.g. Pi to Pi!)
 
 Packages from `requirements.txt` must be installed first. Use your preferred python package manager. E.g.:
 
 ```bash
-# Conda
-conda create -n kvm
-conda activate kvm
-# OR Venv (don't use both!)
+# Create Virtual env
 python -m venv ./.venv
 ./.venv/scripts/activate
 # Then, use pip to install dependencies
 pip install -r requirements.txt
+# Or install as a module
+pip install kvm_serial
 ```
 
 Usage examples for the `control.py` script:
@@ -68,39 +100,14 @@ sudo python control.py --mode usb /dev/tty.usbserial0
 python control.py --verbose COM1
 ```
 
-Use `python control.py --help` to view all available options. Keyboard capture and transmission is the default functionality of control.py: a couple of extra parameters are used to enable mouse and video.
+Use `python control.py --help` to view all available options. Keyboard capture and transmission is the default functionality of control.py: a couple of extra parameters are used to enable mouse and video. For most purposes, the default capture mode will suffice.
 
 Mouse capture is provided using the parameter `--mouse` (`-e`). It uses pynput for capturing mouse input and transmits this over the serial link simultaneously to keyboard input. Appropriate system permissions (Privacy and Security) may be required to use mouse capture.
 
 Video capture is provided using the parameter `--video` (`-x`). It uses OpenCV for capturing frames from the camera device. Again, system permissions for webcam access may need to be granted.
 
-## Keyboard capture mode comparison
-
-Some capture methods require superuser privileges (`sudo`), for example `pyusb` provides the most accurate keyboard scancode capture, but needs to de-register the device driver for the input method in order to control it directly.
-
-For example usage, please see the accompanying blogpost: https://wp.finnigan.dev/?p=682
-
-| Mode     | Modifiers  | Paste  | Blocking   | Focus  | Exit     | Permissions            |
-|----------|------------|--------|------------|--------|----------|------------------------|
-| `usb`    | ✅ Yes     | ❌ No  | ✅ Yes      | ❌ No  | Ctrl+ESC | `sudo` / root          |
-| `tty`    | ❌ No      | ✅ Yes | ❌ No       | ✅ Yes | Ctrl+C   | Standard user          |
-| `pynput` | ✅ Yes     | ❌ No  | ❌ No       | ❌ No  | Ctrl+ESC | Input monitoring (OSX) |
-| `curses` | ⚠️ Some    | ✅ Yes | ❌ No       | ✅ Yes | ESC      | Standard user          |
-
-For `curses`, modifier support is incomplete but should be good enough to enable working in a terminal. Curses provides a good mix of functionality versus permissions and is therefore the default mode in keyboard-only mode. When running with mouse and video, `pynput` is selected automatically.
-
-A 'yes' in the remaining columns means:
-
- * **Modifiers**:
-Keys like `Ctrl`, `Shift`, `Alt` and `Cmd`/`Win` will be captured. Combinations like Ctrl+C will be passed through.
- * **Paste**: 
-Content can be pasted from host to guest. Paste text into the console and it will be transmitted char-wise to the HID device
- * **Blocking**:
-Keyboard input will not function in other applications while the script is running
- * **Focus**:
-The console must remain in focus for input to be recorded (and transmitted over the UART)
- * **Implication**:
-You will need to select the best input method for your use case! 
+See [MODES.md](./docs/MODES.MD) for more information on the various other options to the script.
+Implementations are provided for all the main python input capture methods.
 
 ## Troubleshooting
 
