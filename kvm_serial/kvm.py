@@ -933,6 +933,14 @@ class KVMQtGui(QMainWindow):
         # Get the native camera resolution from video worker
         camera_width = self.video_worker.camera_width
         camera_height = self.video_worker.camera_height
+
+        if 0 > self.pos_x or self.pos_x >= camera_width:
+            logging.debug(f"X coordinate out of bounds: 0 <= {x} >= {camera_width}")
+            return False
+        elif 0 > self.pos_y or self.pos_y >= camera_height:
+            logging.debug(f"Y coordinate out of bounds: 0 <= {y} >= {camera_height}")
+            return False
+
         report = f"Mouse: [x:{self.pos_x} y:{self.pos_y}] in [{camera_width}x{camera_height}]"
         logging.debug(report)
         self.status_mouse_label.setText(report)

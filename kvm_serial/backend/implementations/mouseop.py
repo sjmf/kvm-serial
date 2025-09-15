@@ -30,11 +30,6 @@ class MouseOp(BaseOp):
         raise Exception("Run not supported for MouseOp mode. Call from handler class")
 
     def on_move(self, x, y, width, height):
-        if 0 > x or x > width or 0 > y or y > height:
-            raise ValueError(
-                f"Coordinates out of bounds: 0 <= {x} > {width} or 0 <= {y} > {height}"
-            )
-
         # Prepare data payload
         data = bytearray(b"\x02\x00")  # Absolute coordinates (0x02); No mouse buttons (0x0)
 
