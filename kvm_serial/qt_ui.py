@@ -7,7 +7,7 @@ import cv2
 from typing import cast
 from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
-from PyQt5.QtGui import QImage, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent, QPainter
+from PyQt5.QtGui import QImage, QMouseEvent, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent, QPainter
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -109,7 +109,7 @@ class VideoCaptureWorker(QThread):
         """Internal method to capture a single frame"""
         width = int(self.camera_width)
         height = int(self.camera_height)
-        
+
         with QMutexLocker(self.mutex):
             # Initialise camera if needed
             if not self.camera_initialised:
@@ -143,30 +143,46 @@ class VideoGraphicsView(QGraphicsView):
     focusGained = pyqtSignal()
     focusLost = pyqtSignal()
 
+    mousePressed = pyqtSignal(float, float, Qt.MouseButton, bool)  
+    mouseReleased = pyqtSignal(float, float, Qt.MouseButton, bool)
+    mouseMoved = pyqtSignal(float, float)
+
     def __init__(self, scene=None, parent=None):
         super().__init__(scene, parent)
         # Accept focus on click so the view becomes the focus widget when clicked
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
-        self.setMouseTracking(True)
 
-    def mousePressEvent(self, event):
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         # Ensure the view receives focus when clicked so focus events fire
         self.setFocus()
-        super().mousePressEvent(event)
+        # Convert to scene coordinates
+        scene_pos = self.mapToScene(event.pos())
+        self.mousePressed.emit(scene_pos.x(), scene_pos.y(), event.button(), True)
+        return super().mousePressEvent(event)
 
-    def focusInEvent(self, event):
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        scene_pos = self.mapToScene(event.pos())
+        self.mouseReleased.emit(scene_pos.x(), scene_pos.y(), event.button(), False)
+        return super().mouseReleaseEvent(event)
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        scene_pos = self.mapToScene(event.pos())
+        self.mouseMoved.emit(scene_pos.x(), scene_pos.y())
+        return super().mouseMoveEvent(event)
+
+    def focusInEvent(self, event: QFocusEvent) -> None:
         try:
             self.focusGained.emit()
         except Exception:
             pass
-        super().focusInEvent(event)
+        return super().focusInEvent(event)
 
-    def focusOutEvent(self, event):
+    def focusOutEvent(self, event: QFocusEvent) -> None:
         try:
             self.focusLost.emit()
         except Exception:
             pass
-        super().focusOutEvent(event)
+        return super().focusOutEvent(event)
 
 
 class KVMQtGui(QMainWindow):
@@ -211,10 +227,10 @@ class KVMQtGui(QMainWindow):
     mouse_op: MouseOp | None = None
 
     # Dimensions
-    canvas_width: int = 1280
-    canvas_height: int = 720
-    canvas_min_width: int = 512
-    canvas_min_height: int = 320
+    window_default_width: int = 1280
+    window_default_height: int = 720
+    window_min_width: int = 512
+    window_min_height: int = 320
     status_bar_default_height: int = 24  # Typical status bar height in pixels
 
     # Video
@@ -262,8 +278,12 @@ class KVMQtGui(QMainWindow):
     def __init_window(self):
         # Window characteristics
         self.setWindowTitle("Serial KVM")
-        self.setMinimumSize(self.canvas_min_width, self.canvas_min_height)
-        self.resize(self.canvas_width, self.canvas_height + self.status_bar_default_height)
+        self.setMinimumSize(
+            self.window_min_width, self.window_min_height + self.status_bar_default_height
+        )
+        self.resize(
+            self.window_default_width, self.window_default_height + self.status_bar_default_height
+        )
 
         # Set up main layout
         self.main_layout = QVBoxLayout()
@@ -396,25 +416,16 @@ class KVMQtGui(QMainWindow):
         # Add video view to main layout
         self.main_layout.addWidget(self.video_view, 1)  # 1 = stretch factor
 
-        # Install event filter to intercept graphics view events
-        self.video_scene.installEventFilter(self)
+        # Set mouse tracking on video view
         self.video_view.setMouseTracking(True)
 
         # Give the window a chance to show and lay out its widgets
         QApplication.processEvents()
 
-        # Get the actual size of the video view after layout
-        view_size = self.video_view.size()
-        if view_size.width() > 0 and view_size.height() > 0:
-            self.canvas_width = view_size.width()
-            self.canvas_height = view_size.height()
-        else:
-            # If view not sized yet, use default dimensions
-            self.canvas_width = 1280
-            self.canvas_height = 720
-
         # Initialise video capture worker thread with actual view size
-        self.video_worker = VideoCaptureWorker(self.canvas_width, self.canvas_height, 0)
+        self.video_worker = VideoCaptureWorker(
+            self.window_default_width, self.window_default_height, 0
+        )
         self.video_worker.frame_ready.connect(self._on_frame_ready)
         self.video_worker.start()
 
@@ -422,6 +433,10 @@ class KVMQtGui(QMainWindow):
         # Connect view-local focus signals to dedicated handlers so the
         # keyboard capture state is only affected by focusing inside the view.
         try:
+            # Connect mouse signals from view to handlers
+            self.video_view.mousePressed.connect(self._on_mouse_click)
+            self.video_view.mouseReleased.connect(self._on_mouse_click)
+            self.video_view.mouseMoved.connect(self._on_mouse_move)
             self.video_view.focusGained.connect(self._on_view_focus_gained)
             self.video_view.focusLost.connect(self._on_view_focus_lost)
         except Exception:
@@ -472,7 +487,10 @@ class KVMQtGui(QMainWindow):
         captured = "Captured" if self.keyboard_var else "Idle"
         self.status_keyboard_label.setText(f"Keyboard: {captured}")
 
-        self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
+        camera_width = self.video_worker.camera_width
+        camera_height = self.video_worker.camera_height
+        report = f"Mouse: [x:{self.pos_x} y:{self.pos_y}] in [{camera_width}x{camera_height}]"
+        self.status_mouse_label.setText(report)
         idx = self.video_var
 
         if idx >= 0 and idx < len(self.video_devices):
@@ -889,41 +907,14 @@ class KVMQtGui(QMainWindow):
         super().resizeEvent(event)
 
         # Get new size from the video view's actual size
-        new_size = self.video_view.size()
-        if new_size.width() > 0 and new_size.height() > 0:
-            self.canvas_width = new_size.width()
-            self.canvas_height = new_size.height()
-            self.video_worker.set_canvas_size(self.canvas_width, self.canvas_height)
+        view_size = self.video_view.size()
+        if view_size.width() > 0 and view_size.height() > 0:
+            self.video_worker.set_canvas_size(view_size.width(), view_size.height())
 
-    def eventFilter(self, source, event):
-        """
-        Handle mouse movement events within the video_scene, update mouse position.
-        This filter receives all events and could be used for other things too.
-
-        Args:
-            event: QEvent object – an event that was fired.
-        """
-
-        try:
-            if source == self.video_scene:
-                if event.type() == QEvent.Type.GraphicsSceneMouseMove:
-                    pos = event.scenePos()
-                    self._on_mouse_move(pos.x(), pos.y())
-                elif event.type() == QEvent.Type.GraphicsSceneMousePress:
-                    pos = event.scenePos()
-                    self._on_mouse_click(pos.x(), pos.y(), event.button(), down=True)
-                elif event.type() == QEvent.Type.GraphicsSceneMouseRelease:
-                    pos = event.scenePos()
-                    self._on_mouse_click(pos.x(), pos.y(), event.button(), down=False)
-        except SerialException as e:
-            if self._quitting:
-                return True  # Indicate the event should not be further processed
-
-            QMessageBox.critical(self, "Error", f"Error writing to serial port: {e}")
-            self._on_quit()
-
-        # Let event continue to original handler
-        return super().eventFilter(source, event)
+    def mouseMoveEvent(self, event):
+        pos = event.pos()
+        logging.debug(f"Main mouse move: {pos.x():.1f}, {pos.y():.1f}")
+        super().mouseMoveEvent(event)
 
     def _on_mouse_click(self, x, y, button, down=True):
         """
@@ -932,26 +923,30 @@ class KVMQtGui(QMainWindow):
             event: QMouseEvent object containing mouse button and position.
         """
         pressed = "pressed" if down else "released"
-        logging.info(f"Mouse {self.BUTTON_MAP[button]} {pressed} at {x},{y}")
+        logging.info(f"Mouse {self.BUTTON_MAP[button]} {pressed} at {int(x)},{int(y)}")
 
         if self.mouse_op:
             self.mouse_op.on_click(x, y, MouseButton[self.BUTTON_MAP[button]], down)
 
     def _on_mouse_move(self, x, y):
-
+        # Store original scene coordinates
         self.pos_x = int(x)
         self.pos_y = int(y)
         self.mouse_var = True
 
-        logging.debug(f"Mouse at ({self.pos_x}, {self.pos_y})")
-        self.status_mouse_label.setText(f"Mouse: [x:{self.pos_x} y:{self.pos_y}]")
-        
+        # Get the native camera resolution from video worker
+        camera_width = self.video_worker.camera_width
+        camera_height = self.video_worker.camera_height
+        report = f"Mouse: [x:{self.pos_x} y:{self.pos_y}] in [{camera_width}x{camera_height}]"
+        logging.debug(report)
+        self.status_mouse_label.setText(report)
+
         if self.mouse_op:
             try:
-                self.mouse_op.on_move(self.pos_x, self.pos_y, self.canvas_width, self.canvas_height)
-            except OverflowError as e:
+                self.mouse_op.on_move(self.pos_x, self.pos_y, camera_width, camera_height)
+            except (OverflowError, ValueError) as e:
                 logging.error(e)
-                logging.error(f"{self.pos_x}, {self.pos_y}, {self.canvas_width}, {self.canvas_height}")
+                logging.error(f"{self.pos_x}, {self.pos_y}, {camera_width}, {camera_height}")
 
     def _toggle_mouse(self):
         logging.info("Toggling mouse pointer visibility")
