@@ -143,7 +143,7 @@ class VideoGraphicsView(QGraphicsView):
     focusGained = pyqtSignal()
     focusLost = pyqtSignal()
 
-    mousePressed = pyqtSignal(float, float, Qt.MouseButton, bool)  
+    mousePressed = pyqtSignal(float, float, Qt.MouseButton, bool)
     mouseReleased = pyqtSignal(float, float, Qt.MouseButton, bool)
     mouseMoved = pyqtSignal(float, float)
 
