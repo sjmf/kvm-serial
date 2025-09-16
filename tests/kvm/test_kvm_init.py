@@ -5,9 +5,8 @@ Tests the core setup logic without instantiating actual GUI components.
 """
 
 import unittest
-from unittest.mock import patch, MagicMock, Mock, call
+from unittest.mock import patch, MagicMock
 import sys
-import os
 
 
 class TestKVMInitialization(unittest.TestCase):
