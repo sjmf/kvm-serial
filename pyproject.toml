@@ -19,7 +19,10 @@ classifiers = [
 license = "MIT"
 license-files = ["LICEN[CS]E*"]
 
-dependencies = ["dynamic"]
+dynamic = ["dependencies"]
+
+[tool.setuptools.dynamic]
+dependencies = {file = ["requirements.txt"]}
 
 [project.optional-dependencies]
 dev = [
@@ -37,6 +40,7 @@ Issues = "https://github.com/sjmf/kvm-serial/issues"
 
 [tool.setuptools.packages.find]
 where = ["."]
+include = ["kvm_serial*"]
 
 [tool.black]
 line-length = 100
