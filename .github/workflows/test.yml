@@ -43,7 +43,7 @@ jobs:
             --cov-report=xml --junitxml=./junit.xml
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && github.event_name != 'workflow_call' }}
         uses: codecov/test-results-action@v1
         with:
           files: ./junit.xml,!./cache
@@ -51,6 +51,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload results to Codecov
+        if: github.event_name != 'workflow_call'
         uses: codecov/codecov-action@v5
         with:
           env_vars: OS,PYTHON
