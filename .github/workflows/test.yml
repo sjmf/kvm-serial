@@ -4,6 +4,10 @@ on:
   push:
   pull_request:
   workflow_call:
+    inputs:
+      skip-coverage:
+        type: boolean
+        default: false
 
 jobs:
   test:
@@ -43,7 +47,7 @@ jobs:
             --cov-report=xml --junitxml=./junit.xml
 
       - name: Upload test results to Codecov
-        if: ${{ !cancelled() && github.event_name != 'workflow_call' }}
+        if: ${{ !cancelled() && !inputs.skip-coverage }}
         uses: codecov/test-results-action@v1
         with:
           files: ./junit.xml,!./cache
@@ -51,7 +55,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
       - name: Upload results to Codecov
-        if: github.event_name != 'workflow_call'
+        if: ${{ !cancelled() && !inputs.skip-coverage }}
         uses: codecov/codecov-action@v5
         with:
           env_vars: OS,PYTHON

@@ -8,6 +8,8 @@ on:
 jobs:
   test:
     uses: ./.github/workflows/test.yml
+    with:
+      skip-coverage: true
 
   build-and-publish:
     needs: test
