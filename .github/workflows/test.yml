@@ -30,6 +30,11 @@ jobs:
           pytest tests/utils/ --cov --cov-append --cov-branch \
             --cov-report=xml --junitxml=./junit.xml
 
+      - name: Run frontend GUI tests
+        run: >
+          pytest tests/kvm/ --cov --cov-append --cov-branch \
+            --cov-report=xml --junitxml=./junit.xml
+
       - name: Run control test
         run: >
           pytest tests/test_control.py --cov --cov-append --cov-branch \
