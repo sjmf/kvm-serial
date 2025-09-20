@@ -2,6 +2,8 @@ name: Unit Tests
 
 on: 
   push:
+    tags-ignore:
+      - 'v*'  # Skip workflow for release tags - run from release.yml
   pull_request:
   workflow_call:
     inputs:
