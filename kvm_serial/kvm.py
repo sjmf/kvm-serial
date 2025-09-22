@@ -153,13 +153,12 @@ class VideoGraphicsView(QGraphicsView):
         # Enable mouse tracking
         self.setMouseTracking(True)
         self.main_window = None
-        
+
         # Find and store reference to main window
         widget = self
         while widget and not isinstance(widget, KVMQtGui):
             widget = widget.parent()
         self.main_window = widget
-
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Ensure the view receives focus when clicked so focus events fire
@@ -179,7 +178,7 @@ class VideoGraphicsView(QGraphicsView):
         self.mouseMoved.emit(scene_pos.x(), scene_pos.y())
         # logging.debug(f"View mouse move: {scene_pos.x():.1f}, {scene_pos.y():.1f}")
         return super().mouseMoveEvent(event)
-    
+
     def focusInEvent(self, event: QFocusEvent) -> None:
         logging.info("Video view focused - keyboard capture enabled")
         if self.main_window:
