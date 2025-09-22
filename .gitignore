@@ -11,3 +11,7 @@ coverage.xml
 junit.xml
 .coverage
 lcov.info
+kvm.app
+kvm.spec
+kvm.build
+kvm.dist
