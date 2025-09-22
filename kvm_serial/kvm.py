@@ -150,6 +150,16 @@ class VideoGraphicsView(QGraphicsView):
         self.setFocusPolicy(Qt.FocusPolicy.ClickFocus)
         # Remove this widget from the tab focus chain entirely
         self.setFocusProxy(None)
+        # Enable mouse tracking
+        self.setMouseTracking(True)
+        self.main_window = None
+        
+        # Find and store reference to main window
+        widget = self
+        while widget and not isinstance(widget, KVMQtGui):
+            widget = widget.parent()
+        self.main_window = widget
+
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Ensure the view receives focus when clicked so focus events fire
@@ -169,22 +179,30 @@ class VideoGraphicsView(QGraphicsView):
         self.mouseMoved.emit(scene_pos.x(), scene_pos.y())
         # logging.debug(f"View mouse move: {scene_pos.x():.1f}, {scene_pos.y():.1f}")
         return super().mouseMoveEvent(event)
-
+    
     def focusInEvent(self, event: QFocusEvent) -> None:
-        logging.info("Video view focused")
-        try:
-            self.focusGained.emit()
-        except Exception:
-            pass
-        return super().focusInEvent(event)
+        logging.info("Video view focused - keyboard capture enabled")
+        if self.main_window:
+            self.main_window.keyboard_var = True
+        super().focusInEvent(event)
 
     def focusOutEvent(self, event: QFocusEvent) -> None:
-        logging.info("Video view unfocused")
-        try:
-            self.focusLost.emit()
-        except Exception:
-            pass
-        return super().focusOutEvent(event)
+        logging.info("Video view unfocused - keyboard capture disabled")
+        if self.main_window:
+            self.main_window.keyboard_var = False
+        super().focusOutEvent(event)
+
+    def keyPressEvent(self, event: QKeyEvent) -> None:
+        # Let the main window handle the key event first
+        if self.main_window:
+            self.main_window.keyPressEvent(event)
+        # Prevent Qt from using arrow keys for scrolling
+        event.accept()
+
+    def keyReleaseEvent(self, event: QKeyEvent) -> None:
+        if self.main_window:
+            self.main_window.keyReleaseEvent(event)
+        event.accept()
 
 
 class KVMQtGui(QMainWindow):
@@ -1020,18 +1038,6 @@ class KVMQtGui(QMainWindow):
             self._on_quit()
 
         super().keyReleaseEvent(event)
-
-    def focusInEvent(self, event: QFocusEvent):
-        logging.info("Window focused")
-        self.keyboard_var = True
-        # Do not change keyboard capture state here; the video view manages that.
-        super(KVMQtGui, self).focusInEvent(event)
-
-    def focusOutEvent(self, event: QFocusEvent):
-        logging.info("Window unfocused")
-        self.keyboard_var = False
-        # Do not change keyboard capture state here; the video view manages that.
-        super(KVMQtGui, self).focusOutEvent(event)
 
     def _get_version(self):
         import toml
