@@ -42,7 +42,9 @@ KEYS_WITH_CODES = {
     Qt.Key.Key_Tab: 0x2B,
     Qt.Key.Key_Space: 0x2C,
     # 0x2D-0x38 are punctuation and symbols, handled by character handling
-    # - = [ ] \ # ; ' ` , . /
+    # - = [ ] \ # ; ' ` , /
+    # except period . for some reason...
+    Qt.Key.Key_Period: 0x37,
     # Lock keys and function keys
     Qt.Key.Key_CapsLock: 0x39,
     Qt.Key.Key_F1: 0x3A,
@@ -76,23 +78,6 @@ KEYS_WITH_CODES = {
     Qt.Key.Key_NumLock: 0x53,
     # Additional keys
     Qt.Key.Key_Menu: 0x65,
-    # Numpad keys
-    Qt.Key.Key_Slash: 0x54,
-    Qt.Key.Key_Asterisk: 0x55,
-    Qt.Key.Key_Minus: 0x56,
-    Qt.Key.Key_Plus: 0x57,
-    Qt.Key.Key_Return: 0x58,
-    Qt.Key.Key_1: 0x59,
-    Qt.Key.Key_2: 0x5A,
-    Qt.Key.Key_3: 0x5B,
-    Qt.Key.Key_4: 0x5C,
-    Qt.Key.Key_5: 0x5D,
-    Qt.Key.Key_6: 0x5E,
-    Qt.Key.Key_7: 0x5F,
-    Qt.Key.Key_8: 0x60,
-    Qt.Key.Key_9: 0x61,
-    Qt.Key.Key_0: 0x62,
-    Qt.Key.Key_Period: 0x63,
 }
 
 
