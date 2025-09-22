@@ -371,6 +371,11 @@ class KVMQtGui(QMainWindow):
         self.verbose_action.triggered.connect(self._toggle_verbose)
         options_menu.addAction(self.verbose_action)
 
+        # Add CTRL+ALT+DEL action
+        ctrl_alt_del_action = QAction("Send CTRL+ALT+DEL", self)
+        ctrl_alt_del_action.triggered.connect(self._send_ctrl_alt_del)
+        options_menu.addAction(ctrl_alt_del_action)
+
         # View menu
         view_menu = menubar.addMenu("View")
         view_menu = cast(QMenu, view_menu)  # hush PyLance
@@ -1063,6 +1068,33 @@ class KVMQtGui(QMainWindow):
             "<p>Available under <a href='https://github.com/sjmf/kvm-serial/blob/main/LICENSE.md'>"
             "MIT License</a></p>",
         )
+
+    def _send_ctrl_alt_del(self):
+        """Send CTRL+ALT+DEL key combination"""
+        if not self.keyboard_op:
+            logging.warning("No keyboard operation available")
+            return
+
+        try:
+            # On macOS, Qt maps Cmd to Control and Ctrl to Meta
+            # We want to send actual Control key, so we use Meta on macOS
+            ctrl_key = Qt.Key.Key_Control
+            if sys.platform == "darwin":
+                ctrl_key = Qt.Key.Key_Meta
+
+            # Create synthetic key events
+            ctrl_alt_del = [ctrl_key, Qt.Key.Key_Alt, Qt.Key.Key_Delete]
+
+            # Press and release all keys
+            for action in [QEvent.Type.KeyPress, QEvent.Type.KeyRelease]:
+                for key in ctrl_alt_del:
+                    self.keyboard_op.parse_key(
+                        QKeyEvent(action, key, Qt.KeyboardModifier.NoModifier)
+                    )
+
+            logging.info("Sent CTRL+ALT+DEL")
+        except Exception as e:
+            logging.error(f"Error sending CTRL+ALT+DEL: {e}")
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
