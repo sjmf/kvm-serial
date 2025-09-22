@@ -4,6 +4,9 @@ on:
   push:
     branches: ['**']  # Run on all branches
     tags-ignore: ['v*']  # But skip version tags
+    paths:
+      - 'kvm_serial/**'
+      - 'tests/**'
   pull_request:
   workflow_call:
     inputs:

@@ -1,6 +1,11 @@
 name: Lint using Black
 
-on: [push, pull_request]
+on: 
+  push:
+    paths:
+      - kvm_serial/**
+      - tests/**
+  pull_request:
 
 jobs:
   lint:
