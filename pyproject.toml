@@ -35,8 +35,8 @@ dev = [
     ]
 
 [project.scripts]
-kvm-serial = "kvm_serial.kvm:main"
-kvm-command = "kvm_serial.control:main"
+kvm-gui = "kvm_serial.kvm:main"
+kvm-control = "kvm_serial.control:main"
 
 [project.urls]
 Homepage = "https://github.com/sjmf/kvm-serial"
