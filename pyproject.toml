@@ -34,6 +34,10 @@ dev = [
     "pre-commit"
     ]
 
+[project.scripts]
+kvm-serial = "kvm_serial.kvm:main"
+kvm-command = "kvm_serial.control:main"
+
 [project.urls]
 Homepage = "https://github.com/sjmf/kvm-serial"
 Issues = "https://github.com/sjmf/kvm-serial/issues"
