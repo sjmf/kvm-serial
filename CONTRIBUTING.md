@@ -14,9 +14,7 @@ If this project has been useful to you, please consider giving it a star. ⭐️
 - [Development Setup](#development-setup)
 - [How to Contribute](#how-to-contribute)
 - [Reporting Bugs](#reporting-bugs)
-- [Suggesting Enhancements](#suggesting-enhancements)
 - [Pull Requests](#pull-requests)
-- [Code Style and Standards](#code-style-and-standards)
 - [Testing](#testing)
 - [Documentation](#documentation)
 
@@ -25,12 +23,14 @@ If this project has been useful to you, please consider giving it a star. ⭐️
 This project is committed to providing a welcoming and inclusive environment for all contributors. In summary: be decent to others in this space, act in good faith and assume good faith on others' parts, and conduct onself in a way which would be acceptable in the workplace.
 
 All participants should:
+
 - Be respectful and considerate in communications
 - Show empathy towards other community members
 - Accept constructive criticism gracefully
 - Focus on what is best for the project
 
 Unacceptable behavior includes:
+
 - Any conduct that would be inappropriate in a professional setting
 - Harassment of any kind
 - Discriminatory jokes and language
@@ -58,7 +58,7 @@ If you still need clarification, please:
 
 ### Forking the Repository
 
-You will need to fork the repository if you want to contribute via [Pull Request](#pull-requests). 
+You will need to fork the repository if you want to contribute via [Pull Request](#pull-requests).
 If that's you, read on!
 
 1. Fork the repository on GitHub
@@ -72,7 +72,7 @@ If that's you, read on!
    git remote add upstream https://github.com/sjmf/kvm-serial.git
    ```
 
-### Development Setup
+## Development Setup
 
 To develop the code, there's a few steps to get set up:
 
@@ -131,6 +131,7 @@ Open a [new issue](../../issues/new) with a clear, descriptive title that summar
 ### Commit Message Guidelines
 
 Examples:
+
 - `feat(video): add support for USB 3.0 cameras`
 - `fix(serial): handle port disconnection gracefully`
 - `docs(readme): update installation instructions`
@@ -170,6 +171,7 @@ Documentation should be updated whenever functionality changes. This includes no
 ## Legal Notice
 
 By contributing to this project, you agree that:
+
 - You have authored 100% of the contributed content
 - You have the necessary rights to the content
 - Your contribution may be provided under the project license
@@ -177,7 +179,8 @@ By contributing to this project, you agree that:
 ## Questions?
 
 If you have questions about contributing, feel free to:
-- Open an [issue](../../issues/new) 
+
+- Open an [issue](../../issues/new)
 - Contact the maintainers
 
 Thank you for contributing to KVM Serial! 🎉
