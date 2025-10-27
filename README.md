@@ -119,6 +119,7 @@ if your system user does not have serial write permissions (resulting in a permi
 ## Acknowledgements
 With thanks to [@beijixiaohu](https://github.com/beijixiaohu), the author of the [ch9329Comm PyPi package](https://pypi.org/project/ch9329Comm/) and [GitHub repo](https://github.com/beijixiaohu/CH9329_COMM/) (in Chinese), some code of which is re-used under the MIT License.
 
-## License
-(c) 2023-25 Samantha Finnigan (except where acknowledged) and released under [MIT License](LICENSE.md).
+Thank you, once again, to everyone who has [contributed](CONTRIBUTING.md) to this project.
 
+## License
+(c) 2023-25 Samantha Finnigan and contributors (except where acknowledged) and released under [MIT License](LICENSE.md).
