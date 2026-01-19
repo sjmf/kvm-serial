@@ -27,6 +27,7 @@ from PyQt5.QtWidgets import (
 try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
+    from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
     from kvm_serial.backend.implementations.qtop import QtOp
     from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
@@ -36,6 +37,7 @@ except ModuleNotFoundError:
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
+    from utils import scancode_to_ascii, string_to_scancodes
     from backend.video import CameraProperties, CaptureDevice
     from backend.implementations.qtop import QtOp
     from backend.implementations.mouseop import MouseOp, MouseButton
@@ -348,6 +350,13 @@ class KVMQtGui(QMainWindow):
         about_action = QAction("About Serial KVM", self)
         about_action.triggered.connect(self._show_about)
         file_menu.addAction(about_action)
+
+        # Edit Menu
+        edit_menu = menubar.addMenu("Edit")
+        edit_menu = cast(QMenu, edit_menu)
+        self.paste_action = QAction("Paste", self)
+        self.paste_action.triggered.connect(self._on_paste)
+        edit_menu.addAction(self.paste_action)
 
         # Options Menu
         options_menu = menubar.addMenu("Options")
@@ -1095,6 +1104,60 @@ class KVMQtGui(QMainWindow):
             logging.info("Sent CTRL+ALT+DEL")
         except Exception as e:
             logging.error(f"Error sending CTRL+ALT+DEL: {e}")
+
+    def _on_paste(self):
+        """Paste text from clipboard to remote machine, transmitting char-wise"""
+        if not self.keyboard_op:
+            logging.warning("No keyboard operation available")
+            return
+
+        try:
+            clipboard = QApplication.clipboard()
+            if clipboard is None:
+                logging.warning("Could not access clipboard")
+                return
+
+            paste_text = clipboard.text()
+            if not paste_text:
+                logging.info("Clipboard is empty")
+                return
+
+            # Convert string to scancodes with key-up signals between characters
+            scancodes = string_to_scancodes(paste_text, key_repeat=1, key_up=1)
+
+            # Disable paste action while transmitting
+            self.paste_action.setEnabled(False)
+
+            # Start transmitting scancodes asynchronously
+            self._send_next_scancode(scancodes, 0, len(paste_text))
+        except Exception as e:
+            logging.error(f"Error pasting from clipboard: {e}")
+            self.paste_action.setEnabled(True)
+
+    def _send_next_scancode(self, scancodes: list, index: int, char_count: int):
+        """Send the next scancode in the paste buffer, scheduling the next one via QTimer"""
+        if index >= len(scancodes):
+            logging.info(f"Pasted {char_count} characters")
+            self.paste_action.setEnabled(True)
+            return
+
+        try:
+            scancode = scancodes[index]
+            char_repr = scancode_to_ascii(scancode) or "?"
+            logging.debug(
+                f"Paste [{index}]: {char_repr!r} -> ({', '.join(hex(b) for b in scancode)})"
+            )
+            self.keyboard_op.hid_serial_out.send_scancode(bytes(scancode))  # type: ignore
+        except Exception as e:
+            logging.error(f"Error during paste at index {index}: {e}")
+            self.paste_action.setEnabled(True)
+            return
+
+        # Schedule the next scancode after 10ms delay:
+        # I'm tracking `index` here - arguably we could use a deque for scancodes, and
+        #  do .popleft() instead. I've implemented it this way out of performance concerns,
+        #  plus, it's more debuggable if we don't mutate state every time we hit the function.
+        QTimer.singleShot(10, lambda: self._send_next_scancode(scancodes, index + 1, char_count))
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
