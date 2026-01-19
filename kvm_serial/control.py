@@ -7,7 +7,6 @@ import logging
 
 from serial import Serial
 
-
 logger = logging.getLogger(__name__)
 
 # Globally visible listener objects for thread stop

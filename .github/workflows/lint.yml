@@ -16,5 +16,5 @@ jobs:
         with:
           options: "--check"
           src: "./kvm_serial ./tests"
-          version: ">= 25.1"
+          version: "26.1.0"
   

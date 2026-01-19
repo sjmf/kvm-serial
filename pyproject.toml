@@ -30,7 +30,7 @@ dev = [
     "pytest-cov",
     "pytest-watch",
     "pytest-timeout",
-    "black", 
+    "black==26.1.0", 
     "pre-commit"
     ]
 
