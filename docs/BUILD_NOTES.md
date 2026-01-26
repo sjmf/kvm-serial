@@ -53,6 +53,7 @@ pyinstaller kvm-gui.spec
 ## Testing the Build
 
 ### macOS
+
 ```bash
 # Run the built application
 open "dist/KVM Serial.app"
@@ -62,12 +63,14 @@ open "dist/KVM Serial.app"
 ```
 
 ### Windows
+
 ```bash
 # Run the executable
 dist\kvm-gui.exe
 ```
 
 ### Linux
+
 ```bash
 # Make executable (if needed)
 chmod +x dist/kvm-gui
@@ -79,6 +82,7 @@ chmod +x dist/kvm-gui
 ## Build Configuration
 
 The build is configured in `kvm-gui.spec`:
+
 - **One-file mode**: All dependencies bundled into single executable
 - **Icons**: Platform-specific icons from `assets/` directory
 - **Hidden imports**: Explicitly includes PyQt5, OpenCV, serial, pynput
@@ -89,20 +93,26 @@ The build is configured in `kvm-gui.spec`:
 ## Troubleshooting
 
 ### Missing modules error
+
 If you get "ModuleNotFoundError" when running the built executable:
+
 1. Add the missing module to `hiddenimports` in `kvm-gui.spec`
 2. Rebuild with `pyinstaller kvm-gui.spec`
 
 ### Icon not showing
+
 - Verify icon files exist in `assets/` directory
 - Check `icon` parameter in spec file points to correct file
 
 ### Application won't start
+
 - Run from terminal to see error messages
 - Check that all dependencies are installed in your build environment
 
 ### Size too large
+
 The one-file executable will be 150-300MB due to:
+
 - PyQt5 (GUI framework)
 - OpenCV (video capture)
 - Python runtime
@@ -112,6 +122,7 @@ This is normal for PyInstaller builds with these dependencies.
 ## CI/CD Builds
 
 Automated builds are handled by GitHub Actions:
+
 - Workflow: `.github/workflows/build-binaries.yml`
 - Triggers: On version tags (`v*`)
 - Platforms: macOS and Windows
