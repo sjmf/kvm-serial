@@ -45,8 +45,15 @@ This directory contains CI/CD workflows for the KVM Serial project.
    - Creates: ZIP for distribution
    - Size: ~150-200 MB (estimated)
 
-3. **upload-release-assets** - Upload binaries to release
-   - Waits for both builds to complete
+3. **build-linux** - Build Linux AppImage
+   - Runs on: `ubuntu-latest`
+   - Output: `KVM-Serial-x86_64.AppImage` (portable executable)
+   - Creates: Standalone AppImage for distribution
+   - Installs PyQt5 system dependencies
+   - Size: ~200-250 MB (estimated)
+
+4. **upload-release-assets** - Upload binaries to release
+   - Waits for all three builds to complete
    - Downloads all build artifacts
    - Uploads to the GitHub release created by `release.yml`
 
@@ -65,13 +72,15 @@ Tag pushed: v1.5.2
 └─ build-binaries.yml
    ├─ 1. Build macOS app (parallel)
    ├─ 2. Build Windows exe (parallel)
-   └─ 3. Upload binaries to release
+   ├─ 3. Build Linux AppImage (parallel)
+   └─ 4. Upload binaries to release
 ```
 
 **Result:** GitHub release with:
 - Auto-generated release notes
 - macOS: `KVM-Serial-v1.5.2-macOS.zip` and `.dmg`
 - Windows: `KVM-Serial-v1.5.2-Windows.zip`
+- Linux: `KVM-Serial-v1.5.2-x86_64.AppImage`
 
 ## Manual Testing
 
@@ -98,6 +107,13 @@ This will build binaries but won't create a release (useful for testing).
 - Icon embedded in executable
 - No console window (GUI mode)
 
+### Linux
+- Uses onefile mode with AppImage packaging
+- Single portable `.AppImage` file that runs on most distros
+- Includes PyQt5 system dependencies (xcb, GL, etc.)
+- No installation required - just download, chmod +x, and run
+- Compatible with Ubuntu, Fedora, Debian, and derivatives
+
 ## Build Requirements
 
 Each platform runner has:
@@ -117,6 +133,12 @@ Each platform runner has:
 - Check Windows-specific dependencies
 - Ensure `console=False` for GUI mode
 
+### Build fails on Linux
+- Check PyQt5 system dependencies are installed
+- Verify AppImage tools downloaded successfully
+- Ensure `icon.png` exists in `assets/`
+- Check AppDir structure creation
+
 ### Binaries not attached to release
 - Verify `contents: write` permission
 - Check artifact upload/download steps
@@ -130,7 +152,7 @@ Each platform runner has:
 
 ## Future Improvements
 
-- [ ] Add Linux builds (AppImage or .tar.gz)
+- [x] Add Linux builds (AppImage) - ✅ Completed
 - [ ] Code signing for macOS (requires Apple Developer account)
 - [ ] Code signing for Windows (requires certificate)
 - [ ] Automated testing of built executables
