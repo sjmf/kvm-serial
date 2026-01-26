@@ -1,0 +1,121 @@
+name: Build Executable Binaries
+
+on:
+  push:
+    tags:
+      - 'v*'  # Triggers on version tags like v1.5.0, v2.0.1, etc.
+  workflow_dispatch:  # Allow manual triggering for testing
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Build macOS application
+      run: |
+        pyinstaller kvm-gui.spec
+
+    - name: Create DMG (optional)
+      run: |
+        # Create a simple DMG for distribution
+        brew install create-dmg
+        create-dmg \
+          --volname "KVM Serial" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --app-drop-link 600 185 \
+          "dist/KVM-Serial-${{ github.ref_name }}-macOS.dmg" \
+          "dist/KVM Serial.app" \
+          || true  # Don't fail if DMG creation has issues
+
+    - name: Verify build
+      run: |
+        ls -lh dist/
+        ls -lh "dist/KVM Serial.app/Contents/"
+
+    - name: Create ZIP for distribution
+      run: |
+        cd dist
+        zip -r "KVM-Serial-${{ github.ref_name }}-macOS.zip" "KVM Serial.app"
+        cd ..
+
+    - name: Upload macOS artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-build
+        path: |
+          dist/KVM-Serial-${{ github.ref_name }}-macOS.zip
+          dist/KVM-Serial-${{ github.ref_name }}-macOS.dmg
+        if-no-files-found: ignore
+
+  build-windows:
+    runs-on: windows-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Build Windows executable
+      run: |
+        pyinstaller kvm-gui.spec
+
+    - name: Verify build
+      run: |
+        dir dist
+        dir dist\kvm-gui.exe
+
+    - name: Create ZIP for distribution
+      run: |
+        Compress-Archive -Path "dist\kvm-gui.exe" -DestinationPath "dist\KVM-Serial-${{ github.ref_name }}-Windows.zip"
+
+    - name: Upload Windows artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: windows-build
+        path: dist/KVM-Serial-${{ github.ref_name }}-Windows.zip
+
+  upload-release-assets:
+    needs: [build-macos, build-windows]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: write  # Required for uploading release assets
+
+    steps:
+    - name: Download all artifacts
+      uses: actions/download-artifact@v4
+      with:
+        path: artifacts
+
+    - name: Display structure of downloaded files
+      run: ls -R artifacts
+
+    - name: Upload binaries to release
+      uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          artifacts/macos-build/*
+          artifacts/windows-build/*
+        fail_on_unmatched_files: false
