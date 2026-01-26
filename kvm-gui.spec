@@ -86,33 +86,43 @@ a = Analysis(
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
-exe = EXE(
-    pyz,
-    a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
-    [],
-    name='kvm-gui',
-    debug=False,
-    bootloader_ignore_signals=False,
-    strip=False,
-    upx=True,  # Compress with UPX if available
-    upx_exclude=[],
-    runtime_tmpdir=None,
-    console=False,  # GUI application, no console window on Windows
-    disable_windowed_traceback=False,
-    argv_emulation=False,
-    target_arch=None,
-    codesign_identity=None,
-    entitlements_file=None,
-    icon='assets/icon.ico' if sys.platform == 'win32' else 'assets/icon.icns',
-)
-
-# macOS: Create .app bundle
+# Platform-specific build configuration
+# macOS: Use onedir mode (recommended and required for PyInstaller 7.0+)
+# Windows/Linux: Use onefile mode for simpler distribution
 if sys.platform == 'darwin':
-    app = BUNDLE(
+    # macOS: onedir mode
+    exe = EXE(
+        pyz,
+        a.scripts,
+        [],
+        exclude_binaries=True,  # onedir: binaries in separate folder
+        name='kvm-gui',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon='assets/icon.icns',
+    )
+
+    coll = COLLECT(
         exe,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        name='kvm-gui',
+    )
+
+    app = BUNDLE(
+        coll,
         name='KVM Serial.app',
         icon='assets/icon.icns',
         bundle_identifier='dev.finnigan.kvm-serial',
@@ -129,4 +139,28 @@ if sys.platform == 'darwin':
             # Accessibility for keyboard/mouse capture
             'NSAppleEventsUsageDescription': 'KVM Serial needs to capture keyboard and mouse events to control the remote machine.',
         },
+    )
+else:
+    # Windows/Linux: onefile mode
+    exe = EXE(
+        pyz,
+        a.scripts,
+        a.binaries,
+        a.zipfiles,
+        a.datas,
+        [],
+        name='kvm-gui',
+        debug=False,
+        bootloader_ignore_signals=False,
+        strip=False,
+        upx=True,
+        upx_exclude=[],
+        runtime_tmpdir=None,
+        console=False,
+        disable_windowed_traceback=False,
+        argv_emulation=False,
+        target_arch=None,
+        codesign_identity=None,
+        entitlements_file=None,
+        icon='assets/icon.ico' if sys.platform == 'win32' else None,
     )
