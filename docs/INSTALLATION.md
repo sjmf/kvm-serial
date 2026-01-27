@@ -35,6 +35,8 @@ pip install -e ".[dev]"
 uv pip install -e ".[dev]"
 ```
 
+Note: `uv run` doesn't appear to work on Windows. See [#15](https://github.com/sjmf/kvm-serial/issues/15).
+
 ## Windows
 
 **Note**: If you see "No serial ports found" and you've connected a USB serial device, ensure the drivers are properly installed (see below):
@@ -149,6 +151,7 @@ If the driver isn't loaded, it should automatically load when you connect the de
 Install required system libraries for PyQt5 and OpenCV:
 
 **Ubuntu/Debian**:
+
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
@@ -166,6 +169,7 @@ sudo apt-get install -y \
 ```
 
 **Fedora/RHEL**:
+
 ```bash
 sudo dnf install -y \
     libxcb \
