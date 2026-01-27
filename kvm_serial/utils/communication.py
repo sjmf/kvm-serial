@@ -1,8 +1,13 @@
 import sys
 import glob
-import termios
 import logging
 from serial import Serial, SerialException
+
+# termios is Unix-only, not available on Windows
+try:
+    import termios
+except ImportError:
+    termios = None
 
 
 class DataComm:
@@ -112,9 +117,11 @@ def list_serial_ports():
         except (OSError, ImportError, FileNotFoundError, SerialException) as e:
             # Don't append ports we can't open
             logging.error(f"{port} could not be opened: {e}")
-        except termios.error as e:
-            logging.warning(f"{port} didn't open at 9600 baud, but a different rate may work!")
-            result.append(port)
         except Exception as e:
-            raise e
+            # Handle termios.error on Unix systems (termios is None on Windows)
+            if termios and type(e).__name__ == "error" and type(e).__module__ == "termios":
+                logging.warning(f"{port} didn't open at 9600 baud, but a different rate may work!")
+                result.append(port)
+            else:
+                raise e
     return result
