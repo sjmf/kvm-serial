@@ -30,8 +30,9 @@ dev = [
     "pytest-cov",
     "pytest-watch",
     "pytest-timeout",
-    "black==26.1.0", 
-    "pre-commit"
+    "black==26.1.0",
+    "pre-commit",
+    "pyinstaller>=6.0"
     ]
 
 [project.scripts]

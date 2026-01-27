@@ -15,3 +15,7 @@ kvm.app
 kvm.spec
 kvm.build
 kvm.dist
+
+# Icon generation intermediate files
+assets/icon.iconset/
+assets/icon_*.png
