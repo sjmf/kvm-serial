@@ -7,8 +7,8 @@ on:
   workflow_dispatch:  # Allow manual triggering for testing
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  build-macos-intel:
+    runs-on: macos-13  # Intel x86_64 runner
 
     steps:
     - uses: actions/checkout@v4
@@ -42,7 +42,7 @@ jobs:
           --window-size 800 400 \
           --icon-size 100 \
           --app-drop-link 600 185 \
-          "dist/KVM-Serial-${{ github.ref_name }}-macOS.dmg" \
+          "dist/KVM-Serial-${{ github.ref_name }}-macOS-Intel.dmg" \
           "dist/KVM Serial.app" \
           || true  # Don't fail if DMG creation has issues
 
@@ -50,20 +50,81 @@ jobs:
       run: |
         ls -lh dist/
         ls -lh "dist/KVM Serial.app/Contents/"
+        file "dist/KVM Serial.app/Contents/MacOS/kvm-gui"
 
     - name: Create ZIP for distribution
       run: |
         cd dist
-        zip -r "KVM-Serial-${{ github.ref_name }}-macOS.zip" "KVM Serial.app"
+        zip -r "KVM-Serial-${{ github.ref_name }}-macOS-Intel.zip" "KVM Serial.app"
         cd ..
 
-    - name: Upload macOS artifacts
+    - name: Upload macOS Intel artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: macos-build
+        name: macos-intel-build
         path: |
-          dist/KVM-Serial-${{ github.ref_name }}-macOS.zip
-          dist/KVM-Serial-${{ github.ref_name }}-macOS.dmg
+          dist/KVM-Serial-${{ github.ref_name }}-macOS-Intel.zip
+          dist/KVM-Serial-${{ github.ref_name }}-macOS-Intel.dmg
+        if-no-files-found: ignore
+
+  build-macos-arm:
+    runs-on: macos-latest  # Apple Silicon arm64 runner (macOS 14+)
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Build macOS application
+      run: |
+        pyinstaller kvm-gui.spec
+
+    - name: Sign macOS app with ad-hoc signature
+      run: |
+        codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/KVM Serial.app"
+        codesign --verify --verbose "dist/KVM Serial.app"
+
+    - name: Create DMG (optional)
+      run: |
+        # Create a simple DMG for distribution
+        brew install create-dmg
+        create-dmg \
+          --volname "KVM Serial" \
+          --window-pos 200 120 \
+          --window-size 800 400 \
+          --icon-size 100 \
+          --app-drop-link 600 185 \
+          "dist/KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.dmg" \
+          "dist/KVM Serial.app" \
+          || true  # Don't fail if DMG creation has issues
+
+    - name: Verify build
+      run: |
+        ls -lh dist/
+        ls -lh "dist/KVM Serial.app/Contents/"
+        file "dist/KVM Serial.app/Contents/MacOS/kvm-gui"
+
+    - name: Create ZIP for distribution
+      run: |
+        cd dist
+        zip -r "KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.zip" "KVM Serial.app"
+        cd ..
+
+    - name: Upload macOS Apple Silicon artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: macos-arm-build
+        path: |
+          dist/KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.zip
+          dist/KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.dmg
         if-no-files-found: ignore
 
   build-windows:
@@ -186,7 +247,7 @@ jobs:
         path: KVM-Serial-${{ github.ref_name }}-x86_64.AppImage
 
   upload-release-assets:
-    needs: [build-macos, build-windows, build-linux]
+    needs: [build-macos-intel, build-macos-arm, build-windows, build-linux]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     permissions:
@@ -205,7 +266,8 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          artifacts/macos-build/*
+          artifacts/macos-intel-build/*
+          artifacts/macos-arm-build/*
           artifacts/windows-build/*
           artifacts/linux-build/*
         fail_on_unmatched_files: false
