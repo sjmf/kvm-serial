@@ -170,7 +170,7 @@ jobs:
 
     - name: Build AppImage
       run: |
-        ./appimagetool-x86_64.AppImage AppDir "KVM-Serial-${{ github.ref_name }}-x86_64.AppImage"
+        ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "KVM-Serial-${{ github.ref_name }}-x86_64.AppImage"
       env:
         ARCH: x86_64
 
