@@ -61,7 +61,7 @@ jobs:
     - name: Upload macOS Intel artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: macos-intel-build
+        name: kvm-serial-macos-intel
         path: |
           dist/KVM-Serial-${{ github.ref_name }}-macOS-Intel.zip
           dist/KVM-Serial-${{ github.ref_name }}-macOS-Intel.dmg
@@ -121,7 +121,7 @@ jobs:
     - name: Upload macOS Apple Silicon artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: macos-arm-build
+        name: kvm-serial-macos-arm
         path: |
           dist/KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.zip
           dist/KVM-Serial-${{ github.ref_name }}-macOS-AppleSilicon.dmg
@@ -159,7 +159,7 @@ jobs:
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: windows-build
+        name: kvm-serial-windows
         path: dist/KVM-Serial-${{ github.ref_name }}-Windows.zip
 
   build-linux:
@@ -243,7 +243,7 @@ jobs:
     - name: Upload Linux artifacts
       uses: actions/upload-artifact@v4
       with:
-        name: linux-build
+        name: kvm-serial-linux
         path: KVM-Serial-${{ github.ref_name }}-x86_64.AppImage
 
   upload-release-assets:
@@ -266,8 +266,8 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         files: |
-          artifacts/macos-intel-build/*
-          artifacts/macos-arm-build/*
-          artifacts/windows-build/*
-          artifacts/linux-build/*
+          artifacts/kvm-serial-macos-intel/*
+          artifacts/kvm-serial-macos-arm/*
+          artifacts/kvm-serial-windows/*
+          artifacts/kvm-serial-linux/*
         fail_on_unmatched_files: false
