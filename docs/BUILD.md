@@ -129,11 +129,14 @@ If the macOS app hangs when requesting camera access:
 
 1. The app likely wasn't code signed with entitlements
 2. Rebuild and sign the app:
+
    ```bash
    pyinstaller kvm-gui.spec
    codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/KVM Serial.app"
    ```
+
 3. If permissions were previously denied, reset them:
+
    ```bash
    tccutil reset Camera dev.finnigan.kvm-serial
    ```
@@ -170,6 +173,7 @@ Automated builds are handled by GitHub Actions:
 - **Linux**: AppImage format doesn't require signing
 
 For public distribution, proper code signing certificates are needed:
+
 - macOS: Apple Developer ID ($99/year)
 - Windows: Code signing certificate (~$100-500/year)
 
