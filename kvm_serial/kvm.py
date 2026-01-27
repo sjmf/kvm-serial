@@ -84,37 +84,35 @@ class VideoCaptureWorker(QThread):
         self.mutex = QMutex()
         self.should_capture = False
 
-        # Use actual camera properties
-        try:
-            self._set_camera_dims(video_device_idx)
-        except Exception as e:
-            logging.warning(f"Could not get initial camera properties: {e}")
+        # Camera dimensions will be set when enumeration completes via set_camera_index()
 
         # Connect internal signal to capture method
         self.capture_requested.connect(self._capture_frame)
 
-    def _set_camera_dims(self, video_device_idx):
+    def set_camera_index(self, idx, width=None, height=None):
         """
-        Set camera dimensions from the cached video devices list.
-        Note: This now relies on the main window's cached camera enumeration.
-        """
-        # This method is now deprecated in favor of receiving camera properties
-        # from the main window's cached enumeration results
-        logging.warning("_set_camera_dims called but camera enumeration should use cached results")
-        return False
+        Set the camera index and optionally its dimensions.
 
-    def set_camera_index(self, idx):
+        Args:
+            idx: Camera index to use
+            width: Optional camera width (uses actual camera width if not provided)
+            height: Optional camera height (uses actual camera height if not provided)
+        """
         with QMutexLocker(self.mutex):
             self.video_device_idx = idx
             self.camera_initialised = False
-            # Reset camera properties when setting new index
-            try:
-                if not self._set_camera_dims(self.video_device_idx):
-                    # No matching camera found
-                    self.camera_width = 1280
-                    self.camera_height = 720
-            except Exception as e:
-                logging.warning(f"Could not get camera dimensions: {e}")
+            # Update camera properties if provided
+            if width is not None and height is not None:
+                self.camera_width = width
+                self.camera_height = height
+                logging.info(f"Camera {idx} dimensions set to {width}x{height}")
+            else:
+                # Fall back to defaults if dimensions not provided
+                self.camera_width = 1280
+                self.camera_height = 720
+                logging.warning(
+                    f"Camera {idx} using default dimensions {self.camera_width}x{self.camera_height}"
+                )
 
     def set_canvas_size(self, width, height):
         """Update the target size for video capture"""
@@ -828,8 +826,11 @@ class KVMQtGui(QMainWindow):
         if len(self.video_devices) > 0:
             self.video_device_var = str(self.video_devices[0])
             self.video_var = 0  # Default to first device
-            # Set the worker to use the first camera
-            self.video_worker.set_camera_index(0)
+            # Set the worker to use the first camera with its actual dimensions
+            first_camera = self.video_devices[0]
+            self.video_worker.set_camera_index(
+                first_camera.index, width=first_camera.width, height=first_camera.height
+            )
 
             # Start video frame timer now that camera enumeration is complete
             if not self.video_update_timer.isActive():
@@ -891,8 +892,27 @@ class KVMQtGui(QMainWindow):
 
         self.video_device_var = device_label
         self.video_var = device_idx
-        self.video_worker.set_camera_index(device_idx)
-        logging.info(f"Selected video device: {device_label} (index: {device_idx})")
+
+        # Find the camera properties for the selected device and pass dimensions
+        selected_camera = None
+        for camera in self.video_devices:
+            if camera.index == device_idx:
+                selected_camera = camera
+                break
+
+        if selected_camera:
+            self.video_worker.set_camera_index(
+                device_idx, width=selected_camera.width, height=selected_camera.height
+            )
+            logging.info(
+                f"Selected video device: {device_label} (index: {device_idx}, {selected_camera.width}x{selected_camera.height})"
+            )
+        else:
+            # Fallback if camera not found in enumerated list
+            self.video_worker.set_camera_index(device_idx)
+            logging.warning(
+                f"Selected video device: {device_label} (index: {device_idx}) - dimensions unknown"
+            )
 
     def _request_video_frame(self):
         """
