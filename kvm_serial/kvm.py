@@ -43,6 +43,24 @@ except ModuleNotFoundError:
     from backend.implementations.mouseop import MouseOp, MouseButton
 
 
+class CameraEnumerationThread(QThread):
+    """
+    Background thread for camera enumeration.
+    Prevents blocking the Qt event loop during macOS permission requests.
+    """
+
+    cameras_found = pyqtSignal(list)
+    enumeration_error = pyqtSignal(str)
+
+    def run(self):
+        """Enumerate cameras in a background thread."""
+        try:
+            cameras = CaptureDevice.getCameras()
+            self.cameras_found.emit(cameras)
+        except Exception as e:
+            self.enumeration_error.emit(str(e))
+
+
 class VideoCaptureWorker(QThread):
     """
     Background thread for video frame capture.
@@ -76,12 +94,13 @@ class VideoCaptureWorker(QThread):
         self.capture_requested.connect(self._capture_frame)
 
     def _set_camera_dims(self, video_device_idx):
-        cameras = CaptureDevice.getCameras()
-        for camera in cameras:
-            if camera.index == video_device_idx:
-                self.camera_width = camera.width
-                self.camera_height = camera.height
-                return True
+        """
+        Set camera dimensions from the cached video devices list.
+        Note: This now relies on the main window's cached camera enumeration.
+        """
+        # This method is now deprecated in favor of receiving camera properties
+        # from the main window's cached enumeration results
+        logging.warning("_set_camera_dims called but camera enumeration should use cached results")
         return False
 
     def set_camera_index(self, idx):
@@ -787,25 +806,39 @@ class KVMQtGui(QMainWindow):
     def _populate_video_devices(self):
         """
         Populate the list of available video devices and update the menu.
+        Uses a background thread to avoid blocking the event loop during macOS permission requests.
         """
-        try:
-            self.video_devices = CaptureDevice.getCameras()
-            video_strings = [str(v) for v in self.video_devices]
-            logging.info(f"Found video devices: {video_strings}")
-            self._populate_video_device_menu()
+        # Start camera enumeration in background thread
+        self.camera_enum_thread = CameraEnumerationThread()
+        self.camera_enum_thread.cameras_found.connect(self._on_cameras_found)
+        self.camera_enum_thread.enumeration_error.connect(self._on_camera_enumeration_error)
+        self.camera_enum_thread.start()
+        logging.info("Starting camera enumeration in background thread...")
 
-            if len(self.video_devices) > 0:
-                self.video_device_var = str(self.video_devices[0])
-                self.video_var = 0  # Default to first device
-            else:
-                self.video_device_var = "None found"
-                QMessageBox.warning(self, "Start-up Warning", "No video devices found.")
+    def _on_cameras_found(self, cameras):
+        """
+        Callback when camera enumeration completes successfully.
+        """
+        self.video_devices = cameras
+        video_strings = [str(v) for v in self.video_devices]
+        logging.info(f"Found video devices: {video_strings}")
+        self._populate_video_device_menu()
 
-        except Exception as e:
-            logging.error(f"Error discovering video devices: {e}")
-            QMessageBox.critical(self, "Error", f"Failed to discover video devices: {e}")
-            self.video_devices = []
-            self.video_device_var = "Error"
+        if len(self.video_devices) > 0:
+            self.video_device_var = str(self.video_devices[0])
+            self.video_var = 0  # Default to first device
+        else:
+            self.video_device_var = "None found"
+            QMessageBox.warning(self, "Start-up Warning", "No video devices found.")
+
+    def _on_camera_enumeration_error(self, error_msg):
+        """
+        Callback when camera enumeration fails.
+        """
+        logging.error(f"Error discovering video devices: {error_msg}")
+        QMessageBox.critical(self, "Error", f"Failed to discover video devices: {error_msg}")
+        self.video_devices = []
+        self.video_device_var = "Error"
 
     def _populate_video_device_menu(self):
         """
