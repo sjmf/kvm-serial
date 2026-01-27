@@ -1,7 +1,7 @@
 import sys
-import glob
 import logging
 from serial import Serial, SerialException
+from serial.tools import list_ports
 
 # termios is Unix-only, not available on Windows
 try:
@@ -89,28 +89,18 @@ class DataComm:
 
 def list_serial_ports():
     """
-    List serial port names on Windows, Mac, and Linux.
+    List available serial port names on Windows, Mac, and Linux.
+    Uses pyserial's list_ports API for cross-platform enumeration.
     """
-    if sys.platform.startswith("win"):
-        ports = [f"COM{i + 1}" for i in range(256)]
-    elif sys.platform.startswith("linux") or sys.platform.startswith("cygwin"):
-        ports = glob.glob("/dev/tty[A-Za-z]*")
-    elif sys.platform.startswith("darwin"):
-        # On macOS, /dev/tty.* are "call-in" devices (used for incoming connections, e.g., modems waiting for a call),
-        # and /dev/cu.* are "call-out" devices (used for outgoing connections, e.g., when your program initiates a connection).
-        # /dev/cu.* is usually preferred for initiating connections from user programs.
-        ports = glob.glob("/dev/cu.*")
-        # Move cu.usbserial-xxxxxx ports to the end of the list
-        usbserial_ports = [p for p in ports if "cu.usbserial-" in p]
-        other_ports = [p for p in ports if "cu.usbserial-" not in p]
-        ports = other_ports + usbserial_ports
-    else:
-        raise EnvironmentError("Unsupported platform")
-
     result = []
-    for port in ports:
+
+    # Use pyserial's list_ports to enumerate actual available ports
+    ports_info = list_ports.comports()
+
+    for port_info in ports_info:
+        port = port_info.device
         try:
-            # Only import if working
+            # Verify we can open the port - only import if working
             s = Serial(port)
             s.close()
             result.append(port)
@@ -124,4 +114,15 @@ def list_serial_ports():
                 result.append(port)
             else:
                 raise e
+
+    # On macOS, prioritize cu.* ports over usbserial
+    if sys.platform.startswith("darwin"):
+        # On macOS, /dev/tty.* are "call-in" devices (used for incoming connections, e.g., modems waiting for a call),
+        # and /dev/cu.* are "call-out" devices (used for outgoing connections, e.g., when your program initiates a connection).
+        # /dev/cu.* is usually preferred for initiating connections from user programs.
+        usbserial_ports = [p for p in result if "cu.usbserial-" in p]
+        # Move cu.usbserial-xxxxxx ports to the start of the list
+        other_ports = [p for p in result if "cu.usbserial-" not in p]
+        result = other_ports + usbserial_ports
+
     return result
