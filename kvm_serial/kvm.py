@@ -495,9 +495,10 @@ class KVMQtGui(QMainWindow):
 
     def __init_timers(self):
         # Set up QTimer for frame updates (integrates with Qt event loop)
+        # Note: Frame timer is set up but not started here
+        #       - it will start after camera enumeration completes
         self.video_update_timer = QTimer()
         self.video_update_timer.timeout.connect(self._request_video_frame)
-        self.video_update_timer.start(1000 // self.target_fps)  # Timer interval in ms
 
         # Frame timing for performance monitoring
         self.last_frame_time = time.time()
@@ -827,9 +828,16 @@ class KVMQtGui(QMainWindow):
         if len(self.video_devices) > 0:
             self.video_device_var = str(self.video_devices[0])
             self.video_var = 0  # Default to first device
+            # Set the worker to use the first camera
+            self.video_worker.set_camera_index(0)
         else:
             self.video_device_var = "None found"
             QMessageBox.warning(self, "Start-up Warning", "No video devices found.")
+
+        # Start video frame timer now that camera enumeration is complete
+        if not self.video_update_timer.isActive():
+            self.video_update_timer.start(1000 // self.target_fps)
+            logging.info(f"Video frame timer started at {self.target_fps} FPS")
 
     def _on_camera_enumeration_error(self, error_msg):
         """
