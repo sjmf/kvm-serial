@@ -111,7 +111,10 @@ class TestKVMDeviceManagement(
             patch("kvm_serial.kvm.CaptureDevice.getCameras", return_value=test_cameras),
             self.patch_kvm_method(app, "_populate_video_device_menu"),
         ):
+            # _populate_video_devices now starts a thread and calls _on_cameras_found
             app._populate_video_devices()
+            # Manually call the callback that would be triggered by the thread
+            app._on_cameras_found(test_cameras)
 
             self.assertEqual(app.video_devices, test_cameras)
             self.assertEqual(app.video_device_var, str(test_cameras[0]))
@@ -127,6 +130,8 @@ class TestKVMDeviceManagement(
             patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning,
         ):
             app._populate_video_devices()
+            # Manually call the callback that would be triggered by the thread
+            app._on_cameras_found([])
 
             self.assert_error_handling(mock_warning)
             self.assertEqual(app.video_devices, [])
@@ -145,6 +150,8 @@ class TestKVMDeviceManagement(
             patch("kvm_serial.kvm.QMessageBox.critical") as mock_critical,
         ):
             app._populate_video_devices()
+            # Manually call the error callback that would be triggered by the thread
+            app._on_camera_enumeration_error("Camera discovery failed")
 
             self.assert_error_handling(mock_critical)
             self.assertEqual(app.video_devices, [])
@@ -169,7 +176,10 @@ class TestKVMDeviceManagement(
         app._on_video_device_selected(1, str(test_cameras[1]))
 
         self.assert_video_device_selection(app, 1, str(test_cameras[1]))
-        app.video_worker.set_camera_index.assert_called_once_with(1)
+        # set_camera_index now takes width and height parameters
+        app.video_worker.set_camera_index.assert_called_once_with(
+            1, width=test_cameras[1].width, height=test_cameras[1].height
+        )
 
     def test_serial_initialization_success(self):
         """Test successful serial port initialization."""
