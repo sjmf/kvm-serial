@@ -830,14 +830,19 @@ class KVMQtGui(QMainWindow):
             self.video_var = 0  # Default to first device
             # Set the worker to use the first camera
             self.video_worker.set_camera_index(0)
+
+            # Start video frame timer now that camera enumeration is complete
+            if not self.video_update_timer.isActive():
+                self.video_update_timer.start(1000 // self.target_fps)
+                logging.info(f"Video frame timer started at {self.target_fps} FPS")
         else:
             self.video_device_var = "None found"
-            QMessageBox.warning(self, "Start-up Warning", "No video devices found.")
-
-        # Start video frame timer now that camera enumeration is complete
-        if not self.video_update_timer.isActive():
-            self.video_update_timer.start(1000 // self.target_fps)
-            logging.info(f"Video frame timer started at {self.target_fps} FPS")
+            QMessageBox.warning(
+                self,
+                "Start-up Warning",
+                "No video devices found.\n\n"
+                "Ensure a video capture device is connected and recognised by the system.",
+            )
 
     def _on_camera_enumeration_error(self, error_msg):
         """
