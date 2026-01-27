@@ -80,7 +80,11 @@ class CaptureDevice(InputHandler):
         # check for cameras
         for index in range(0, CAMERAS_TO_CHECK):
             cam = cv2.VideoCapture(index)
-            cv2.setLogLevel(-1)
+            # Suppress OpenCV logging (available in OpenCV 4.5.5+)
+            try:
+                cv2.setLogLevel(-1)
+            except AttributeError:
+                logging.warning("setLogLevel not available in this OpenCV version")
             if cam.isOpened():
                 if type(cam.read()[1]) is numpy.ndarray:
                     # Successfully read a frame from camera. It works.
