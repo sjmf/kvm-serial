@@ -27,6 +27,11 @@ jobs:
       run: |
         pyinstaller kvm-gui.spec
 
+    - name: Sign macOS app with ad-hoc signature
+      run: |
+        codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/KVM Serial.app"
+        codesign --verify --verbose "dist/KVM Serial.app"
+
     - name: Create DMG (optional)
       run: |
         # Create a simple DMG for distribution

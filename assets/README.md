@@ -23,3 +23,23 @@ iconutil -c icns icon.iconset  # macOS only
 - Python 3.10+
 - Pillow (PIL): `pip install pillow`
 - iconutil (macOS built-in, for .icns generation)
+
+## Entitlements
+
+### `entitlements.plist`
+
+macOS entitlements file used during code signing. Required for:
+
+1. **Camera access** - Allows the app to capture video from the remote machine
+2. **PyInstaller compatibility** - Allows the bundled Python runtime to work properly:
+   - Unsigned executable memory (bootloader requirement)
+   - Dynamic library loading (OpenCV, PyQt5, etc.)
+   - JIT compilation (NumPy and other numeric libraries)
+
+Used during build:
+
+```bash
+codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/KVM Serial.app"
+```
+
+This file is automatically referenced in `kvm-gui.spec` for macOS builds.

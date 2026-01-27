@@ -106,7 +106,7 @@ if sys.platform == 'darwin':
         argv_emulation=False,
         target_arch=None,
         codesign_identity=None,
-        entitlements_file=None,
+        entitlements_file='assets/entitlements.plist',
         icon='assets/icon.icns',
     )
 

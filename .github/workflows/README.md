@@ -36,6 +36,7 @@ This directory contains CI/CD workflows for the KVM Serial project.
 1. **build-macos** - Build macOS application
    - Runs on: `macos-latest`
    - Output: `KVM Serial.app` (onedir .app bundle)
+   - Ad-hoc code signing with entitlements (camera access, PyInstaller compatibility)
    - Creates: ZIP and DMG for distribution
    - Size: ~331 MB
 
@@ -149,6 +150,20 @@ Each platform runner has:
 - PyPI publishing uses OIDC (no API tokens)
 - Release creation requires `contents: write` permission
 - Workflows only trigger on tags (protected)
+
+### Code Signing
+
+- **macOS**: Builds are ad-hoc signed with entitlements for proper permission handling
+  - Entitlements file: `assets/entitlements.plist`
+  - Signing command: `codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/KVM Serial.app"`
+  - Ad-hoc signatures work for local testing but not for distribution outside GitHub
+- **Windows**: Not currently signed (users will see SmartScreen warnings)
+- **Linux**: AppImage format doesn't require code signing
+
+For public distribution, proper certificates are recommended:
+
+- macOS: Apple Developer ID certificate ($99/year for notarization)
+- Windows: Code signing certificate (~$100-500/year)
 
 ## Future Improvements
 

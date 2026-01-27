@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Hardware Access Permissions -->
+
+	<!-- Camera access for video capture from remote machine -->
+	<key>com.apple.security.device.camera</key>
+	<true/>
+
+	<!-- Code Signing Workarounds for PyInstaller -->
+	<!-- These prevent crashes and library loading errors in bundled apps -->
+
+	<!-- Allow unsigned executable memory (PyInstaller bootloader requirement) -->
+	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+	<true/>
+
+	<!-- Allow loading bundled third-party libraries (OpenCV, PyQt5, etc.) -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+
+	<!-- Allow JIT compilation (for NumPy and other numeric libraries) -->
+	<key>com.apple.security.cs.allow-jit</key>
+	<true/>
+</dict>
+</plist>
