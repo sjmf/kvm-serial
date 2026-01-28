@@ -195,6 +195,16 @@ jobs:
       run: |
         pyinstaller kvm-gui.spec
 
+    - name: Verify cv2 Qt exclusion
+      run: |
+        echo "Checking for cv2/qt in the built executable..."
+        if strings dist/kvm-gui | grep -q "cv2/qt/plugins"; then
+          echo "ERROR: cv2/qt/plugins found in executable! Qt conflict not resolved."
+          exit 1
+        else
+          echo "SUCCESS: cv2/qt/plugins not found in executable"
+        fi
+
     - name: Cache AppImage tools
       uses: actions/cache@v4
       with:
