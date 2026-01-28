@@ -84,6 +84,21 @@ a = Analysis(
     noarchive=False,
 )
 
+# Remove OpenCV's bundled Qt plugins and libraries to prevent conflicts with PyQt5
+# OpenCV bundles its own Qt libraries which conflict with PyQt5's Qt
+# This causes "Could not load Qt platform plugin" errors on Linux
+# See: https://github.com/sjmf/kvm-serial/issues/12#issuecomment-3808456623
+a.datas = [
+    (dest, src, type_) for dest, src, type_ in a.datas
+    if not dest.startswith('cv2/qt/')
+]
+
+# Also remove cv2's Qt binaries (shared libraries)
+a.binaries = [
+    (dest, src, type_) for dest, src, type_ in a.binaries
+    if not (dest.startswith('cv2/') and 'Qt' in dest)
+]
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
 # Platform-specific build configuration
