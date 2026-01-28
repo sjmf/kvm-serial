@@ -88,16 +88,27 @@ a = Analysis(
 # OpenCV bundles its own Qt libraries which conflict with PyQt5's Qt
 # This causes "Could not load Qt platform plugin" errors on Linux
 # See: https://github.com/sjmf/kvm-serial/issues/12#issuecomment-3808456623
-a.datas = [
-    (dest, src, type_) for dest, src, type_ in a.datas
-    if not dest.startswith('cv2/qt/')
-]
 
-# Also remove cv2's Qt binaries (shared libraries)
-a.binaries = [
-    (dest, src, type_) for dest, src, type_ in a.binaries
-    if not (dest.startswith('cv2/') and 'Qt' in dest)
-]
+# Filter out cv2's Qt from datas (includes plugins and other data files)
+filtered_datas = []
+for dest, src, type_ in a.datas:
+    # Skip anything under cv2/qt/ directory
+    if dest.startswith('cv2/qt/') or dest.startswith('cv2\\qt\\'):
+        print(f"Excluding data: {dest}")
+        continue
+    filtered_datas.append((dest, src, type_))
+a.datas = filtered_datas
+
+# Filter out cv2's Qt binaries (shared libraries)
+filtered_binaries = []
+for dest, src, type_ in a.binaries:
+    # Skip cv2 binaries with Qt in the name
+    if dest.startswith('cv2/') or dest.startswith('cv2\\'):
+        if 'Qt' in dest or 'Qt' in src:
+            print(f"Excluding binary: {dest}")
+            continue
+    filtered_binaries.append((dest, src, type_))
+a.binaries = filtered_binaries
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
