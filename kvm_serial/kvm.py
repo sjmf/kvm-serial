@@ -838,12 +838,16 @@ class KVMQtGui(QMainWindow):
                 logging.info(f"Video frame timer started at {self.target_fps} FPS")
         else:
             self.video_device_var = "None found"
-            QMessageBox.warning(
-                self,
-                "Start-up Warning",
-                "No video devices found.\n\n"
-                "Ensure a video capture device is connected and recognised by the system.",
+
+            # Build the warning message
+            message = "No video devices found.\n\n"
+            message += "Ensure a video capture device is connected and recognised by the system."
+            message += (
+                "\n\nIf you have just granted camera permissions, "
+                "please restart the application for the changes to take effect."
             )
+
+            QMessageBox.warning(self, "Start-up Warning", message)
 
     def _on_camera_enumeration_error(self, error_msg):
         """
