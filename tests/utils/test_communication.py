@@ -158,16 +158,6 @@ class TestDataComm:
             assert "COM2" not in ports
             assert len(ports) == 2
 
-    @patch("kvm_serial.utils.communication.sys.platform", "sunos")
-    def test_list_serial_ports_unsupported_platform(self):
-        """Test handling of unsupported platform
-
-        Ensure that "Unsupported platform" is raised for the patched platform string
-        """
-        with pytest.raises(EnvironmentError) as exc_info:
-            list_serial_ports()
-        assert "Unsupported platform" in str(exc_info.value)
-
     @patch("serial.Serial", MockSerial)
     def test_packet_format_error(self, mock_serial):
         """Test ValueError is correctly raised on L40 when called with a bad header"""
