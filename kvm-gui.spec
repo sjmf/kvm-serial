@@ -68,7 +68,13 @@ a = Analysis(
     datas=datas,
     hiddenimports=hiddenimports,
     hookspath=[],
-    hooksconfig={},
+    hooksconfig={
+        # Disable OpenCV's Qt backend to prevent bundling Qt plugins
+        # This prevents conflicts with PyQt5's Qt
+        'cv2': {
+            'backends': ['headless']  # Use headless backend only
+        }
+    },
     runtime_hooks=[],
     excludes=[
         # Exclude unnecessary packages to reduce size
@@ -89,26 +95,51 @@ a = Analysis(
 # This causes "Could not load Qt platform plugin" errors on Linux
 # See: https://github.com/sjmf/kvm-serial/issues/12#issuecomment-3808456623
 
+print("=" * 80)
+print("FILTERING cv2 Qt files...")
+print("=" * 80)
+
 # Filter out cv2's Qt from datas (includes plugins and other data files)
+original_datas_count = len(a.datas)
 filtered_datas = []
+excluded_datas = []
 for dest, src, type_ in a.datas:
     # Skip anything under cv2/qt/ directory
     if dest.startswith('cv2/qt/') or dest.startswith('cv2\\qt\\'):
-        print(f"Excluding data: {dest}")
+        excluded_datas.append(dest)
         continue
     filtered_datas.append((dest, src, type_))
+
+print(f"Filtered {len(excluded_datas)} cv2/qt data files:")
+for excluded in excluded_datas[:10]:  # Show first 10
+    print(f"  - {excluded}")
+if len(excluded_datas) > 10:
+    print(f"  ... and {len(excluded_datas) - 10} more")
+
 a.datas = filtered_datas
 
 # Filter out cv2's Qt binaries (shared libraries)
+original_binaries_count = len(a.binaries)
 filtered_binaries = []
+excluded_binaries = []
 for dest, src, type_ in a.binaries:
     # Skip cv2 binaries with Qt in the name
     if dest.startswith('cv2/') or dest.startswith('cv2\\'):
         if 'Qt' in dest or 'Qt' in src:
-            print(f"Excluding binary: {dest}")
+            excluded_binaries.append(dest)
             continue
     filtered_binaries.append((dest, src, type_))
+
+print(f"\nFiltered {len(excluded_binaries)} cv2 Qt binaries:")
+for excluded in excluded_binaries[:10]:
+    print(f"  - {excluded}")
+if len(excluded_binaries) > 10:
+    print(f"  ... and {len(excluded_binaries) - 10} more")
+
 a.binaries = filtered_binaries
+
+print(f"\nTotal: removed {original_datas_count - len(filtered_datas)} datas, {original_binaries_count - len(filtered_binaries)} binaries")
+print("=" * 80)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
