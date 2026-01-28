@@ -95,26 +95,33 @@ a = Analysis(
 # This causes "Could not load Qt platform plugin" errors on Linux
 # See: https://github.com/sjmf/kvm-serial/issues/12#issuecomment-3808456623
 
-print("=" * 80)
-print("FILTERING cv2 Qt files...")
-print("=" * 80)
+import sys
+
+print("=" * 80, file=sys.stderr)
+print("FILTERING cv2 Qt files...", file=sys.stderr)
+print("=" * 80, file=sys.stderr)
 
 # Filter out cv2's Qt from datas (includes plugins and other data files)
 original_datas_count = len(a.datas)
 filtered_datas = []
 excluded_datas = []
 for dest, src, type_ in a.datas:
-    # Skip anything under cv2/qt/ directory
-    if dest.startswith('cv2/qt/') or dest.startswith('cv2\\qt\\'):
+    # Skip anything under cv2/qt/ directory (Windows and Unix paths)
+    dest_lower = dest.lower().replace('\\', '/')
+    if 'cv2/qt/' in dest_lower:
+        excluded_datas.append(dest)
+        continue
+    # Also exclude specific Qt-related files in cv2 root
+    if dest_lower.startswith('cv2/') and '/qt' in dest_lower:
         excluded_datas.append(dest)
         continue
     filtered_datas.append((dest, src, type_))
 
-print(f"Filtered {len(excluded_datas)} cv2/qt data files:")
+print(f"Filtered {len(excluded_datas)} cv2/qt data files:", file=sys.stderr)
 for excluded in excluded_datas[:10]:  # Show first 10
-    print(f"  - {excluded}")
+    print(f"  - {excluded}", file=sys.stderr)
 if len(excluded_datas) > 10:
-    print(f"  ... and {len(excluded_datas) - 10} more")
+    print(f"  ... and {len(excluded_datas) - 10} more", file=sys.stderr)
 
 a.datas = filtered_datas
 
@@ -123,23 +130,42 @@ original_binaries_count = len(a.binaries)
 filtered_binaries = []
 excluded_binaries = []
 for dest, src, type_ in a.binaries:
-    # Skip cv2 binaries with Qt in the name
-    if dest.startswith('cv2/') or dest.startswith('cv2\\'):
-        if 'Qt' in dest or 'Qt' in src:
+    # Skip cv2 binaries with Qt in the name (case insensitive, handle both path separators)
+    dest_lower = dest.lower().replace('\\', '/')
+    src_lower = src.lower().replace('\\', '/')
+
+    if dest_lower.startswith('cv2/'):
+        if 'qt' in dest_lower or 'qt' in src_lower:
             excluded_binaries.append(dest)
             continue
     filtered_binaries.append((dest, src, type_))
 
-print(f"\nFiltered {len(excluded_binaries)} cv2 Qt binaries:")
+print(f"\nFiltered {len(excluded_binaries)} cv2 Qt binaries:", file=sys.stderr)
 for excluded in excluded_binaries[:10]:
-    print(f"  - {excluded}")
+    print(f"  - {excluded}", file=sys.stderr)
 if len(excluded_binaries) > 10:
-    print(f"  ... and {len(excluded_binaries) - 10} more")
+    print(f"  ... and {len(excluded_binaries) - 10} more", file=sys.stderr)
 
 a.binaries = filtered_binaries
 
-print(f"\nTotal: removed {original_datas_count - len(filtered_datas)} datas, {original_binaries_count - len(filtered_binaries)} binaries")
-print("=" * 80)
+print(f"\nTotal: removed {original_datas_count - len(filtered_datas)} datas, {original_binaries_count - len(filtered_binaries)} binaries", file=sys.stderr)
+
+# Verify no cv2/qt files remain
+cv2_qt_check = [d for d in a.datas if 'cv2/qt' in d[0].lower().replace('\\', '/')]
+cv2_qt_check += [b for b in a.binaries if 'cv2/qt' in b[0].lower().replace('\\', '/')]
+
+if cv2_qt_check:
+    print("\n" + "!" * 80, file=sys.stderr)
+    print("ERROR: cv2/qt files still present after filtering!", file=sys.stderr)
+    print("!" * 80, file=sys.stderr)
+    for item in cv2_qt_check[:20]:
+        print(f"  - {item[0]}", file=sys.stderr)
+    print("\n", file=sys.stderr)
+    sys.exit(1)
+else:
+    print("\nSUCCESS: No cv2/qt files detected in build", file=sys.stderr)
+
+print("=" * 80, file=sys.stderr)
 
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
