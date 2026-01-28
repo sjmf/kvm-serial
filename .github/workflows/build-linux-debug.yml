@@ -1,0 +1,104 @@
+name: Build Linux Executable (Debug)
+
+on:
+  workflow_dispatch:  # Manual trigger only
+
+jobs:
+  build-linux:
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: Install system dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y libxcb-xinerama0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-xfixes0 libxkbcommon-x11-0 libgl1 libegl1 libxcb-cursor0
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+
+    - name: Build Linux executable
+      run: |
+        pyinstaller kvm-gui.spec
+
+    - name: Verify cv2 Qt exclusion
+      run: |
+        echo "Checking for cv2/qt in the built executable..."
+        if strings dist/kvm-gui | grep -q "cv2/qt/plugins"; then
+          echo "ERROR: cv2/qt/plugins found in executable! Qt conflict not resolved."
+          exit 1
+        else
+          echo "SUCCESS: cv2/qt/plugins not found in executable"
+        fi
+
+    - name: Cache AppImage tools
+      uses: actions/cache@v4
+      with:
+        path: appimagetool-x86_64.AppImage
+        key: appimagetool-continuous
+        restore-keys: |
+          appimagetool-
+
+    - name: Download AppImage tools
+      run: |
+        if [ ! -f appimagetool-x86_64.AppImage ]; then
+          wget https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage
+        fi
+        chmod +x appimagetool-x86_64.AppImage
+
+    - name: Create AppImage structure
+      run: |
+        mkdir -p AppDir/usr/bin
+        mkdir -p AppDir/usr/share/applications
+        mkdir -p AppDir/usr/share/icons/hicolor/256x256/apps
+
+        # Copy executable
+        cp dist/kvm-gui AppDir/usr/bin/kvm-gui
+
+        # Copy icon
+        cp assets/icon.png AppDir/usr/share/icons/hicolor/256x256/apps/kvm-serial.png
+        cp assets/icon.png AppDir/kvm-serial.png
+
+        # Create .desktop file
+        cat > AppDir/kvm-serial.desktop << 'EOF'
+        [Desktop Entry]
+        Type=Application
+        Name=KVM Serial
+        Comment=Control remote machines via serial KVM devices
+        Exec=kvm-gui
+        Icon=kvm-serial
+        Categories=Utility;RemoteAccess;
+        Terminal=false
+        EOF
+
+        cp AppDir/kvm-serial.desktop AppDir/usr/share/applications/
+
+        # Create AppRun script
+        cat > AppDir/AppRun << 'EOF'
+        #!/bin/bash
+        SELF=$(readlink -f "$0")
+        HERE=${SELF%/*}
+        export PATH="${HERE}/usr/bin:${PATH}"
+        exec "${HERE}/usr/bin/kvm-gui" "$@"
+        EOF
+        chmod +x AppDir/AppRun
+
+    - name: Build AppImage
+      run: |
+        ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "KVM-Serial-debug-x86_64.AppImage"
+      env:
+        ARCH: x86_64
+
+    - name: Upload Linux artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: kvm-serial-linux-debug
+        path: KVM-Serial-debug-x86_64.AppImage
