@@ -1,12 +1,13 @@
 """
-Pytest configuration for utils tests.
+Pytest configuration for all tests.
 
 Mocks serial modules to prevent importing real pyserial during tests.
+This runs before any test collection begins, ensuring mocks are in place
+for module-level imports across all test directories.
 """
 
 import sys
 from unittest.mock import MagicMock
-import pytest
 
 
 # Mock serial modules BEFORE any test imports happen
