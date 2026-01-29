@@ -73,6 +73,7 @@ class VideoCaptureWorker(QThread):
 
     frame_ready = pyqtSignal(object)
     capture_requested = pyqtSignal()
+    camera_error = pyqtSignal(str)  # Signal for camera initialization errors
 
     def __init__(self, canvas_width, canvas_height, video_device_idx=0):
         super().__init__()
@@ -136,7 +137,9 @@ class VideoCaptureWorker(QThread):
                     self.video_device.setCamera(self.video_device_idx)
                     self.camera_initialised = True
                 except Exception as e:
-                    logging.error(f"Failed to set camera index {self.video_device_idx}: {e}")
+                    error_msg = f"Failed to initialize camera {self.video_device_idx}: {e}"
+                    logging.error(error_msg)
+                    self.camera_error.emit(error_msg)
                     return
 
             # Capture frame - avoid color conversion if not necessary
@@ -478,6 +481,7 @@ class KVMQtGui(QMainWindow):
             self.window_default_width, self.window_default_height, 0
         )
         self.video_worker.frame_ready.connect(self._on_frame_ready)
+        self.video_worker.camera_error.connect(self._on_camera_initialization_error)
         self.video_worker.start()
 
         # Wire focus signals from the view back to the main window handlers.
@@ -861,6 +865,19 @@ class KVMQtGui(QMainWindow):
         logging.error(f"Error discovering video devices: {error_msg}")
         QMessageBox.critical(self, "Error", f"Failed to discover video devices: {error_msg}")
         self.video_devices = []
+        self.video_device_var = "Error"
+
+    def _on_camera_initialization_error(self, error_msg):
+        """
+        Callback when camera initialization/verification fails.
+        Shows error to user and allows them to select a different camera.
+        """
+        logging.error(f"Camera initialization error: {error_msg}")
+        QMessageBox.critical(
+            self,
+            "Camera Error",
+            f"{error_msg}\n\nPlease select a different camera from the Video menu.",
+        )
         self.video_device_var = "Error"
 
     def _populate_video_device_menu(self):
