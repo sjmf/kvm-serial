@@ -8,7 +8,7 @@ from kvm_serial.backend.inputhandler import InputHandler
 
 logger = logging.getLogger(__name__)
 
-CAMERAS_TO_CHECK = 10
+CAMERAS_TO_CHECK = 4  # Reduced from 10 - most users have 0-2 cameras
 MAX_CAM_FAILURES = 2
 
 
@@ -86,19 +86,19 @@ class CaptureDevice(InputHandler):
             except AttributeError:
                 logging.warning("setLogLevel not available in this OpenCV version")
             if cam.isOpened():
-                if type(cam.read()[1]) is numpy.ndarray:
-                    # Successfully read a frame from camera. It works.
-                    cameras.append(
-                        CameraProperties(
-                            index=index,
-                            width=int(cam.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                            height=int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                            fps=int(cam.get(cv2.CAP_PROP_FPS)),
-                            format=int(cam.get(cv2.CAP_PROP_FORMAT)),
-                        )
+                # Camera opened successfully - get its properties
+                # We skip cam.read() here for performance (1-2s per camera)
+                ## if type(cam.read()[1]) is numpy.ndarray:
+                # Frame reading will be verified when the camera is actually used
+                cameras.append(
+                    CameraProperties(
+                        index=index,
+                        width=int(cam.get(cv2.CAP_PROP_FRAME_WIDTH)),
+                        height=int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)),
+                        fps=int(cam.get(cv2.CAP_PROP_FPS)),
+                        format=int(cam.get(cv2.CAP_PROP_FORMAT)),
                     )
-                else:
-                    failures += 1
+                )
                 cam.release()
             else:
                 failures += 1
@@ -133,6 +133,16 @@ class CaptureDevice(InputHandler):
 
     def setCamera(self, camIndex=0):
         self.cam = cv2.VideoCapture(camIndex)
+
+        # Verify the camera can actually capture frames
+        if self.cam.isOpened():
+            ret, frame = self.cam.read()
+            if not ret or type(frame) is not numpy.ndarray:
+                logger.warning(f"Camera {camIndex} opened but failed to read frame")
+                raise CaptureDeviceException(f"Camera {camIndex} cannot capture frames")
+            logger.info(f"Camera {camIndex} verified: successfully captured test frame")
+        else:
+            raise CaptureDeviceException(f"Camera {camIndex} failed to open")
 
     def frameLoop(self, exitKey=27, windowTitle="kvm"):
         try:
