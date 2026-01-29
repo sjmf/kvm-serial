@@ -807,6 +807,9 @@ class KVMQtGui(QMainWindow):
         Populate the list of available video devices and update the menu.
         Uses a background thread to avoid blocking the event loop during macOS permission requests.
         """
+        # Update status to show we're enumerating cameras
+        self.video_device_var = "Initializing..."
+
         # Start camera enumeration in background thread
         self.camera_enum_thread = CameraEnumerationThread()
         self.camera_enum_thread.cameras_found.connect(self._on_cameras_found)
