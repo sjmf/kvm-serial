@@ -67,7 +67,7 @@ class VideoCaptureWorker(QThread):
     Captures frames on-demand rather than continuously looping.
     """
 
-    # Initialize camera properties with defaults
+    # Initialise camera properties with defaults
     camera_width: int = 1280
     camera_height: int = 720
 
@@ -549,7 +549,9 @@ class KVMQtGui(QMainWindow):
                 video_str += f" [{self._actual_fps:.1f} fps]"
             self.status_video_label.setText(video_str)
         else:
-            self.status_video_label.setText("Video: Idle")
+            # Show video_device_var status (e.g., "Initialising...", "None found", "Error")
+            # instead of hardcoded "Idle" when no camera is selected
+            self.status_video_label.setText(f"Video: {self.video_device_var}")
 
     def _toggle_verbose(self):
         """Toggle verbose logging and update log level."""
@@ -785,7 +787,7 @@ class KVMQtGui(QMainWindow):
                 QMessageBox.critical(
                     self, "Serial Error", f"Failed to open serial port {self.serial_port_var}:\n{e}"
                 )
-                # Reset to None if initialization failed
+                # Reset to None if initialisation failed
                 self.serial_port = None
                 self.keyboard_op = None
                 self.mouse_op = None
@@ -808,7 +810,7 @@ class KVMQtGui(QMainWindow):
         Uses a background thread to avoid blocking the event loop during macOS permission requests.
         """
         # Update status to show we're enumerating cameras
-        self.video_device_var = "Initializing..."
+        self.video_device_var = "Initialising..."
 
         # Start camera enumeration in background thread
         self.camera_enum_thread = CameraEnumerationThread()
