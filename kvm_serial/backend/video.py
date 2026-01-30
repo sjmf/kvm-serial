@@ -5,6 +5,7 @@ import cv2
 import numpy
 import threading
 import logging
+import time
 from kvm_serial.backend.inputhandler import InputHandler
 
 logger = logging.getLogger(__name__)
@@ -152,12 +153,24 @@ class CaptureDevice(InputHandler):
                     fmt = CameraProperties.format_from_frame(frame)
                     if fmt == -1:
                         fmt = int(cam.get(cv2.CAP_PROP_FORMAT))
+
+                    # Use reported FPS if available, otherwise measure it
+                    fps = int(cam.get(cv2.CAP_PROP_FPS))
+                    if fps <= 0:
+                        FPS_SAMPLE_FRAMES = 5
+                        t0 = time.perf_counter()
+                        for _ in range(FPS_SAMPLE_FRAMES):
+                            cam.read()
+                        elapsed = time.perf_counter() - t0
+                        fps = int(FPS_SAMPLE_FRAMES / elapsed) if elapsed > 0 else 0
+                        logger.debug(f"Camera {index} measured FPS: {fps}")
+
                     cameras.append(
                         CameraProperties(
                             index=index,
                             width=width,
                             height=height,
-                            fps=int(cam.get(cv2.CAP_PROP_FPS)),
+                            fps=fps,
                             format=fmt,
                         )
                     )
