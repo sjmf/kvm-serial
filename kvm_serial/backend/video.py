@@ -177,15 +177,22 @@ class CaptureDevice(InputHandler):
     def setCamera(self, camIndex=0):
         self.cam = cv2.VideoCapture(camIndex, CAMERA_BACKEND)
 
-        # Verify the camera can actually capture frames
-        if self.cam.isOpened():
-            ret, frame = self.cam.read()
-            if not ret or type(frame) is not numpy.ndarray:
-                logger.warning(f"Camera {camIndex} opened but failed to read frame")
-                raise CaptureDeviceException(f"Camera {camIndex} cannot capture frames")
-            logger.info(f"Camera {camIndex} verified: successfully captured test frame")
-        else:
+        if not self.cam.isOpened():
             raise CaptureDeviceException(f"Camera {camIndex} failed to open")
+
+        # On Windows, DirectShow defaults to 640x480 YUY2 (see issue #19)
+        if sys.platform == "win32":
+            _configure_dshow_camera(self.cam)
+
+        # Verify the camera can actually capture frames
+        ret, frame = self.cam.read()
+        if not ret or type(frame) is not numpy.ndarray:
+            logger.warning(f"Camera {camIndex} opened but failed to read frame")
+            raise CaptureDeviceException(f"Camera {camIndex} cannot capture frames")
+
+        # Derive actual dimensions from the frame (cam.get() is unreliable on DirectShow)
+        self.camera_height, self.camera_width = frame.shape[:2]
+        logger.info(f"Camera {camIndex} verified: {self.camera_width}x{self.camera_height}")
 
     def frameLoop(self, exitKey=27, windowTitle="kvm"):
         try:
