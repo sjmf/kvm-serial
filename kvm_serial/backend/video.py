@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 from typing import List
+import sys
 import cv2
 import numpy
 import threading
@@ -10,6 +11,15 @@ logger = logging.getLogger(__name__)
 
 CAMERAS_TO_CHECK = 5  # Reduced from 10 - most users have 0-2 cameras
 MAX_CAM_FAILURES = 2
+
+# Platform-specific camera backend for better performance and reliability
+# Using CAP_ANY lets OpenCV try all backends, which causes 15+ second delays on Windows
+if sys.platform == "win32":
+    CAMERA_BACKEND = cv2.CAP_DSHOW  # DirectShow on Windows
+elif sys.platform == "darwin":
+    CAMERA_BACKEND = cv2.CAP_AVFOUNDATION  # AVFoundation on macOS
+else:
+    CAMERA_BACKEND = cv2.CAP_V4L2  # Video4Linux2 on Linux
 
 
 class CaptureDeviceException(Exception):
@@ -87,7 +97,7 @@ class CaptureDevice(InputHandler):
         logger.info(f"Enumerating cameras (checking indices 0-{CAMERAS_TO_CHECK-1})...")
         for index in range(0, CAMERAS_TO_CHECK):
             logger.debug(f"Probing camera index {index}...")
-            cam = cv2.VideoCapture(index, cv2.CAP_ANY)
+            cam = cv2.VideoCapture(index, CAMERA_BACKEND)
 
             if cam.isOpened():
                 # Camera opened successfully - get its properties
@@ -136,7 +146,7 @@ class CaptureDevice(InputHandler):
         self.setCamera(camIndex=cameras[camIndex].index)
 
     def setCamera(self, camIndex=0):
-        self.cam = cv2.VideoCapture(camIndex)
+        self.cam = cv2.VideoCapture(camIndex, CAMERA_BACKEND)
 
         # Verify the camera can actually capture frames
         if self.cam.isOpened():
