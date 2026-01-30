@@ -1,14 +1,16 @@
 name: Build Executable Binaries
 
 on:
-  release:
-    types: [published]
-  workflow_dispatch:  # Allow manual triggering for testing
+  workflow_dispatch:  # Triggered by release.yml or manually for testing
     inputs:
       tag:
-        description: 'Tag to build (e.g., v1.5.2)'
-        required: true
+        description: 'Tag to build and upload to release (e.g., v1.5.2). Leave empty to build current commit without uploading.'
+        required: false
         type: string
+        default: ''
+
+env:
+  VERSION: ${{ inputs.tag || github.sha }}
 
 jobs:
   build-macos-intel:
@@ -17,7 +19,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        ref: ${{ env.VERSION }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -65,7 +67,7 @@ jobs:
           --window-size 800 400 \
           --icon-size 100 \
           --app-drop-link 600 185 \
-          "dist/KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-macOS-Intel.dmg" \
+          "dist/KVM-Serial-${{ env.VERSION }}-macOS-Intel.dmg" \
           "dist/KVM Serial.app"
 
     - name: Upload macOS Intel artifacts
@@ -73,7 +75,7 @@ jobs:
       with:
         name: kvm-serial-macos-intel
         path: |
-          dist/KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-macOS-Intel.dmg
+          dist/KVM-Serial-${{ env.VERSION }}-macOS-Intel.dmg
         if-no-files-found: ignore
 
   build-macos-arm:
@@ -82,7 +84,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        ref: ${{ env.VERSION }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -130,7 +132,7 @@ jobs:
           --window-size 800 400 \
           --icon-size 100 \
           --app-drop-link 600 185 \
-          "dist/KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-macOS-AppleSilicon.dmg" \
+          "dist/KVM-Serial-${{ env.VERSION }}-macOS-AppleSilicon.dmg" \
           "dist/KVM Serial.app"
 
     - name: Upload macOS Apple Silicon artifacts
@@ -138,7 +140,7 @@ jobs:
       with:
         name: kvm-serial-macos-arm
         path: |
-          dist/KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-macOS-AppleSilicon.dmg
+          dist/KVM-Serial-${{ env.VERSION }}-macOS-AppleSilicon.dmg
         if-no-files-found: ignore
 
   build-windows:
@@ -147,7 +149,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        ref: ${{ env.VERSION }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -172,13 +174,13 @@ jobs:
     - name: Rename Windows distributable
       shell: pwsh
       run: |
-        Copy-Item -Path 'dist\\kvm-gui.exe' -Destination "dist\\KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-Windows.exe"
+        Copy-Item -Path 'dist\\kvm-gui.exe' -Destination "dist\\KVM-Serial-${{ env.VERSION }}-Windows.exe"
 
     - name: Upload Windows artifacts
       uses: actions/upload-artifact@v4
       with:
         name: kvm-serial-windows
-        path: dist/KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-Windows.exe
+        path: dist/KVM-Serial-${{ env.VERSION }}-Windows.exe
 
   build-linux:
     runs-on: ubuntu-latest
@@ -186,7 +188,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       with:
-        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        ref: ${{ env.VERSION }}
 
     - name: Set up Python
       uses: actions/setup-python@v5
@@ -271,24 +273,25 @@ jobs:
 
     - name: Build AppImage
       run: |
-        ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-x86_64.AppImage"
+        ./appimagetool-x86_64.AppImage --appimage-extract-and-run AppDir "KVM-Serial-${{ env.VERSION }}-x86_64.AppImage"
       env:
         ARCH: x86_64
 
     - name: Verify build
       run: |
-        ls -lh KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-x86_64.AppImage
-        chmod +x "KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-x86_64.AppImage"
+        ls -lh KVM-Serial-${{ env.VERSION }}-x86_64.AppImage
+        chmod +x "KVM-Serial-${{ env.VERSION }}-x86_64.AppImage"
 
     - name: Upload Linux artifacts
       uses: actions/upload-artifact@v4
       with:
         name: kvm-serial-linux
-        path: KVM-Serial-${{ github.event.release.tag_name || inputs.tag }}-x86_64.AppImage
+        path: KVM-Serial-${{ env.VERSION }}-x86_64.AppImage
 
   upload-release-assets:
     needs: [build-macos-intel, build-macos-arm, build-windows, build-linux]
     runs-on: ubuntu-latest
+    if: ${{ inputs.tag != '' }}  # Only upload to release if a tag was provided
     permissions:
       contents: write  # Required for uploading release assets
 
@@ -304,7 +307,7 @@ jobs:
     - name: Upload binaries to release
       uses: softprops/action-gh-release@v2
       with:
-        tag_name: ${{ github.event.release.tag_name || inputs.tag }}
+        tag_name: ${{ env.VERSION }}
         files: |
           artifacts/kvm-serial-macos-intel/*
           artifacts/kvm-serial-macos-arm/*
