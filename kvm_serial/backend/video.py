@@ -8,7 +8,7 @@ from kvm_serial.backend.inputhandler import InputHandler
 
 logger = logging.getLogger(__name__)
 
-CAMERAS_TO_CHECK = 4  # Reduced from 10 - most users have 0-2 cameras
+CAMERAS_TO_CHECK = 5  # Reduced from 10 - most users have 0-2 cameras
 MAX_CAM_FAILURES = 2
 
 
@@ -77,14 +77,18 @@ class CaptureDevice(InputHandler):
         cameras: List[CameraProperties] = []
         failures = 0
 
+        # Suppress OpenCV logging (available in OpenCV 4.5.5+)
+        try:
+            cv2.setLogLevel(-1)
+        except AttributeError:
+            logging.warning("setLogLevel not available in this OpenCV version")
+
         # check for cameras
+        logger.info(f"Enumerating cameras (checking indices 0-{CAMERAS_TO_CHECK-1})...")
         for index in range(0, CAMERAS_TO_CHECK):
-            cam = cv2.VideoCapture(index)
-            # Suppress OpenCV logging (available in OpenCV 4.5.5+)
-            try:
-                cv2.setLogLevel(-1)
-            except AttributeError:
-                logging.warning("setLogLevel not available in this OpenCV version")
+            logger.debug(f"Probing camera index {index}...")
+            cam = cv2.VideoCapture(index, cv2.CAP_ANY)
+
             if cam.isOpened():
                 # Camera opened successfully - get its properties
                 # We skip cam.read() here for performance (1-2s per camera)
