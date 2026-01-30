@@ -26,6 +26,27 @@ class CaptureDeviceException(Exception):
     pass
 
 
+def _configure_dshow_camera(cam: cv2.VideoCapture, width=1920, height=1080):
+    """
+    Configure DirectShow camera properties in the correct order.
+
+    On Windows, DirectShow defaults to 640x480 YUY2 and requires explicit
+    configuration. Property order matters: dimensions must be set before FOURCC,
+    because setting FOURCC auto-populates dimensions from the current device
+    state and triggers reconfiguration (see cap_dshow.cpp L3472-L3475).
+
+    Returns True if MJPG was successfully set, False if it fell back to default codec.
+    """
+    cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
+
+    mjpg_ok = cam.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc("M", "J", "P", "G"))
+    if not mjpg_ok:
+        logger.warning("MJPG not supported by device, using default codec")
+
+    return mjpg_ok
+
+
 class CameraProperties:
     """
     Describe a reference to a camera attached to the system
