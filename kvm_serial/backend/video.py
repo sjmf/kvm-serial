@@ -60,6 +60,24 @@ class CameraProperties:
     format: int
 
     FORMAT_STRINGS = ["CV_8U", "CV_8S", "CV_16U", "CV_16S", "CV_32S", "CV_32F", "CV_64F", "Unknown"]
+    DTYPE_TO_DEPTH = {
+        "uint8": 0,
+        "int8": 1,
+        "uint16": 2,
+        "int16": 3,
+        "int32": 4,
+        "float32": 5,
+        "float64": 6,
+    }
+
+    @staticmethod
+    def format_from_frame(frame) -> int:
+        """Derive OpenCV format (e.g. CV_8UC3=16) from a numpy frame."""
+        depth = CameraProperties.DTYPE_TO_DEPTH.get(frame.dtype.name, -1)
+        if depth == -1:
+            return -1
+        channels = frame.shape[2] if frame.ndim == 3 else 1
+        return depth + (channels - 1) * 8
 
     def __init__(self, index, width, height, fps, format):
         self.index = index
@@ -131,13 +149,16 @@ class CaptureDevice(InputHandler):
                 ret, frame = cam.read()
                 if ret and type(frame) is numpy.ndarray:
                     height, width = frame.shape[:2]
+                    fmt = CameraProperties.format_from_frame(frame)
+                    if fmt == -1:
+                        fmt = int(cam.get(cv2.CAP_PROP_FORMAT))
                     cameras.append(
                         CameraProperties(
                             index=index,
                             width=width,
                             height=height,
                             fps=int(cam.get(cv2.CAP_PROP_FPS)),
-                            format=int(cam.get(cv2.CAP_PROP_FORMAT)),
+                            format=fmt,
                         )
                     )
                 else:
