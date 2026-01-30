@@ -21,11 +21,14 @@ movements and scan codes to the remote computer.
 
 The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
 
-|  |  |
-|--|--|
-| <img src="assets/icon.png" alt="App icon" height="100" /> | __[Download the latest release](https://github.com/sjmf/kvm-serial/releases/latest/download/)__ for Windows, Mac or Linux. |
+<a href="https://github.com/sjmf/kvm-serial/releases/latest/"> <img align="left" src="assets/icon.png" alt="App icon" height="100" /></a>
+
+<hr />
+
+__[Download the latest release](https://github.com/sjmf/kvm-serial/releases/latest/)__ for Windows, Mac or Linux.
 
 *See [INSTALLATION.md](docs/INSTALLATION.md) for information on installing serial drivers, if required.*
+
 
 ## GUI Usage
 
