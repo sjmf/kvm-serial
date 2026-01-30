@@ -121,19 +121,27 @@ class CaptureDevice(InputHandler):
             cam = cv2.VideoCapture(index, CAMERA_BACKEND)
 
             if cam.isOpened():
-                # Camera opened successfully - get its properties
-                # We skip cam.read() here for performance (1-2s per camera)
-                ## if type(cam.read()[1]) is numpy.ndarray:
-                # Frame reading will be verified when the camera is actually used
-                cameras.append(
-                    CameraProperties(
-                        index=index,
-                        width=int(cam.get(cv2.CAP_PROP_FRAME_WIDTH)),
-                        height=int(cam.get(cv2.CAP_PROP_FRAME_HEIGHT)),
-                        fps=int(cam.get(cv2.CAP_PROP_FPS)),
-                        format=int(cam.get(cv2.CAP_PROP_FORMAT)),
+                # On Windows, DirectShow defaults to 640x480 YUY2 and needs
+                # explicit configuration (see issue #19)
+                if sys.platform == "win32":
+                    _configure_dshow_camera(cam)
+
+                # Read a frame to verify the camera works and get actual dimensions
+                ret, frame = cam.read()
+                if ret and type(frame) is numpy.ndarray:
+                    height, width = frame.shape[:2]
+                    cameras.append(
+                        CameraProperties(
+                            index=index,
+                            width=width,
+                            height=height,
+                            fps=int(cam.get(cv2.CAP_PROP_FPS)),
+                            format=int(cam.get(cv2.CAP_PROP_FORMAT)),
+                        )
                     )
-                )
+                else:
+                    logger.warning(f"Camera {index} opened but failed to read frame")
+
                 cam.release()
             else:
                 failures += 1
