@@ -40,8 +40,8 @@ class PyUSBOp(BaseOp):
     def name(self):
         return "usb"
 
-    def __init__(self, serial_port):
-        super().__init__(serial_port)
+    def __init__(self, serial_port, layout: str = "en_GB"):
+        super().__init__(serial_port, layout=layout)
         self.usb_endpoints = get_usb_endpoints()
         self.debounce = None
 

@@ -69,8 +69,8 @@ class PynputOp(BaseOp):
     def name(self):
         return "pynput"
 
-    def __init__(self, serial_port):
-        super().__init__(serial_port)
+    def __init__(self, serial_port, layout: str = "en_GB"):
+        super().__init__(serial_port, layout=layout)
         self.modifier_map = {}
         # TODO: implement n-key rollover
         # self.key_rollover_map = {}
@@ -132,7 +132,7 @@ class PynputOp(BaseOp):
                 scancode = self._nonalphanumeric_key_to_scancode(key)  # type: ignore
             except KeyError as e:
                 # This may be an alphanumeric instead
-                scancode = ascii_to_scancode(key.char)  # type: ignore
+                scancode = ascii_to_scancode(key.char, layout=self.layout)  # type: ignore
 
             scan_modifiers = merge_scancodes(self.modifier_map.values())
             scancode = merge_scancodes([scan_modifiers, scancode])
