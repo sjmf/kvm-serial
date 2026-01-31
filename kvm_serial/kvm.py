@@ -1278,12 +1278,30 @@ class KVMQtGui(QMainWindow):
         self.close()
 
 
+def _resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller.
+
+    PyInstaller onefile builds extract bundled data files to a temporary
+    directory and expose its path via sys._MEIPASS. When running from source,
+    resolve relative to the project root instead.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", relative_path)
+
+
 def main():
     """
     Entry point for the application. Configures logging and shows the KVMQtGui main window.
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = QApplication(sys.argv)
+
+    # Set application icon (used for title bar and taskbar)
+    icon_path = _resource_path(os.path.join("assets", "icon.png"))
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
     window = KVMQtGui()
     window.show()
     sys.exit(app.exec_())
