@@ -59,7 +59,10 @@ hiddenimports = [
 ]
 
 # Collect any data files from kvm_serial package
-datas = []
+datas = [
+    ('assets/icon.ico', 'assets'),
+    ('assets/icon.png', 'assets'),
+]
 
 a = Analysis(
     ['kvm_serial/kvm.py'],
