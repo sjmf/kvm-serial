@@ -7,35 +7,22 @@ as this will be bundled in the application. However, steps regarding serial driv
 
 ## Requirements
 
-- Python 3.10 or higher
+- Python 3.10 or higher for running from source
 - USB to UART bridge connecting to the CH9329 serial device
 - USB video capture device (for video functionality)
 
-## Installing Python Dependencies
+# Platform Specific Dependencies
 
-**Standard installation** (running the application from `pip`):
+__Note:__ On modern Windows and Mac, this application is signed without a paid developer certificate (between $99 and $300). You will therefore see the following prompts:
 
-```bash
-pip install kvm-serial
-```
+![Mac OSX Security Prompt](img/osx-sec-prompt.png)
+![Windows Security Prompt](img/win-sec-prompt.png)
 
-**Install from source** (for development):
+In order to run the binary app on Mac OSX, you will need to *right click -> Open* it. Otherwise, the above prompt will not show the "Open" option.
 
-```bash
-pip install -e .
-```
+On Windows, you will need to click "More info" on the SmartScreen dialog to "Run anyway".
 
-**Development installation** (includes PyInstaller for building executables, pytest for testing, etc.):
-
-```bash
-# Using pip
-pip install -e ".[dev]"
-
-# Using uv (faster alternative)
-uv pip install -e ".[dev]"
-```
-
-Note: `uv run` doesn't appear to work on Windows. See [#15](https://github.com/sjmf/kvm-serial/issues/15).
+As always, do not run apps on your machine which you do not trust. The entire build chain and source code for this application is available in the GitHub repository for you to verify if desired.
 
 ## Windows
 

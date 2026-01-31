@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "kvm-serial"
-version = "1.5.1"
+version = "1.5.2"
 authors = [{ name="Samantha Finnigan", email="1038320+sjmf@users.noreply.github.com" }]
 description = "Python package for interfacing with CH9329 KVM devices"
 readme = "README.md"

@@ -41,13 +41,27 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write  # Required for creating releases
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+
     - name: Create GitHub Release
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ github.ref_name }}
         name: ${{ github.ref_name }}
         generate_release_notes: true
+
+  trigger-binary-builds:
+    needs: create-release
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write  # Required for triggering workflows
+
+    steps:
+    - name: Trigger binary builds workflow
+      run: |
+        gh workflow run build-binaries.yml -f tag=${{ github.ref_name }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+        GH_REPO: ${{ github.repository }}

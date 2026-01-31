@@ -10,20 +10,29 @@ A Software KVM, using the CH9329 UART Serial to USB HID controller.
 
 Control your computers using an emulated keyboard and mouse!
 
-This python module allows you to control to a second device using a CH9329 module (or cable) and 
-a video capture device. You can find these from vendors on eBay and AliExpress for a low price.
+This app and python module allows you to control to a second device using a CH9329 module (or cable)
+and a video capture device. You can find these from vendors on eBay and AliExpress for a low price.
 However, there is very little software support available for these modules, and CH9329
 protocol documentation is sparse.
 
-Running this package will capture keyboard and mouse inputs from the local computer 
-where the script is running, and send these over a serial UART connection to the CH9329 USB HID 
-module, which will send USB HID mouse and keyboard movements and scan codes to the remote.
+This software captures keyboard and mouse inputs from the local computer, sending these over a 
+serial UART connection to the CH9329 USB HID module, which will output USB HID mouse and keyboard 
+movements and scan codes to the remote computer.
 
 The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
 
+<a href="https://github.com/sjmf/kvm-serial/releases/latest/"> <img align="left" src="assets/icon.png" alt="App icon" height="100" /></a>
+
+<hr />
+
+__[Download the latest release](https://github.com/sjmf/kvm-serial/releases/latest/)__ for Windows, Mac or Linux.
+
+*See [INSTALLATION.md](docs/INSTALLATION.md) for information on installing serial drivers, if required.*
+
+
 ## GUI Usage
 
-Run the GUI using `python -m kvm_serial`:
+Run the GUI using the [executable for your platform](https://github.com/sjmf/kvm-serial/releases/latest/), or with Python using `python -m kvm_serial`.
 
 ![KVM Window](https://wp.finnigan.dev/wp-content/uploads/2025/09/output-4.gif)
 *The Serial KVM window running on OSX, controlling a Windows remote machine*
@@ -45,7 +54,7 @@ This module requires a little bit of hardware to get going. You will need:
 You can likely get everything you need for under £30, which is incredible when compared to the 
 price of a KVM crash cart adapter.
 
-### CH9329 module/cable assembled as cables.
+### CH9329 module/cable assembled as cables
 
 _PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling CH9329 hardware._  
 
@@ -68,27 +77,54 @@ as a USB device to your local system. I found the "*UGREEN Video Capture Card HD
 Device*" was a good balance of price versus value. The more you spend on a capture device, the more
 responsive your video feed will likely be (to a point). HDMI and VGA hardware is available.
 
+## Installing Python Dependencies
+
+_Note:_ These instructions are not required if using the executables, but you may need to do some other setup. See [INSTALLATION.md](docs/INSTALLATION.md) for information on installing serial drivers.
+
+**Standard installation** (running the application from `pip`):
+
+```bash
+# OPTIONAL: Create and activate a Virtual environment
+python -m venv ./.venv
+./.venv/scripts/activate
+
+# Install the module from PyPI and run the GUI
+pip install kvm-serial
+python -m kvm-serial
+```
+
+OR using [`uv` package manager](https://docs.astral.sh/uv) (a faster alternative to pip, if available):  
+*Note: `uv run` may not work on Windows. See [#15](https://github.com/sjmf/kvm-serial/issues/15).*
+
+```bash
+uv run kvm-gui
+```
+
+**Install from source** (for development- includes PyInstaller for building executables, pytest for testing, etc.):
+
+```bash
+pip install -e ".[dev]"
+```
+
 ## Script Usage
 
 A script called `control.py` is also provided for use directly from the terminal, so you can also control remotes from a headless environment! (e.g. Pi to Pi!)
 
-Packages from `requirements.txt` must be installed first. Use your preferred python package manager. E.g.:
+Packages must be installed first. Use your preferred python package manager. E.g.:
 
-```bash
-# Create Virtual env
-python -m venv ./.venv
-./.venv/scripts/activate
-# Then, use pip to install dependencies
-pip install -r requirements.txt
-# Or install as a module
-pip install kvm_serial
-```
+
 
 Usage examples for the `control.py` script:
 
 ```bash
+# Run using module
+python -m kvm_serial.control
+
+# Run using `uv`
+uv run kvm-control
+
 # Run with mouse and video support; use a Mac OSX serial port:
-python control.py -ex /dev/cu.usbserial-A6023LNH
+python -m kvm_serial.control -ex /dev/cu.usbserial-A6023LNH
 
 # Run the script using keyboard 'tty' mode (no mouse, no video)
 python control.py --mode tty /dev/tty.usbserial0
