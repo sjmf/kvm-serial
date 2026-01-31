@@ -249,15 +249,26 @@ class TestKVMSettingsPersistence(
         mock_video_actions[0].text.return_value = "Camera 0"
         mock_video_actions[1].text.return_value = "Camera 1"
 
+        mock_layout_actions = [MagicMock(), MagicMock()]
+        mock_layout_actions[0].text.return_value = "en_GB"
+        mock_layout_actions[1].text.return_value = "en_US"
+
         app.serial_port_menu = MagicMock()
         app.serial_port_menu.actions.return_value = mock_serial_actions
         app.baud_rate_menu = MagicMock()
         app.baud_rate_menu.actions.return_value = mock_baud_actions
         app.video_device_menu = MagicMock()
         app.video_device_menu.actions.return_value = mock_video_actions
+        app.keyboard_layout_menu = MagicMock()
+        app.keyboard_layout_menu.actions.return_value = mock_layout_actions
 
         settings = self.create_test_settings(
-            {"serial_port": "/dev/ttyUSB1", "baud_rate": "115200", "video_device": "1"}
+            {
+                "serial_port": "/dev/ttyUSB1",
+                "baud_rate": "115200",
+                "video_device": "1",
+                "keyboard_layout": "en_US",
+            }
         )
 
         with (
@@ -270,6 +281,7 @@ class TestKVMSettingsPersistence(
             mock_serial_actions[1].setChecked.assert_called_with(True)
             mock_baud_actions[1].setChecked.assert_called_with(True)
             mock_video_actions[1].setChecked.assert_called_with(True)
+            mock_layout_actions[1].setChecked.assert_called_with(True)
 
     def test_ui_state_updates_on_load(self):
         """Test that UI components are updated when settings are loaded."""
@@ -409,11 +421,46 @@ class TestKVMSettingsPersistence(
         app.serial_port_menu = MagicMock()
         app.baud_rate_menu = MagicMock()
         app.video_device_menu = MagicMock()
+        app.keyboard_layout_menu = MagicMock()
 
         # Default empty actions
         app.serial_port_menu.actions.return_value = []
         app.baud_rate_menu.actions.return_value = []
         app.video_device_menu.actions.return_value = []
+        app.keyboard_layout_menu.actions.return_value = []
+
+    def test_load_keyboard_layout_from_settings(self):
+        """Test loading keyboard layout from saved settings."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        settings = self.create_test_settings({"keyboard_layout": "en_US"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            self.assertEqual(app.keyboard_layout_var, "en_US")
+
+    def test_load_keyboard_layout_with_default(self):
+        """Test keyboard layout defaults to en_GB when not in settings."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        # Settings without keyboard_layout
+        settings = self.create_test_settings({})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            self.assertEqual(app.keyboard_layout_var, "en_GB")
 
 
 if __name__ == "__main__":
