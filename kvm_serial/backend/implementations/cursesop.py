@@ -69,8 +69,8 @@ CONTROL_CHARACTERS = {
 
 
 class CursesOp(BaseOp):
-    def __init__(self, serial_port):
-        super().__init__(serial_port=serial_port)
+    def __init__(self, serial_port, layout: str = "en_GB"):
+        super().__init__(serial_port=serial_port, layout=layout)
         self.sc = None
 
     @property
@@ -141,7 +141,7 @@ class CursesOp(BaseOp):
 
                 # Otherwise, received key was a single character
                 else:
-                    self.sc = ascii_to_scancode(key)
+                    self.sc = ascii_to_scancode(key, layout=self.layout)
 
                 # If debug logging, be a little more verbose:
                 if logging.DEBUG >= logging.root.level:
@@ -174,7 +174,7 @@ class CursesOp(BaseOp):
         # Handle Ctrl+C and pass through. Our exit key is "ESC" in this mode
         except KeyboardInterrupt as e:
             term.addstr("^C")
-            self.sc = build_scancode(ascii_to_scancode("c")[2], 0x1)
+            self.sc = build_scancode(ascii_to_scancode("c", layout=self.layout)[2], 0x1)
 
         except CursesError as e:
             term.clear()

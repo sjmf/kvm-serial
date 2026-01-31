@@ -259,25 +259,25 @@ class TestKeyboard:
             # USB mode
             listener = KeyboardListener(mock_serial, mode=Mode.USB)
             listener.run_keyboard()
-            mock_pyusbop.PyUSBOp.assert_called_once_with(mock_serial)
+            mock_pyusbop.PyUSBOp.assert_called_once_with(mock_serial, layout="en_GB")
             mock_pyusbop.PyUSBOp.return_value.run.assert_called_once()
 
             # PYNPUT mode
             listener = KeyboardListener(mock_serial, mode=Mode.PYNPUT)
             listener.run_keyboard()
-            mock_pynputop.PynputOp.assert_called_once_with(mock_serial)
+            mock_pynputop.PynputOp.assert_called_once_with(mock_serial, layout="en_GB")
             mock_pynputop.PynputOp.return_value.run.assert_called_once()
 
             # TTY mode
             listener = KeyboardListener(mock_serial, mode=Mode.TTY)
             listener.run_keyboard()
-            mock_ttyop.TtyOp.assert_called_once_with(mock_serial)
+            mock_ttyop.TtyOp.assert_called_once_with(mock_serial, layout="en_GB")
             mock_ttyop.TtyOp.return_value.run.assert_called_once()
 
             # CURSES mode
             listener = KeyboardListener(mock_serial, mode=Mode.CURSES)
             listener.run_keyboard()
-            mock_cursesop.CursesOp.assert_called_once_with(mock_serial)
+            mock_cursesop.CursesOp.assert_called_once_with(mock_serial, layout="en_GB")
             mock_cursesop.CursesOp.return_value.run.assert_called_once()
 
             # NONE mode (should do nothing)

@@ -69,6 +69,7 @@ class TestKVMInitialization(
             patch.object(KVMQtGui, "_populate_serial_ports") as mock_pop_serial,
             patch.object(KVMQtGui, "_populate_baud_rates") as mock_pop_baud,
             patch.object(KVMQtGui, "_populate_video_devices") as mock_pop_video,
+            patch.object(KVMQtGui, "_populate_keyboard_layouts") as mock_pop_layouts,
         ):
             app = KVMQtGui()
 
@@ -76,6 +77,7 @@ class TestKVMInitialization(
             self.assertTrue(hasattr(app, "_populate_serial_ports"))
             self.assertTrue(hasattr(app, "_populate_baud_rates"))
             self.assertTrue(hasattr(app, "_populate_video_devices"))
+            self.assertTrue(hasattr(app, "_populate_keyboard_layouts"))
 
     def test_default_values_set_correctly(self):
         """Test that default configuration values are set properly."""
@@ -92,6 +94,9 @@ class TestKVMInitialization(
         self.assertFalse(app.verbose_var)
         self.assertFalse(app.hide_mouse_var)
         self.assertEqual(app.target_fps, 30)
+
+        # Test keyboard layout default
+        self.assertEqual(app.keyboard_layout_var, "en_GB")
 
         # Test dimension defaults
         self.assertEqual(app.window_min_width, 512)

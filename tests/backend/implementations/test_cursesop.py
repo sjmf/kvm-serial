@@ -180,7 +180,7 @@ class TestCursesOperation:
             assert returnval == True
             assert op.sc == scancode
             mock_term.addstr.assert_called_once()
-            op._mock_ascii.assert_called_with(key)
+            op._mock_ascii.assert_called_with(key, layout="en_GB")
 
     def test_cursesop_parse_key_control_characters(self, op, sys_modules_patch, mock_term):
         """Send a control character, and check object state afterwards"""
@@ -267,13 +267,11 @@ class TestCursesOperation:
             - run() called once
             - main_curses returns None
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch(f"{CLASS_PATH}.CursesOp") as mock_op,
-        ):
-            from kvm_serial.backend.implementations.cursesop import main_curses
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import cursesop as cursesop_mod
 
-            mock_op.return_value.run.return_value = None
-            assert main_curses(mock_serial) is None
-            mock_op.assert_called_once_with(mock_serial)
-            mock_op.return_value.run.assert_called_once()
+            with patch.object(cursesop_mod, "CursesOp") as mock_op:
+                mock_op.return_value.run.return_value = None
+                assert cursesop_mod.main_curses(mock_serial) is None
+                mock_op.assert_called_once_with(mock_serial)
+                mock_op.return_value.run.assert_called_once()

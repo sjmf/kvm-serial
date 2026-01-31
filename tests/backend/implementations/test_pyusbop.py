@@ -139,11 +139,11 @@ class TestPyUSBOperation:
         Returns:
             PyUSBOp: Configured PyUSBOp instance ready for use in tests.
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch(f"{CLASS_PATH}.get_usb_endpoints", return_value={}),
-        ):
-            return self._get_op_unsafe(mock_serial, mock_keyboard_device)
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import pyusbop as pyusbop_mod
+
+            with patch.object(pyusbop_mod, "get_usb_endpoints", return_value={}):
+                return self._get_op_unsafe(mock_serial, mock_keyboard_device)
 
     def test_pyusbop_name_property(self, op):
         """Test that the name property returns 'usb'"""
@@ -163,27 +163,31 @@ class TestPyUSBOperation:
         mock_intf = mock_keyboard_device.interfaces[0]
         mock_endp = mock_keyboard_device.interfaces[0].endpoints[0]
 
-        with (
-            patch("sys.modules", sys_modules_patch),
-            patch(f"{CLASS_PATH}.usb_core_find", return_value=[mock_keyboard_device]) as find,
-            patch(f"{CLASS_PATH}.find_descriptor", side_effect=[mock_intf, mock_endp]) as f_desc,
-            patch(f"{CLASS_PATH}.endpoint_direction", return_value=0x80),
-            patch(f"{CLASS_PATH}.endpoint_type", return_value=0x03),
-        ):
-            from kvm_serial.backend.implementations.pyusbop import get_usb_endpoints
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import pyusbop as pyusbop_mod
 
-            endpoints = get_usb_endpoints()
-            assert len(endpoints) == 1
-            device_key = "dead:beef"
-            assert device_key in endpoints
-            endpoint, device, interface_number = endpoints[device_key]
-            assert endpoint == mock_keyboard_device.interfaces[0].endpoints[0]
-            assert device == mock_keyboard_device
-            assert interface_number == 0
+            with (
+                patch.object(
+                    pyusbop_mod, "usb_core_find", return_value=[mock_keyboard_device]
+                ) as find,
+                patch.object(
+                    pyusbop_mod, "find_descriptor", side_effect=[mock_intf, mock_endp]
+                ) as f_desc,
+                patch.object(pyusbop_mod, "endpoint_direction", return_value=0x80),
+                patch.object(pyusbop_mod, "endpoint_type", return_value=0x03),
+            ):
+                endpoints = pyusbop_mod.get_usb_endpoints()
+                assert len(endpoints) == 1
+                device_key = "dead:beef"
+                assert device_key in endpoints
+                endpoint, device, interface_number = endpoints[device_key]
+                assert endpoint == mock_keyboard_device.interfaces[0].endpoints[0]
+                assert device == mock_keyboard_device
+                assert interface_number == 0
 
-            # Verify that find_descriptor was called correctly
-            find.assert_called_once_with(find_all=True)
-            assert f_desc.call_count == 2
+                # Verify that find_descriptor was called correctly
+                find.assert_called_once_with(find_all=True)
+                assert f_desc.call_count == 2
 
     def test_get_usb_endpoints_no_backend_error(self, sys_modules_patch):
         """

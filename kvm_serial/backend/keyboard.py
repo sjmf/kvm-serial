@@ -22,7 +22,13 @@ class Mode(Enum):
 
 
 class KeyboardListener(InputHandler):
-    def __init__(self, serial_port: Serial | str, mode: Mode | str = "pynput", baud: int = 9600):
+    def __init__(
+        self,
+        serial_port: Serial | str,
+        mode: Mode | str = "pynput",
+        baud: int = 9600,
+        layout: str = "en_GB",
+    ):
 
         if isinstance(serial_port, str):
             self.serial_port = Serial(serial_port, baud)
@@ -34,6 +40,7 @@ class KeyboardListener(InputHandler):
         elif isinstance(mode, Mode):
             self.mode = mode
 
+        self.layout = layout
         self.running = False
         self.thread = threading.Thread(target=self.run_keyboard)
 
@@ -57,19 +64,19 @@ class KeyboardListener(InputHandler):
         elif self.mode is Mode.USB:
             from backend.implementations.pyusbop import PyUSBOp
 
-            keyboard_handler = PyUSBOp(self.serial_port)
+            keyboard_handler = PyUSBOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.PYNPUT:
             from backend.implementations.pynputop import PynputOp
 
-            keyboard_handler = PynputOp(self.serial_port)
+            keyboard_handler = PynputOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.TTY:
             from backend.implementations.ttyop import TtyOp
 
-            keyboard_handler = TtyOp(self.serial_port)
+            keyboard_handler = TtyOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.CURSES:
             from backend.implementations.cursesop import CursesOp
 
-            keyboard_handler = CursesOp(self.serial_port)
+            keyboard_handler = CursesOp(self.serial_port, layout=self.layout)
         else:
             raise ValueError(f"Unknown keyboard mode: {self.mode!r}")
 

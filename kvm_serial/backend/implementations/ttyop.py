@@ -22,6 +22,9 @@ class TtyOp(BaseOp):
     passed through to the CH9329 HID keyboard
     """
 
+    def __init__(self, serial_port, layout: str = "en_GB"):
+        super().__init__(serial_port, layout=layout)
+
     @property
     def name(self):
         return "tty"
@@ -42,7 +45,7 @@ class TtyOp(BaseOp):
 
     def _parse_key(self) -> bool:
         ascii_val = sys.stdin.read(1)
-        scancode = ascii_to_scancode(ascii_val)
+        scancode = ascii_to_scancode(ascii_val, layout=self.layout)
         print(ascii_val, end="", flush=True)
         logging.debug(scancode)
 

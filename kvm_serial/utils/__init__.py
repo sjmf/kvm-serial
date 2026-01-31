@@ -1,4 +1,5 @@
 from .utils import *
+from .keyboard_layouts import get_layout, get_available_layouts
 
 # Auto-import all submodules
 import pkgutil
@@ -14,4 +15,6 @@ __all__ = [
     "scancode_to_ascii",
     "merge_scancodes",
     "string_to_scancodes",
+    "get_layout",
+    "get_available_layouts",
 ]
