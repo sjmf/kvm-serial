@@ -47,7 +47,7 @@ def start_threads(args, serial_port):
     if not args.no_keyboard:
         from kvm_serial.backend.keyboard import KeyboardListener
 
-        keeb = KeyboardListener(serial_port, mode=args.mode)
+        keeb = KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout)
         keeb.start()
 
     # Display video window if --video (-x)
@@ -137,6 +137,14 @@ def parse_args():
         default="curses",
         type=str,
         choices=["usb", "pynput", "tty", "curses", "none"],
+    )
+    parser.add_argument(
+        "--keyboard-layout",
+        "-l",
+        help="Set keyboard layout",
+        default="en_GB",
+        type=str,
+        choices=["en_US", "en_GB"],
     )
     parser.add_argument(
         "--no-keyboard",
