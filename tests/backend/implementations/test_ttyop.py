@@ -98,36 +98,35 @@ class TestTTYOperation:
             - hid_serial_out.release is called once
             - _parse_key returns True
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch(f"{CLASS_PATH}.ascii_to_scancode") as mock_scancode,
-        ):
-            mock_scancode.return_value = [0, 0, 42, 0, 0, 0, 0, 0]
-            from kvm_serial.backend.implementations.ttyop import TtyOp
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import ttyop as ttyop_mod
 
-            # We cannot use the op mock here, because ascii_to_scancode will already be initialised
-            # when TtyOp is, resulting in a patching failure. We must re-create it here.
-            op = TtyOp(mock_serial)
-            op.hid_serial_out = MagicMock()
+            with patch.object(ttyop_mod, "ascii_to_scancode") as mock_scancode:
+                mock_scancode.return_value = [0, 0, 42, 0, 0, 0, 0, 0]
 
-            with patch.object(sys.stdin, "read", lambda n=-1: "a"):
-                with caplog.at_level("DEBUG"):
-                    assert op._parse_key() is True
+                # We cannot use the op mock here, because ascii_to_scancode will already be initialised
+                # when TtyOp is, resulting in a patching failure. We must re-create it here.
+                op = ttyop_mod.TtyOp(mock_serial)
+                op.hid_serial_out = MagicMock()
 
-            # Mock ascii_to_scancode called once with 'a'
-            mock_scancode.assert_called_once_with("a")
+                with patch.object(sys.stdin, "read", lambda n=-1: "a"):
+                    with caplog.at_level("DEBUG"):
+                        assert op._parse_key() is True
 
-            # Assert scancode logged at DEBUG level
-            assert any(
-                "42" in record.getMessage() and record.levelname == "DEBUG"
-                for record in caplog.records
-            )
+                # Mock ascii_to_scancode called once with 'a'
+                mock_scancode.assert_called_once_with("a")
 
-            # Assert hid_serial_out.send_scancode and release called
-            op.hid_serial_out.send_scancode.assert_called_once_with(
-                bytes(mock_scancode.return_value)
-            )
-            op.hid_serial_out.release.assert_called_once()
+                # Assert scancode logged at DEBUG level
+                assert any(
+                    "42" in record.getMessage() and record.levelname == "DEBUG"
+                    for record in caplog.records
+                )
+
+                # Assert hid_serial_out.send_scancode and release called
+                op.hid_serial_out.send_scancode.assert_called_once_with(
+                    bytes(mock_scancode.return_value)
+                )
+                op.hid_serial_out.release.assert_called_once()
 
     def test_legacy_main_tty(self, mock_serial, sys_modules_patch):
         """
@@ -139,17 +138,11 @@ class TestTTYOperation:
             - run() called once
             - main_tty returns None
         """
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import ttyop as ttyop_mod
 
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch(f"{CLASS_PATH}.TtyOp") as mock_op,
-        ):
-            # Import main_tty after patching TtyOp so the patch is in effect
-            from kvm_serial.backend.implementations import ttyop
-
-            main_tty = ttyop.main_tty
-
-            mock_op.return_value.run.return_value = None
-            assert main_tty(mock_serial) is None
-            mock_op.assert_called_once_with(mock_serial)
-            mock_op.return_value.run.assert_called_once()
+            with patch.object(ttyop_mod, "TtyOp") as mock_op:
+                mock_op.return_value.run.return_value = None
+                assert ttyop_mod.main_tty(mock_serial) is None
+                mock_op.assert_called_once_with(mock_serial)
+                mock_op.return_value.run.assert_called_once()
