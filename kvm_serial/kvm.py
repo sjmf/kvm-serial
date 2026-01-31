@@ -264,6 +264,7 @@ class KVMQtGui(QMainWindow):
     serial_port_var: str = "Loading serial..."
     baud_rate_var: int = -1
     video_device_var: str = "Loading cameras..."
+    keyboard_layout_var: str = "en_GB"
 
     window_var: bool = False
     show_status_var: bool = True
@@ -395,10 +396,11 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
-        # Serial Port, Baud, and Video submenus
+        # Serial Port, Baud, Video, and Keyboard Layout submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
         self.video_device_menu = options_menu.addMenu("Video Device")
+        self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
         # Hide Mouse Pointer option
         self.mouse_action = QAction("Hide Mouse Pointer", self)
@@ -560,11 +562,12 @@ class KVMQtGui(QMainWindow):
 
     def __init_devices(self):
         """
-        Initialise and populate device lists (serial ports, video devices)
+        Initialise and populate device lists (serial ports, video devices, keyboard layouts)
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
         self._populate_video_devices()
+        self._populate_keyboard_layouts()
 
     def _update_status_bar(self):
         """
@@ -663,6 +666,7 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
         self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
+        self.keyboard_layout_var = kvm.get("keyboard_layout", "en_GB")
 
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
@@ -677,6 +681,10 @@ class KVMQtGui(QMainWindow):
         if hasattr(self, "verbose_action"):
             self.verbose_action.setChecked(self.verbose_var)
             self._apply_log_level()
+        # And for keyboard layout
+        if hasattr(self, "keyboard_layout_menu"):
+            for action in self.keyboard_layout_menu.actions():
+                action.setChecked(action.text() == self.keyboard_layout_var)
 
         # Initialise serial operations with loaded settings
         self.__init_serial()
@@ -695,6 +703,7 @@ class KVMQtGui(QMainWindow):
             "statusbar": str(self.show_status_var),
             "verbose": str(self.verbose_var),
             "hide_mouse": str(self.hide_mouse_var),
+            "keyboard_layout": str(self.keyboard_layout_var),
         }
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
@@ -796,6 +805,45 @@ class KVMQtGui(QMainWindow):
         logging.info(f"Selected baud rate: {baud_rate}")
         self.__init_serial()
 
+    def _populate_keyboard_layouts(self):
+        """
+        Populate the keyboard layout menu with available layouts.
+        """
+        if self.keyboard_layout_menu is None:
+            raise TypeError(
+                "Initialise keyboard_layout_menu before calling _populate_keyboard_layouts()"
+            )
+
+        from kvm_serial.utils import get_available_layouts
+
+        self.keyboard_layout_menu.clear()
+        for layout in get_available_layouts():
+            action = QAction(layout, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, l=layout: self._on_keyboard_layout_selected(l))
+            self.keyboard_layout_menu.addAction(action)
+
+            # Check the current selection
+            if layout == self.keyboard_layout_var:
+                action.setChecked(True)
+
+    def _on_keyboard_layout_selected(self, layout):
+        """
+        Handle selection of a keyboard layout.
+        """
+        if self.keyboard_layout_menu is None:
+            raise TypeError(
+                "Initialise keyboard_layout_menu before calling _on_keyboard_layout_selected()"
+            )
+
+        # Uncheck all other layout actions
+        for action in self.keyboard_layout_menu.actions():
+            action.setChecked(action.text() == layout)
+
+        self.keyboard_layout_var = layout
+        logging.info(f"Selected keyboard layout: {layout}")
+        self.__init_serial()
+
     def __init_serial(self):
         """
         Initialise or reinitialise serial port and keyboard/mouse operations.
@@ -822,7 +870,7 @@ class KVMQtGui(QMainWindow):
                 )
 
                 # Initialise keyboard and mouse operations
-                self.keyboard_op = QtOp(self.serial_port)
+                self.keyboard_op = QtOp(self.serial_port, layout=self.keyboard_layout_var)
                 self.mouse_op = MouseOp(self.serial_port)
                 logging.info("Initialised keyboard and mouse operations")
 
