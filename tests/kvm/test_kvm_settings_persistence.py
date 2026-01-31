@@ -4,6 +4,7 @@ Test suite for KVM settings persistence functionality.
 Uses KVMTestBase for common mocking infrastructure.
 """
 
+import os
 import unittest
 from unittest.mock import patch, MagicMock, call
 
@@ -456,11 +457,138 @@ class TestKVMSettingsPersistence(
 
         with (
             patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            patch.object(
+                app, "_detect_system_keyboard_layout", return_value="en_GB"
+            ) as mock_detect,
             self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
         ):
             app._load_settings("test_config.ini")
 
+            # Verify auto-detection was called and returned en_GB
+            mock_detect.assert_called_once()
             self.assertEqual(app.keyboard_layout_var, "en_GB")
+
+    def test_auto_detect_system_keyboard_layout_en_us(self):
+        """Test auto-detection of en_US keyboard layout without real Qt imports."""
+        app = self.create_kvm_app()
+
+        with patch("kvm_serial.kvm.QLocale") as mock_qlocale_class:
+            # 1. Define arbitrary values for the constants
+            mock_qlocale_class.English = 31
+            mock_qlocale_class.UnitedStates = 225
+
+            # 2. Setup the instance mock
+            mock_locale = MagicMock()
+            mock_locale.language.return_value = 31  # Matches English
+            mock_locale.country.return_value = 225  # Matches UnitedStates
+
+            # 3. Wire them together
+            mock_qlocale_class.system.return_value = mock_locale
+
+            result = app._detect_system_keyboard_layout()
+            self.assertEqual(result, "en_US")
+
+    def test_auto_detect_system_keyboard_layout_other_english(self):
+        """Test en_GB fallback for other English variants (e.g., NZ)."""
+        app = self.create_kvm_app()
+
+        with patch("kvm_serial.kvm.QLocale") as mock_qlocale_class:
+            mock_qlocale_class.English = 31
+            mock_qlocale_class.UnitedStates = 225
+            # Use a different number for a different country
+            mock_qlocale_class.NewZealand = 3
+
+            mock_locale = MagicMock()
+            mock_locale.language.return_value = 31  # English
+            mock_locale.country.return_value = 3  # NOT UnitedStates
+
+            mock_qlocale_class.system.return_value = mock_locale
+
+            result = app._detect_system_keyboard_layout()
+            self.assertEqual(result, "en_GB")
+
+    def test_auto_detect_system_keyboard_layout_non_english(self):
+        """Test auto-detection defaults to en_GB for non-English locales."""
+        app = self.create_kvm_app()
+
+        mock_locale = MagicMock()
+        mock_locale.language.return_value = MagicMock()  # Something other than English
+        mock_locale.name.return_value = "de_DE"
+
+        with (
+            patch.dict(os.environ, {"LANG": "de_DE.UTF-8"}, clear=False),
+            patch("kvm_serial.kvm.QLocale") as mock_qlocale_class,
+            patch("kvm_serial.kvm.logging") as mock_logging,
+        ):
+            mock_qlocale_class.system.return_value = mock_locale
+            mock_qlocale_class.English = MagicMock()  # Different value
+
+            result = app._detect_system_keyboard_layout()
+
+            self.assertEqual(result, "en_GB")
+            mock_logging.debug.assert_called()
+
+    def test_auto_detect_system_keyboard_layout_exception(self):
+        """Test auto-detection gracefully defaults to en_GB when env vars are empty and QLocale is non-English."""
+        app = self.create_kvm_app()
+
+        mock_locale = MagicMock()
+        mock_locale.language.return_value = MagicMock()  # Not English
+        mock_locale.name.return_value = "de_DE"
+
+        with (
+            patch.dict(os.environ, {}, clear=True),
+            patch("kvm_serial.kvm.QLocale") as mock_qlocale_class,
+        ):
+            mock_qlocale_class.system.return_value = mock_locale
+            mock_qlocale_class.English = MagicMock()  # Different value
+
+            result = app._detect_system_keyboard_layout()
+
+            # Falls back to QLocale which returns non-English, so defaults to en_GB
+            self.assertEqual(result, "en_GB")
+
+    def test_auto_detect_on_first_load(self):
+        """Test auto-detection is triggered when keyboard_layout not in settings."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        # Settings without keyboard_layout
+        settings = self.create_test_settings({})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            patch.object(
+                app, "_detect_system_keyboard_layout", return_value="en_US"
+            ) as mock_detect,
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            # Verify auto-detection was called
+            mock_detect.assert_called_once()
+            self.assertEqual(app.keyboard_layout_var, "en_US")
+
+    def test_no_auto_detect_when_already_configured(self):
+        """Test auto-detection is NOT triggered when keyboard_layout already in settings."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        # Settings WITH keyboard_layout
+        settings = self.create_test_settings({"keyboard_layout": "en_US"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            patch.object(app, "_detect_system_keyboard_layout") as mock_detect,
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            # Verify auto-detection was NOT called
+            mock_detect.assert_not_called()
+            self.assertEqual(app.keyboard_layout_var, "en_US")
 
 
 if __name__ == "__main__":

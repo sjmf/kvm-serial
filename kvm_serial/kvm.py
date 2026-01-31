@@ -6,7 +6,7 @@ import time
 import cv2
 from typing import cast
 from serial import Serial, SerialException
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent, QLocale
 from PyQt5.QtGui import (
     QIcon,
     QImage,
@@ -666,7 +666,14 @@ class KVMQtGui(QMainWindow):
         self.verbose_var = kvm.get("verbose", "False") == "True"
         self.show_status_var = kvm.get("statusbar", "True") == "True"
         self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
-        self.keyboard_layout_var = kvm.get("keyboard_layout", "en_GB")
+
+        # Load keyboard layout, auto-detect if not previously configured
+        if "keyboard_layout" in kvm:
+            self.keyboard_layout_var = kvm.get("keyboard_layout")
+        else:
+            # Auto-detect from system locale on first run
+            self.keyboard_layout_var = self._detect_system_keyboard_layout()
+            logging.info(f"Auto-detected keyboard layout: {self.keyboard_layout_var}")
 
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
@@ -883,6 +890,56 @@ class KVMQtGui(QMainWindow):
                 self.serial_port = None
                 self.keyboard_op = None
                 self.mouse_op = None
+
+    def _detect_system_keyboard_layout(self) -> str:
+        """
+        Auto-detect keyboard layout based on system locale using QLocale.
+        Recognizes en_US and en_GB variants. Extend in future to detect more keyboards.
+
+        Returns:
+            str: Detected keyboard layout ('en_US' or 'en_GB'), defaults to 'en_GB'
+        """
+
+        default_layout = "en_GB"
+        try:
+            # Use QLocale for detection
+            system_locale = QLocale.system()
+            language = system_locale.language()  # 31 - English
+            country = system_locale.country()  # 225- US; 224- GB
+
+            # Map Qt locale to keyboard layout
+            if language == QLocale.English:
+                # US English -> en_US layout
+                if country == QLocale.UnitedStates:
+                    return "en_US"
+                # All other English variants default to en_GB
+                return default_layout
+            else:
+                # Non-English locales default to en_GB
+                logging.debug(
+                    f"System locale {system_locale.name()} is not English, defaulting to {default_layout}"
+                )
+                return default_layout
+        except Exception as e:
+            logging.warning(
+                f"Failed to auto-detect keyboard layout: {e}, defaulting to {default_layout}"
+            )
+            # Fallback: Scrape environment variables for locale information:
+            # Format is typically "en_US.UTF-8" or "en_GB"
+            # This isn't really needed with working QLocale option, so commented out.
+            # locale_env = os.environ.get("LANG") or os.environ.get("LC_ALL") or ""
+            # if locale_env:
+            #     # Extract the locale code (e.g., "en_US" from "en_US.UTF-8")
+            #     locale_code = locale_env.split(".")[0]
+            #     logging.debug(f"Detected locale from environment: {locale_code}")
+
+            #     if locale_code.startswith("en_US"):
+            #         return "en_US"
+            #     elif locale_code.startswith("en_"):
+            #         # en_GB, en_AU, en_CA, etc. all map to en_GB
+            #         return default_layout
+
+            return default_layout
 
     def _close_serial_port(self):
         """
