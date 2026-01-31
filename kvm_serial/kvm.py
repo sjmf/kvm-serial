@@ -140,9 +140,6 @@ class VideoCaptureWorker(QThread):
                     if hasattr(self.video_device, "camera_width"):
                         self.camera_width = self.video_device.camera_width
                         self.camera_height = self.video_device.camera_height
-                        logging.info(
-                            f"Camera actual dimensions: {self.camera_width}x{self.camera_height}"
-                        )
                 except Exception as e:
                     error_msg = f"Failed to initialize camera {self.video_device_idx}: {e}"
                     logging.error(error_msg)

@@ -38,7 +38,7 @@ def _configure_dshow_camera(cam: cv2.VideoCapture, width=1920, height=1080):
 
     Returns True if MJPG was successfully set, False if it fell back to default codec.
     """
-    logger.info(f"Configuring DirectShow: requesting {width}x{height} MJPG")
+    logger.debug(f"Configuring DirectShow: requesting {width}x{height} MJPG")
     cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
     cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
