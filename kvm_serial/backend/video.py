@@ -49,6 +49,24 @@ def _configure_dshow_camera(cam: cv2.VideoCapture, width=1920, height=1080):
     return mjpg_ok
 
 
+def _measure_framerate(cam: cv2.VideoCapture):
+    """
+    Helper method to retrive a semi-accurate framerate as a fallback
+    if the backend does not report CAP_PROP_FPS.
+
+    :param cam: OpenCV VideoCapture device to profile
+    :type cam: cv2.VideoCapture
+    :param index: index of the device (system offset)
+    """
+    FPS_SAMPLE_FRAMES = 5
+    t0 = time.perf_counter()
+    for _ in range(FPS_SAMPLE_FRAMES):
+        cam.read()
+    elapsed = time.perf_counter() - t0
+    fps = int(FPS_SAMPLE_FRAMES // elapsed) if elapsed > 0 else 0
+    return fps
+
+
 class CameraProperties:
     """
     Describe a reference to a camera attached to the system
@@ -157,12 +175,7 @@ class CaptureDevice(InputHandler):
                     # Use reported FPS if available, otherwise measure it
                     fps = int(cam.get(cv2.CAP_PROP_FPS))
                     if fps <= 0:
-                        FPS_SAMPLE_FRAMES = 5
-                        t0 = time.perf_counter()
-                        for _ in range(FPS_SAMPLE_FRAMES):
-                            cam.read()
-                        elapsed = time.perf_counter() - t0
-                        fps = int(FPS_SAMPLE_FRAMES / elapsed) if elapsed > 0 else 0
+                        fps = _measure_framerate(cam)
                         logger.debug(f"Camera {index} measured FPS: {fps}")
 
                     cameras.append(
