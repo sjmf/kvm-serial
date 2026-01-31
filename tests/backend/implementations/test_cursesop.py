@@ -180,7 +180,7 @@ class TestCursesOperation:
             assert returnval == True
             assert op.sc == scancode
             mock_term.addstr.assert_called_once()
-            op._mock_ascii.assert_called_with(key)
+            op._mock_ascii.assert_called_with(key, layout="en_GB")
 
     def test_cursesop_parse_key_control_characters(self, op, sys_modules_patch, mock_term):
         """Send a control character, and check object state afterwards"""
