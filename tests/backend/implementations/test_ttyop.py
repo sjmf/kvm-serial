@@ -113,8 +113,8 @@ class TestTTYOperation:
                     with caplog.at_level("DEBUG"):
                         assert op._parse_key() is True
 
-                # Mock ascii_to_scancode called once with 'a'
-                mock_scancode.assert_called_once_with("a")
+                # Mock ascii_to_scancode called once with 'a' and layout parameter
+                mock_scancode.assert_called_once_with("a", layout="en_GB")
 
                 # Assert scancode logged at DEBUG level
                 assert any(
