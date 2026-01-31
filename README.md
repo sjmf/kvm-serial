@@ -92,7 +92,10 @@ python -m venv ./.venv
 pip install kvm-serial
 python -m kvm-serial
 ```
-OR using [`uv` package manager](https://docs.astral.sh/uv) (a faster alternative, if available):
+
+OR using [`uv` package manager](https://docs.astral.sh/uv) (a faster alternative to pip, if available):  
+*Note: `uv run` may not work on Windows. See [#15](https://github.com/sjmf/kvm-serial/issues/15).*
+
 ```bash
 uv run kvm-gui
 ```
@@ -106,8 +109,6 @@ pip install -e ".[dev]"
 ## Script Usage
 
 A script called `control.py` is also provided for use directly from the terminal, so you can also control remotes from a headless environment! (e.g. Pi to Pi!)
-
-*Note: `uv run` may not work on Windows. See [#15](https://github.com/sjmf/kvm-serial/issues/15).*
 
 Packages must be installed first. Use your preferred python package manager. E.g.:
 
