@@ -1172,7 +1172,7 @@ class KVMQtGui(QMainWindow):
         version = self._get_version()
         QMessageBox.about(
             self,
-            "<h1>About Serial KVM</h1>",
+            "About Serial KVM",
             f"<p><b>Serial KVM</b><br/>Version {version}</p>\n"
             "<p>Keyboard/Mouse over Serial using CH9329.<p>\n"
             "<p>(c) 2024-2025 Samantha Finnigan <a href='https://github.com/sjmf'>@sjmf</a> and contributors.</p>"
