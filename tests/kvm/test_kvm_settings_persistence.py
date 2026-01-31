@@ -167,6 +167,7 @@ class TestKVMSettingsPersistence(
             "statusbar": "False",
             "verbose": "True",
             "hide_mouse": "True",
+            "keyboard_layout": "en_GB",
         }
 
         with (
