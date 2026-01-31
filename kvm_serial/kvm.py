@@ -7,7 +7,16 @@ import cv2
 from typing import cast
 from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
-from PyQt5.QtGui import QImage, QMouseEvent, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent, QPainter
+from PyQt5.QtGui import (
+    QIcon,
+    QImage,
+    QMouseEvent,
+    QPixmap,
+    QKeyEvent,
+    QFocusEvent,
+    QWheelEvent,
+    QPainter,
+)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -423,6 +432,33 @@ class KVMQtGui(QMainWindow):
 
         status_action.triggered.connect(_toggle_status)
         view_menu.addAction(status_action)
+
+        # Fullscreen toggle (macOS provides its own native fullscreen via the green
+        # traffic light button and "Enter Full Screen" menu item automatically)
+        if sys.platform != "darwin":
+            fullscreen_action = QAction("Fullscreen", self)
+            fullscreen_action.setCheckable(True)
+            fullscreen_action.setShortcut("F11")
+
+            def _toggle_fullscreen():
+                if self.isFullScreen():
+                    self.showNormal()
+                    fullscreen_action.setChecked(False)
+                else:
+                    self.showFullScreen()
+                    fullscreen_action.setChecked(True)
+
+            fullscreen_action.triggered.connect(_toggle_fullscreen)
+            view_menu.addAction(fullscreen_action)
+
+            passthrough_action = QAction("Pass Through F11", self)
+            passthrough_action.setCheckable(True)
+
+            def _toggle_passthrough(checked):
+                fullscreen_action.setShortcut("" if checked else "F11")
+
+            passthrough_action.triggered.connect(_toggle_passthrough)
+            view_menu.addAction(passthrough_action)
 
         logging.debug(f"Menus created")
 
