@@ -248,13 +248,11 @@ class TestPynputOperation:
             - run() called once
             - main_pynput returns None
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.pynputop.PynputOp") as mock_op,
-        ):
-            from kvm_serial.backend.implementations.pynputop import main_pynput
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import pynputop as pynputop_mod
 
-            mock_op.return_value.run.return_value = None
-            assert main_pynput(mock_serial) is None
-            mock_op.assert_called_once_with(mock_serial)
-            mock_op.return_value.run.assert_called_once()
+            with patch.object(pynputop_mod, "PynputOp") as mock_op:
+                mock_op.return_value.run.return_value = None
+                assert pynputop_mod.main_pynput(mock_serial) is None
+                mock_op.assert_called_once_with(mock_serial)
+                mock_op.return_value.run.assert_called_once()

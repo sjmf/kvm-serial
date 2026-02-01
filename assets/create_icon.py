@@ -186,9 +186,9 @@ def save_icon_formats(img, base_path):
     # Save ICO for Windows (multiple sizes embedded)
     ico_path = os.path.join(base_path, "icon.ico")
     # ICO format supports multiple sizes - include common Windows sizes
+    # Save from the original high-res image so Pillow downscales cleanly
     ico_sizes = [(16, 16), (32, 32), (48, 48), (64, 64), (128, 128), (256, 256)]
-    ico_images = [img.resize(size, Image.Resampling.LANCZOS) for size in ico_sizes]
-    ico_images[0].save(ico_path, format="ICO", sizes=ico_sizes)
+    img.save(ico_path, format="ICO", sizes=ico_sizes)
     print(f"Created: {ico_path}")
 
     # For macOS ICNS, we need iconutil (macOS only) or save PNG at required sizes

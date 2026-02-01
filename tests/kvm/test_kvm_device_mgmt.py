@@ -200,7 +200,7 @@ class TestKVMDeviceManagement(
 
             mock_serial_class.assert_called_once_with("/dev/ttyUSB0", 9600)
             self.assertEqual(app.serial_port, mock_serial_instance)
-            mock_qtop.assert_called_once_with(mock_serial_instance)
+            mock_qtop.assert_called_once_with(mock_serial_instance, layout="en_GB")
             mock_mouseop.assert_called_once_with(mock_serial_instance)
             self.assertEqual(app.keyboard_op, mock_qtop_instance)
             self.assertEqual(app.mouse_op, mock_mouseop_instance)
@@ -278,6 +278,62 @@ class TestKVMDeviceManagement(
                 self.assertIsNone(app.serial_port)
                 self.assertIsNone(app.keyboard_op)
                 self.assertIsNone(app.mouse_op)
+
+    def test_populate_keyboard_layouts_success(self):
+        """Test successful population of keyboard layout menu."""
+        app = self.create_kvm_app()
+
+        with patch("kvm_serial.utils.get_available_layouts", return_value=["en_GB", "en_US"]):
+            app.keyboard_layout_menu = MagicMock()
+            app._populate_keyboard_layouts()
+
+            # Verify menu was cleared
+            app.keyboard_layout_menu.clear.assert_called_once()
+
+            # Verify actions were added for each layout
+            self.assertEqual(app.keyboard_layout_menu.addAction.call_count, 2)
+
+    def test_populate_keyboard_layouts_menu_not_initialized(self):
+        """Test error handling when keyboard_layout_menu is not initialized."""
+        app = self.create_kvm_app()
+        app.keyboard_layout_menu = None
+
+        with self.assertRaises(TypeError) as context:
+            app._populate_keyboard_layouts()
+
+        self.assertIn("keyboard_layout_menu", str(context.exception))
+
+    def test_keyboard_layout_selection(self):
+        """Test keyboard layout selection logic."""
+        app = self.create_kvm_app()
+
+        # Mock the keyboard layout menu
+        mock_action_gb = MagicMock()
+        mock_action_gb.text.return_value = "en_GB"
+        mock_action_us = MagicMock()
+        mock_action_us.text.return_value = "en_US"
+        mock_menu = MagicMock()
+        mock_menu.actions.return_value = [mock_action_gb, mock_action_us]
+        app.keyboard_layout_menu = mock_menu
+
+        with self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial:
+            app._on_keyboard_layout_selected("en_US")
+
+            self.assertEqual(app.keyboard_layout_var, "en_US")
+            mock_init_serial.assert_called_once()
+            # Verify only selected layout action is checked
+            mock_action_gb.setChecked.assert_called_with(False)
+            mock_action_us.setChecked.assert_called_with(True)
+
+    def test_keyboard_layout_selection_menu_not_initialized(self):
+        """Test error handling when keyboard_layout_menu is not initialized in selection."""
+        app = self.create_kvm_app()
+        app.keyboard_layout_menu = None
+
+        with self.assertRaises(TypeError) as context:
+            app._on_keyboard_layout_selected("en_US")
+
+        self.assertIn("keyboard_layout_menu", str(context.exception))
 
 
 if __name__ == "__main__":

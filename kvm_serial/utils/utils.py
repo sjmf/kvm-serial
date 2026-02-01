@@ -59,45 +59,41 @@ def scancode_to_ascii(scancode, raise_err: bool = False):
         raise e
 
 
-def ascii_to_scancode(ascii_char):
+def ascii_to_scancode(ascii_char, layout: str = "en_GB"):
     """
-    Convert an ASCII character to a scancode
-    :param ascii_char:
+    Convert an ASCII character to a scancode.
+
+    :param ascii_char: Character to convert
+    :param layout: Keyboard layout to use (default: 'en_GB')
     :return: scancode (bytes array)
     """
-    # No modifier (L/RShift) held
-    # fmt: off
-    ascii_to_hid_mapping = {
-        'a': 0x04, 'b': 0x05, 'c': 0x06, 'd': 0x07, 'e': 0x08, 'f': 0x09, 'g': 0x0a,
-        'h': 0x0b, 'i': 0x0c, 'j': 0x0d, 'k': 0x0e, 'l': 0x0f, 'm': 0x10, 'n': 0x11,
-        'o': 0x12, 'p': 0x13, 'q': 0x14, 'r': 0x15, 's': 0x16, 't': 0x17, 'u': 0x18,
-        'v': 0x19, 'w': 0x1a, 'x': 0x1b, 'y': 0x1c, 'z': 0x1d, '1': 0x1e, '2': 0x1f,
-        '3': 0x20, '4': 0x21, '5': 0x22, '6': 0x23, '7': 0x24, '8': 0x25, '9': 0x26,
-        '0': 0x27, '-': 0x2d, '=': 0x2e, '[': 0x2f, ']': 0x30, '#': 0x32, ';': 0x33,
-        "'": 0x34, '`': 0x35, ',': 0x36, '.': 0x37, '/': 0x38, '\\': 0x64,
-        # Paragraph control characters
-        '\n': 0x28, '\t': 0x2b, '\b': 0x2a, ' ': 0x2c,
-    }
+    from .keyboard_layouts import get_layout
 
-    # With modifier (still same scancode for char)
-    ascii_to_modifier = {
-        'A': 0x04, 'B': 0x05, 'C': 0x06, 'D': 0x07, 'E': 0x08, 'F': 0x09, 'G': 0x0a,
-        'H': 0x0b, 'I': 0x0c, 'J': 0x0d, 'K': 0x0e, 'L': 0x0f, 'M': 0x10, 'N': 0x11,
-        'O': 0x12, 'P': 0x13, 'Q': 0x14, 'R': 0x15, 'S': 0x16, 'T': 0x17, 'U': 0x18,
-        'V': 0x19, 'W': 0x1a, 'X': 0x1b, 'Y': 0x1c, 'Z': 0x1d, '!': 0x1e, '"': 0x1f,
-        '£': 0x20, '$': 0x21, '%': 0x22, '^': 0x23, '&': 0x24, '*': 0x25, '(': 0x26,
-        ')': 0x27, '_': 0x2d, '+': 0x2e, '{': 0x2f, '}': 0x30, '~': 0x32, ':': 0x33,
-        '@': 0x34, '¬': 0x35, '<': 0x36, '>': 0x37, '?': 0x38, '|': 0x64,
-    }
-    # fmt: on
-
+    # Get layout mappings
     try:
-        return build_scancode(ascii_to_hid_mapping[ascii_char])
+        layout_map = get_layout(layout)
+    except ValueError:
+        # Fall back to en_GB if invalid layout is specified
+        layout_map = get_layout("en_GB")
+
+    # Separate shift-required and non-shift characters
+    # Characters that require shift are uppercase letters and symbols
+    non_shift_chars = {
+        k: v
+        for k, v in layout_map.items()
+        if k.islower() or k.isdigit() or k in "\n\t\b -=[];';,./\\` "
+    }
+    shift_chars = {k: v for k, v in layout_map.items() if k not in non_shift_chars}
+
+    # Try non-shift characters first
+    try:
+        return build_scancode(non_shift_chars[ascii_char])
     except KeyError:
         pass
 
+    # Try shift-required characters
     try:
-        return build_scancode(ascii_to_modifier[ascii_char], 0x2)
+        return build_scancode(shift_chars[ascii_char], 0x2)
     except KeyError:
         return build_scancode(0x0)
 

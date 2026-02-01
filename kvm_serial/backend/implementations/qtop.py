@@ -90,8 +90,8 @@ class QtOp(BaseOp):
     def name(self):
         return "qt"
 
-    def __init__(self, serial_port):
-        super().__init__(serial_port)
+    def __init__(self, serial_port, layout: str = "en_GB"):
+        super().__init__(serial_port, layout=layout)
         self.modifier_map = {}
 
     def run(self):
@@ -166,7 +166,7 @@ class QtOp(BaseOp):
                         logger.warning(f"Potentially unhandled key: 0x{qt_key:x}")
 
                 if text and len(text) == 1:
-                    scancode = ascii_to_scancode(text)
+                    scancode = ascii_to_scancode(text, layout=self.layout)
                 else:
                     # Unmapped key - log and skip
                     logger.warning(f"Unmapped Qt key: {qt_key} (0x{qt_key:x}) [0b{qt_key:b}]")

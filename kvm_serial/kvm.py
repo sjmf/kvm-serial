@@ -6,8 +6,17 @@ import time
 import cv2
 from typing import cast
 from serial import Serial, SerialException
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent
-from PyQt5.QtGui import QImage, QMouseEvent, QPixmap, QKeyEvent, QFocusEvent, QWheelEvent, QPainter
+from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent, QLocale
+from PyQt5.QtGui import (
+    QIcon,
+    QImage,
+    QMouseEvent,
+    QPixmap,
+    QKeyEvent,
+    QFocusEvent,
+    QWheelEvent,
+    QPainter,
+)
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -255,6 +264,7 @@ class KVMQtGui(QMainWindow):
     serial_port_var: str = "Loading serial..."
     baud_rate_var: int = -1
     video_device_var: str = "Loading cameras..."
+    keyboard_layout_var: str = "en_GB"
 
     window_var: bool = False
     show_status_var: bool = True
@@ -386,10 +396,11 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
-        # Serial Port, Baud, and Video submenus
+        # Serial Port, Baud, Video, and Keyboard Layout submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
         self.video_device_menu = options_menu.addMenu("Video Device")
+        self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
         # Hide Mouse Pointer option
         self.mouse_action = QAction("Hide Mouse Pointer", self)
@@ -423,6 +434,33 @@ class KVMQtGui(QMainWindow):
 
         status_action.triggered.connect(_toggle_status)
         view_menu.addAction(status_action)
+
+        # Fullscreen toggle (macOS provides its own native fullscreen via the green
+        # traffic light button and "Enter Full Screen" menu item automatically)
+        if sys.platform != "darwin":
+            fullscreen_action = QAction("Fullscreen", self)
+            fullscreen_action.setCheckable(True)
+            fullscreen_action.setShortcut("F11")
+
+            def _toggle_fullscreen():
+                if self.isFullScreen():
+                    self.showNormal()
+                    fullscreen_action.setChecked(False)
+                else:
+                    self.showFullScreen()
+                    fullscreen_action.setChecked(True)
+
+            fullscreen_action.triggered.connect(_toggle_fullscreen)
+            view_menu.addAction(fullscreen_action)
+
+            passthrough_action = QAction("Pass Through F11", self)
+            passthrough_action.setCheckable(True)
+
+            def _toggle_passthrough(checked):
+                fullscreen_action.setShortcut("" if checked else "F11")
+
+            passthrough_action.triggered.connect(_toggle_passthrough)
+            view_menu.addAction(passthrough_action)
 
         logging.debug(f"Menus created")
 
@@ -524,11 +562,12 @@ class KVMQtGui(QMainWindow):
 
     def __init_devices(self):
         """
-        Initialise and populate device lists (serial ports, video devices)
+        Initialise and populate device lists (serial ports, video devices, keyboard layouts)
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
         self._populate_video_devices()
+        self._populate_keyboard_layouts()
 
     def _update_status_bar(self):
         """
@@ -628,6 +667,14 @@ class KVMQtGui(QMainWindow):
         self.show_status_var = kvm.get("statusbar", "True") == "True"
         self.hide_mouse_var = kvm.get("hide_mouse", "False") == "True"
 
+        # Load keyboard layout, auto-detect if not previously configured
+        if "keyboard_layout" in kvm:
+            self.keyboard_layout_var = kvm.get("keyboard_layout")
+        else:
+            # Auto-detect from system locale on first run
+            self.keyboard_layout_var = self._detect_system_keyboard_layout()
+            logging.info(f"Auto-detected keyboard layout: {self.keyboard_layout_var}")
+
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
             if self.hide_mouse_var:
@@ -641,6 +688,10 @@ class KVMQtGui(QMainWindow):
         if hasattr(self, "verbose_action"):
             self.verbose_action.setChecked(self.verbose_var)
             self._apply_log_level()
+        # And for keyboard layout
+        if hasattr(self, "keyboard_layout_menu"):
+            for action in self.keyboard_layout_menu.actions():
+                action.setChecked(action.text() == self.keyboard_layout_var)
 
         # Initialise serial operations with loaded settings
         self.__init_serial()
@@ -659,6 +710,7 @@ class KVMQtGui(QMainWindow):
             "statusbar": str(self.show_status_var),
             "verbose": str(self.verbose_var),
             "hide_mouse": str(self.hide_mouse_var),
+            "keyboard_layout": str(self.keyboard_layout_var),
         }
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
@@ -760,6 +812,45 @@ class KVMQtGui(QMainWindow):
         logging.info(f"Selected baud rate: {baud_rate}")
         self.__init_serial()
 
+    def _populate_keyboard_layouts(self):
+        """
+        Populate the keyboard layout menu with available layouts.
+        """
+        if self.keyboard_layout_menu is None:
+            raise TypeError(
+                "Initialise keyboard_layout_menu before calling _populate_keyboard_layouts()"
+            )
+
+        from kvm_serial.utils import get_available_layouts
+
+        self.keyboard_layout_menu.clear()
+        for layout in get_available_layouts():
+            action = QAction(layout, self)
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, l=layout: self._on_keyboard_layout_selected(l))
+            self.keyboard_layout_menu.addAction(action)
+
+            # Check the current selection
+            if layout == self.keyboard_layout_var:
+                action.setChecked(True)
+
+    def _on_keyboard_layout_selected(self, layout):
+        """
+        Handle selection of a keyboard layout.
+        """
+        if self.keyboard_layout_menu is None:
+            raise TypeError(
+                "Initialise keyboard_layout_menu before calling _on_keyboard_layout_selected()"
+            )
+
+        # Uncheck all other layout actions
+        for action in self.keyboard_layout_menu.actions():
+            action.setChecked(action.text() == layout)
+
+        self.keyboard_layout_var = layout
+        logging.info(f"Selected keyboard layout: {layout}")
+        self.__init_serial()
+
     def __init_serial(self):
         """
         Initialise or reinitialise serial port and keyboard/mouse operations.
@@ -786,7 +877,7 @@ class KVMQtGui(QMainWindow):
                 )
 
                 # Initialise keyboard and mouse operations
-                self.keyboard_op = QtOp(self.serial_port)
+                self.keyboard_op = QtOp(self.serial_port, layout=self.keyboard_layout_var)
                 self.mouse_op = MouseOp(self.serial_port)
                 logging.info("Initialised keyboard and mouse operations")
 
@@ -799,6 +890,56 @@ class KVMQtGui(QMainWindow):
                 self.serial_port = None
                 self.keyboard_op = None
                 self.mouse_op = None
+
+    def _detect_system_keyboard_layout(self) -> str:
+        """
+        Auto-detect keyboard layout based on system locale using QLocale.
+        Recognizes en_US and en_GB variants. Extend in future to detect more keyboards.
+
+        Returns:
+            str: Detected keyboard layout ('en_US' or 'en_GB'), defaults to 'en_GB'
+        """
+
+        default_layout = "en_GB"
+        try:
+            # Use QLocale for detection
+            system_locale = QLocale.system()
+            language = system_locale.language()  # 31 - English
+            country = system_locale.country()  # 225- US; 224- GB
+
+            # Map Qt locale to keyboard layout
+            if language == QLocale.English:
+                # US English -> en_US layout
+                if country == QLocale.UnitedStates:
+                    return "en_US"
+                # All other English variants default to en_GB
+                return default_layout
+            else:
+                # Non-English locales default to en_GB
+                logging.debug(
+                    f"System locale {system_locale.name()} is not English, defaulting to {default_layout}"
+                )
+                return default_layout
+        except Exception as e:
+            logging.warning(
+                f"Failed to auto-detect keyboard layout: {e}, defaulting to {default_layout}"
+            )
+            # Fallback: Scrape environment variables for locale information:
+            # Format is typically "en_US.UTF-8" or "en_GB"
+            # This isn't really needed with working QLocale option, so commented out.
+            # locale_env = os.environ.get("LANG") or os.environ.get("LC_ALL") or ""
+            # if locale_env:
+            #     # Extract the locale code (e.g., "en_US" from "en_US.UTF-8")
+            #     locale_code = locale_env.split(".")[0]
+            #     logging.debug(f"Detected locale from environment: {locale_code}")
+
+            #     if locale_code.startswith("en_US"):
+            #         return "en_US"
+            #     elif locale_code.startswith("en_"):
+            #         # en_GB, en_AU, en_CA, etc. all map to en_GB
+            #         return default_layout
+
+            return default_layout
 
     def _close_serial_port(self):
         """
@@ -1172,7 +1313,7 @@ class KVMQtGui(QMainWindow):
         version = self._get_version()
         QMessageBox.about(
             self,
-            "<h1>About Serial KVM</h1>",
+            "About Serial KVM",
             f"<p><b>Serial KVM</b><br/>Version {version}</p>\n"
             "<p>Keyboard/Mouse over Serial using CH9329.<p>\n"
             "<p>(c) 2024-2025 Samantha Finnigan <a href='https://github.com/sjmf'>@sjmf</a> and contributors.</p>"
@@ -1278,12 +1419,30 @@ class KVMQtGui(QMainWindow):
         self.close()
 
 
+def _resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller.
+
+    PyInstaller onefile builds extract bundled data files to a temporary
+    directory and expose its path via sys._MEIPASS. When running from source,
+    resolve relative to the project root instead.
+    """
+    if hasattr(sys, "_MEIPASS"):
+        return os.path.join(sys._MEIPASS, relative_path)
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", relative_path)
+
+
 def main():
     """
     Entry point for the application. Configures logging and shows the KVMQtGui main window.
     """
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     app = QApplication(sys.argv)
+
+    # Set application icon (used for title bar and taskbar)
+    icon_path = _resource_path(os.path.join("assets", "icon.png"))
+    if os.path.exists(icon_path):
+        app.setWindowIcon(QIcon(icon_path))
+
     window = KVMQtGui()
     window.show()
     sys.exit(app.exec_())
