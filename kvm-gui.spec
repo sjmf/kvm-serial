@@ -13,7 +13,12 @@ Platforms:
 """
 
 import sys
+import toml
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
+
+# Read version from pyproject.toml so it stays in sync
+with open('pyproject.toml', 'r') as f:
+    VERSION = toml.load(f)['project']['version']
 
 block_cipher = None
 
@@ -215,8 +220,8 @@ if sys.platform == 'darwin':
         info_plist={
             'CFBundleName': 'KVM Serial',
             'CFBundleDisplayName': 'KVM Serial',
-            'CFBundleShortVersionString': '1.5.1',
-            'CFBundleVersion': '1.5.1',
+            'CFBundleShortVersionString': VERSION,
+            'CFBundleVersion': VERSION,
             'NSHumanReadableCopyright': 'Copyright © 2023-2025 Samantha Finnigan',
             'NSHighResolutionCapable': 'True',
             # Camera and input monitoring permissions
