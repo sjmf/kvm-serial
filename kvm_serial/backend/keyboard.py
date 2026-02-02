@@ -62,19 +62,31 @@ class KeyboardListener(InputHandler):
         if self.mode is Mode.NONE:
             return  # noop
         elif self.mode is Mode.USB:
-            from backend.implementations.pyusbop import PyUSBOp
+            try:
+                from kvm_serial.backend.implementations.pyusbop import PyUSBOp
+            except ModuleNotFoundError:
+                from backend.implementations.pyusbop import PyUSBOp
 
             keyboard_handler = PyUSBOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.PYNPUT:
-            from backend.implementations.pynputop import PynputOp
+            try:
+                from kvm_serial.backend.implementations.pynputop import PynputOp
+            except ModuleNotFoundError:
+                from backend.implementations.pynputop import PynputOp
 
             keyboard_handler = PynputOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.TTY:
-            from backend.implementations.ttyop import TtyOp
+            try:
+                from kvm_serial.backend.implementations.ttyop import TtyOp
+            except ModuleNotFoundError:
+                from backend.implementations.ttyop import TtyOp
 
             keyboard_handler = TtyOp(self.serial_port, layout=self.layout)
         elif self.mode is Mode.CURSES:
-            from backend.implementations.cursesop import CursesOp
+            try:
+                from kvm_serial.backend.implementations.cursesop import CursesOp
+            except ModuleNotFoundError:
+                from backend.implementations.cursesop import CursesOp
 
             keyboard_handler = CursesOp(self.serial_port, layout=self.layout)
         else:

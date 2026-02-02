@@ -236,7 +236,7 @@ class TestKeyboard:
         mock_ttyop = MagicMock()
         mock_cursesop = MagicMock()
 
-        import_path = "backend.implementations"
+        import_path = "kvm_serial.backend.implementations"
         sys_modules_backup = dict()
         try:
             # Backup originals if present
