@@ -191,11 +191,12 @@ class TestMeasureFramerate:
     """Tests for _measure_framerate helper"""
 
     def test_measures_fps_from_frame_timing(self):
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import _measure_framerate
 
         mock_cam = MagicMock()
         # Simulate 5 frames in 0.5s = 10 FPS
-        with patch("kvm_serial.backend.video.time") as mock_time:
+        with patch.object(video_mod, "time") as mock_time:
             mock_time.perf_counter.side_effect = [0.0, 0.5]
             fps = _measure_framerate(mock_cam)
 
@@ -203,10 +204,11 @@ class TestMeasureFramerate:
         assert mock_cam.read.call_count == 5
 
     def test_returns_zero_on_instant_elapsed(self):
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import _measure_framerate
 
         mock_cam = MagicMock()
-        with patch("kvm_serial.backend.video.time") as mock_time:
+        with patch.object(video_mod, "time") as mock_time:
             mock_time.perf_counter.side_effect = [0.0, 0.0]
             fps = _measure_framerate(mock_cam)
 
@@ -216,211 +218,244 @@ class TestMeasureFramerate:
 class TestGetCamerasWindows:
     """Tests for getCameras() on Windows with DirectShow configuration"""
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video._configure_dshow_camera")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_calls_configure_dshow_on_windows(self, mock_cv2, mock_configure, mock_sys):
+    def test_calls_configure_dshow_on_windows(self):
         """DirectShow configuration should be called on Windows"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "win32"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1920, 1080)
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = 30
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "win32"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1920, 1080)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 30
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        mock_configure.assert_called()
-        assert len(cameras) > 0
-        assert cameras[0].width == 1920
-        assert cameras[0].height == 1080
+            mock_configure.assert_called()
+            assert len(cameras) > 0
+            assert cameras[0].width == 1920
+            assert cameras[0].height == 1080
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video._configure_dshow_camera")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_skips_configure_dshow_on_macos(self, mock_cv2, mock_configure, mock_sys):
+    def test_skips_configure_dshow_on_macos(self):
         """DirectShow configuration should NOT be called on macOS"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "darwin"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1280, 720)
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = 29
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "darwin"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 29
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        mock_configure.assert_not_called()
-        assert cameras[0].width == 1280
-        assert cameras[0].height == 720
+            mock_configure.assert_not_called()
+            assert cameras[0].width == 1280
+            assert cameras[0].height == 720
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video._configure_dshow_camera")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_skips_configure_dshow_on_linux(self, mock_cv2, mock_configure, mock_sys):
+    def test_skips_configure_dshow_on_linux(self):
         """DirectShow configuration should NOT be called on Linux"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1280, 720)
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = 30
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 30
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        mock_configure.assert_not_called()
+            mock_configure.assert_not_called()
 
-    @patch("kvm_serial.backend.video._measure_framerate", return_value=30)
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_measures_fps_when_reported_as_zero(self, mock_cv2, mock_sys, mock_measure):
+    def test_measures_fps_when_reported_as_zero(self):
         """When CAP_PROP_FPS returns 0, FPS should be measured from frame timing"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1280, 720)
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = 0  # FPS not reported
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+            patch.object(video_mod, "_measure_framerate", return_value=30) as mock_measure,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 0  # FPS not reported
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        mock_measure.assert_called()
-        assert cameras[0].fps == 30
+            mock_measure.assert_called()
+            assert cameras[0].fps == 30
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_derives_dimensions_from_frame_shape(self, mock_cv2, mock_sys):
+    def test_derives_dimensions_from_frame_shape(self):
         """Dimensions should come from frame.shape, not cam.get()"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        # cam.get() would return 640x480, but frame is 1920x1080
-        frame = _make_frame(1920, 1080)
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = 30
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            # cam.get() would return 640x480, but frame is 1920x1080
+            frame = _make_frame(1920, 1080)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 30
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        assert cameras[0].width == 1920
-        assert cameras[0].height == 1080
+            assert cameras[0].width == 1920
+            assert cameras[0].height == 1080
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_derives_format_from_frame_dtype(self, mock_cv2, mock_sys):
+    def test_derives_format_from_frame_dtype(self):
         """Format should be derived from frame dtype, not CAP_PROP_FORMAT"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1280, 720, channels=3, dtype="uint8")
-        mock_cam.read.return_value = (True, frame)
-        mock_cam.get.return_value = -1  # CAP_PROP_FORMAT returns -1 on DirectShow
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720, channels=3, dtype="uint8")
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = -1  # CAP_PROP_FORMAT returns -1 on DirectShow
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        cameras = CaptureDevice.getCameras()
+            cameras = CaptureDevice.getCameras()
 
-        # uint8 + 3ch = CV_8UC3 = 16, not -1
-        assert cameras[0].format == 16
+            # uint8 + 3ch = CV_8UC3 = 16, not -1
+            assert cameras[0].format == 16
 
 
 class TestSetCameraWindows:
     """Tests for setCamera() with DirectShow configuration"""
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video._configure_dshow_camera")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_calls_configure_dshow_on_windows(self, mock_cv2, mock_configure, mock_sys):
+    def test_calls_configure_dshow_on_windows(self):
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "win32"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1920, 1080)
-        mock_cam.read.return_value = (True, frame)
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "win32"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1920, 1080)
+            mock_cam.read.return_value = (True, frame)
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        device = CaptureDevice()
-        device.setCamera(0)
+            device = CaptureDevice()
+            device.setCamera(0)
 
-        mock_configure.assert_called_once_with(mock_cam)
+            mock_configure.assert_called_once_with(mock_cam)
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video._configure_dshow_camera")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_skips_configure_dshow_on_macos(self, mock_cv2, mock_configure, mock_sys):
+    def test_skips_configure_dshow_on_macos(self):
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "darwin"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1280, 720)
-        mock_cam.read.return_value = (True, frame)
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "darwin"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720)
+            mock_cam.read.return_value = (True, frame)
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        device = CaptureDevice()
-        device.setCamera(0)
+            device = CaptureDevice()
+            device.setCamera(0)
 
-        mock_configure.assert_not_called()
+            mock_configure.assert_not_called()
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_stores_actual_dimensions_from_frame(self, mock_cv2, mock_sys):
+    def test_stores_actual_dimensions_from_frame(self):
         """camera_width/camera_height should reflect actual frame, not cam.get()"""
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        frame = _make_frame(1920, 1080)
-        mock_cam.read.return_value = (True, frame)
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1920, 1080)
+            mock_cam.read.return_value = (True, frame)
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        device = CaptureDevice()
-        device.setCamera(0)
-
-        assert device.camera_width == 1920
-        assert device.camera_height == 1080
-
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_raises_on_failed_open(self, mock_cv2, mock_sys):
-        from kvm_serial.backend.video import CaptureDevice, CaptureDeviceException
-
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = False
-        mock_cv2.VideoCapture.return_value = mock_cam
-
-        device = CaptureDevice()
-        with pytest.raises(CaptureDeviceException):
+            device = CaptureDevice()
             device.setCamera(0)
 
-    @patch("kvm_serial.backend.video.sys")
-    @patch("kvm_serial.backend.video.cv2")
-    def test_raises_on_failed_frame_read(self, mock_cv2, mock_sys):
+            assert device.camera_width == 1920
+            assert device.camera_height == 1080
+
+    def test_raises_on_failed_open(self):
+        from kvm_serial.backend import video as video_mod
         from kvm_serial.backend.video import CaptureDevice, CaptureDeviceException
 
-        mock_sys.platform = "linux"
-        mock_cam = MagicMock()
-        mock_cam.isOpened.return_value = True
-        mock_cam.read.return_value = (False, None)
-        mock_cv2.VideoCapture.return_value = mock_cam
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = False
+            mock_cv2.VideoCapture.return_value = mock_cam
 
-        device = CaptureDevice()
-        with pytest.raises(CaptureDeviceException):
-            device.setCamera(0)
+            device = CaptureDevice()
+            with pytest.raises(CaptureDeviceException):
+                device.setCamera(0)
+
+    def test_raises_on_failed_frame_read(self):
+        from kvm_serial.backend import video as video_mod
+        from kvm_serial.backend.video import CaptureDevice, CaptureDeviceException
+
+        with (
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            mock_cam.read.return_value = (False, None)
+            mock_cv2.VideoCapture.return_value = mock_cam
+
+            device = CaptureDevice()
+            with pytest.raises(CaptureDeviceException):
+                device.setCamera(0)

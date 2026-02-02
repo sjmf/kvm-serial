@@ -30,14 +30,13 @@ class TestMouse:
     def test_mouse_listener(self, mock_serial, sys_modules_patch):
         """Test basic MouseListener initialization"""
 
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_datacomm,
-        ):
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            MouseListener(mock_serial)
-            mock_datacomm.assert_called_once_with(mock_serial)
+            with patch.object(baseop_mod, "DataComm") as mock_datacomm:
+                MouseListener(mock_serial)
+                mock_datacomm.assert_called_once_with(mock_serial)
 
     def test_thread_calls(self, mock_serial, sys_modules_patch):
         """
@@ -47,12 +46,11 @@ class TestMouse:
         Asserts:
             - thread.start(), thread.join(), and thread.stop() are called as expected
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.mouse.Listener") as mock_thread,
-        ):
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend import mouse as mouse_mod
             from kvm_serial.backend.mouse import MouseListener
 
+            mock_thread = MagicMock()
             listener = MouseListener(mock_serial)
             listener.thread = mock_thread
 
@@ -94,55 +92,54 @@ class TestMouse:
             expected_data += dy.to_bytes(2, "little")
             return expected_data[:7] if len(expected_data) > 7 else expected_data.ljust(7, b"\x00")
 
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
-        ):
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            # Set up a MouseListener with known screen size
-            listener = MouseListener(mock_serial)
-            listener.op.hid_serial_out = mock_comm
-            listener._width = 1920
-            listener._height = 1080
+            with patch.object(baseop_mod, "DataComm") as mock_comm:
+                # Set up a MouseListener with known screen size
+                listener = MouseListener(mock_serial)
+                listener.op.hid_serial_out = mock_comm
+                listener._width = 1920
+                listener._height = 1080
 
-            # Case 1: Center of the screen (positive dx/dy)
-            x, y = 960, 540
-            result = listener.on_move(x, y)
-            expected_data = calculate_expected_data(x, y, listener._width, listener._height)
-            mock_comm.send.assert_called_once_with(expected_data, cmd=b"\x04")
-            assert result is True
-            mock_comm.send.reset_mock()
+                # Case 1: Center of the screen (positive dx/dy)
+                x, y = 960, 540
+                result = listener.on_move(x, y)
+                expected_data = calculate_expected_data(x, y, listener._width, listener._height)
+                mock_comm.send.assert_called_once_with(expected_data, cmd=b"\x04")
+                assert result is True
+                mock_comm.send.reset_mock()
 
-            # Case 2: Negative dx (monitor to the left)
-            x_neg, y_neg = -100, 540
-            result_neg = listener.on_move(x_neg, y_neg)
-            expected_data_neg = calculate_expected_data(
-                x_neg, y_neg, listener._width, listener._height
-            )
-            mock_comm.send.assert_called_once_with(expected_data_neg, cmd=b"\x04")
-            assert result_neg is True
-            mock_comm.send.reset_mock()
+                # Case 2: Negative dx (monitor to the left)
+                x_neg, y_neg = -100, 540
+                result_neg = listener.on_move(x_neg, y_neg)
+                expected_data_neg = calculate_expected_data(
+                    x_neg, y_neg, listener._width, listener._height
+                )
+                mock_comm.send.assert_called_once_with(expected_data_neg, cmd=b"\x04")
+                assert result_neg is True
+                mock_comm.send.reset_mock()
 
-            # Case 3: Negative dy (monitor above)
-            x_neg2, y_neg2 = 960, -100
-            result_neg2 = listener.on_move(x_neg2, y_neg2)
-            expected_data_neg2 = calculate_expected_data(
-                x_neg2, y_neg2, listener._width, listener._height
-            )
-            mock_comm.send.assert_called_once_with(expected_data_neg2, cmd=b"\x04")
-            assert result_neg2 is True
-            mock_comm.send.reset_mock()
+                # Case 3: Negative dy (monitor above)
+                x_neg2, y_neg2 = 960, -100
+                result_neg2 = listener.on_move(x_neg2, y_neg2)
+                expected_data_neg2 = calculate_expected_data(
+                    x_neg2, y_neg2, listener._width, listener._height
+                )
+                mock_comm.send.assert_called_once_with(expected_data_neg2, cmd=b"\x04")
+                assert result_neg2 is True
+                mock_comm.send.reset_mock()
 
-            # Case 4: Both dx and dy negative (monitor above and left)
-            x_neg3, y_neg3 = -100, -100
-            result_neg3 = listener.on_move(x_neg3, y_neg3)
-            expected_data_neg3 = calculate_expected_data(
-                x_neg3, y_neg3, listener._width, listener._height
-            )
-            mock_comm.send.assert_called_once_with(expected_data_neg3, cmd=b"\x04")
-            assert result_neg3 is True
-            mock_comm.send.reset_mock()
+                # Case 4: Both dx and dy negative (monitor above and left)
+                x_neg3, y_neg3 = -100, -100
+                result_neg3 = listener.on_move(x_neg3, y_neg3)
+                expected_data_neg3 = calculate_expected_data(
+                    x_neg3, y_neg3, listener._width, listener._height
+                )
+                mock_comm.send.assert_called_once_with(expected_data_neg3, cmd=b"\x04")
+                assert result_neg3 is True
+                mock_comm.send.reset_mock()
 
     def test_on_click(self, mock_serial, sys_modules_patch):
         """
@@ -153,51 +150,50 @@ class TestMouse:
             - comm.send is called with expected data and cmd for press and release
             - on_click returns True
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
-        ):
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
             from kvm_serial.backend.implementations.mouseop import MouseButton
 
-            listener = MouseListener(mock_serial)
+            with patch.object(baseop_mod, "DataComm") as mock_comm:
+                listener = MouseListener(mock_serial)
 
-            listener.op.hid_serial_out = mock_comm
-            listener._width = 1920
-            listener._height = 1080
+                listener.op.hid_serial_out = mock_comm
+                listener._width = 1920
+                listener._height = 1080
 
-            # Mock button values
-            left_button = MagicMock()
-            right_button = MagicMock()
-            # Patch control_chars to accept our mock buttons
-            listener.pynput_button_mapping = {  # type: ignore
-                left_button: MouseButton.LEFT,
-                right_button: MouseButton.RIGHT,
-            }
-            # Test left button press
-            result_press = listener.on_click(100, 200, left_button, True)
-            expected_data_press = bytearray(b"\x01\x01\x00\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_press, cmd=b"\x05")
-            assert result_press is True
-            mock_comm.send.reset_mock()
-            # Test left button release
-            result_release = listener.on_click(100, 200, left_button, False)
-            expected_data_release = bytearray(b"\x01\x00\x00\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_release, cmd=b"\x05")
-            assert result_release is True
-            mock_comm.send.reset_mock()
-            # Test right button press
-            result_press_r = listener.on_click(100, 200, right_button, True)
-            expected_data_press_r = bytearray(b"\x01\x02\x00\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_press_r, cmd=b"\x05")
-            assert result_press_r is True
-            mock_comm.send.reset_mock()
-            # Test right button release
-            result_release_r = listener.on_click(100, 200, right_button, False)
-            expected_data_release_r = bytearray(b"\x01\x00\x00\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_release_r, cmd=b"\x05")
-            assert result_release_r is True
-            mock_comm.send.reset_mock()
+                # Mock button values
+                left_button = MagicMock()
+                right_button = MagicMock()
+                # Patch control_chars to accept our mock buttons
+                listener.pynput_button_mapping = {  # type: ignore
+                    left_button: MouseButton.LEFT,
+                    right_button: MouseButton.RIGHT,
+                }
+                # Test left button press
+                result_press = listener.on_click(100, 200, left_button, True)
+                expected_data_press = bytearray(b"\x01\x01\x00\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_press, cmd=b"\x05")
+                assert result_press is True
+                mock_comm.send.reset_mock()
+                # Test left button release
+                result_release = listener.on_click(100, 200, left_button, False)
+                expected_data_release = bytearray(b"\x01\x00\x00\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_release, cmd=b"\x05")
+                assert result_release is True
+                mock_comm.send.reset_mock()
+                # Test right button press
+                result_press_r = listener.on_click(100, 200, right_button, True)
+                expected_data_press_r = bytearray(b"\x01\x02\x00\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_press_r, cmd=b"\x05")
+                assert result_press_r is True
+                mock_comm.send.reset_mock()
+                # Test right button release
+                result_release_r = listener.on_click(100, 200, right_button, False)
+                expected_data_release_r = bytearray(b"\x01\x00\x00\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_release_r, cmd=b"\x05")
+                assert result_release_r is True
+                mock_comm.send.reset_mock()
 
     def test_on_scroll(self, mock_serial, sys_modules_patch):
         """
@@ -208,41 +204,40 @@ class TestMouse:
             - comm.send is called with expected data and cmd for scroll up/down/left/right
             - on_scroll returns True
         """
-        with (
-            patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.backend.implementations.baseop.DataComm") as mock_comm,
-        ):
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            listener = MouseListener(mock_serial)
-            listener.op.hid_serial_out = mock_comm
-            listener._width = 1920
-            listener._height = 1080
+            with patch.object(baseop_mod, "DataComm") as mock_comm:
+                listener = MouseListener(mock_serial)
+                listener.op.hid_serial_out = mock_comm
+                listener._width = 1920
+                listener._height = 1080
 
-            # Test scroll up
-            result_up = listener.on_scroll(100, 200, 0, 1)
-            expected_data_up = bytearray(b"\x01\x00\x00\x00\x01")
-            mock_comm.send.assert_called_once_with(expected_data_up, cmd=b"\x05")
-            assert result_up is True
-            mock_comm.send.reset_mock()
-            # Test scroll down
-            result_down = listener.on_scroll(100, 200, 0, -1)
-            expected_data_down = bytearray(b"\x01\x00\x00\xff\xff")
-            mock_comm.send.assert_called_once_with(expected_data_down, cmd=b"\x05")
-            assert result_down is True
-            mock_comm.send.reset_mock()
-            # Test scroll right
-            result_right = listener.on_scroll(100, 200, 1, 0)
-            expected_data_right = bytearray(b"\x01\x00\x01\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_right, cmd=b"\x05")
-            assert result_right is True
-            mock_comm.send.reset_mock()
-            # Test scroll left
-            result_left = listener.on_scroll(100, 200, -1, 0)
-            expected_data_left = bytearray(b"\x01\xff\xff\x00\x00")
-            mock_comm.send.assert_called_once_with(expected_data_left, cmd=b"\x05")
-            assert result_left is True
-            mock_comm.send.reset_mock()
+                # Test scroll up
+                result_up = listener.on_scroll(100, 200, 0, 1)
+                expected_data_up = bytearray(b"\x01\x00\x00\x00\x01")
+                mock_comm.send.assert_called_once_with(expected_data_up, cmd=b"\x05")
+                assert result_up is True
+                mock_comm.send.reset_mock()
+                # Test scroll down
+                result_down = listener.on_scroll(100, 200, 0, -1)
+                expected_data_down = bytearray(b"\x01\x00\x00\xff\xff")
+                mock_comm.send.assert_called_once_with(expected_data_down, cmd=b"\x05")
+                assert result_down is True
+                mock_comm.send.reset_mock()
+                # Test scroll right
+                result_right = listener.on_scroll(100, 200, 1, 0)
+                expected_data_right = bytearray(b"\x01\x00\x01\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_right, cmd=b"\x05")
+                assert result_right is True
+                mock_comm.send.reset_mock()
+                # Test scroll left
+                result_left = listener.on_scroll(100, 200, -1, 0)
+                expected_data_left = bytearray(b"\x01\xff\xff\x00\x00")
+                mock_comm.send.assert_called_once_with(expected_data_left, cmd=b"\x05")
+                assert result_left is True
+                mock_comm.send.reset_mock()
 
 
 # ---

@@ -141,6 +141,7 @@ class TestKeyboard:
             - self.serial_port is set correctly
             - self.mode is set correctly
         """
+        from kvm_serial.backend import keyboard as kb_mod
         from kvm_serial.backend.keyboard import KeyboardListener, Mode
 
         # serial_port as Serial, mode as str
@@ -150,7 +151,7 @@ class TestKeyboard:
 
         # serial_port as str, mode as str
         serial_constructor = MagicMock(return_value=mock_serial)
-        with patch("kvm_serial.backend.keyboard.Serial", serial_constructor):
+        with patch.object(kb_mod, "Serial", serial_constructor):
             listener2 = KeyboardListener("COM1", mode="tty")
             serial_constructor.assert_called_with("COM1", 9600)
             assert listener2.serial_port is mock_serial
@@ -163,7 +164,7 @@ class TestKeyboard:
 
         # serial_port as str, mode as Mode
         serial_constructor = MagicMock(return_value=mock_serial)
-        with patch("kvm_serial.backend.keyboard.Serial", serial_constructor):
+        with patch.object(kb_mod, "Serial", serial_constructor):
             listener4 = KeyboardListener("COM2", mode=Mode.CURSES)
             serial_constructor.assert_called_with("COM2", 9600)
             assert listener4.serial_port is mock_serial
