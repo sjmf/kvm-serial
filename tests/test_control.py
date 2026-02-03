@@ -3,7 +3,6 @@ from unittest.mock import patch, MagicMock
 import signal
 import sys
 
-
 # Some modules must be patched before importing, e.g.:
 #   Pynput, which DOES NOT WORK headless, i.e. in Github Actions runner;
 #   Numpy, which must not be re-imported
