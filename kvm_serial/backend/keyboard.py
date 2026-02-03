@@ -1,16 +1,26 @@
 import threading
+from importlib import import_module
 from serial import Serial
 from enum import Enum
 from .inputhandler import InputHandler
 
 try:
-    from kvm_serial.backend.implementations.baseop import BaseOp
+    import_module("kvm_serial.backend.implementations")
 except ModuleNotFoundError:
-    # Allow running as a script directly
+    # Allow running as a script directly: add parent to path so
+    # _load_implementation's fallback "backend.implementations.*" resolves
     import os, sys
 
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    from implementations.baseop import BaseOp
+
+
+def _load_implementation(module_name, class_name):
+    """Load a handler class, trying package import first then script-mode fallback."""
+    try:
+        mod = import_module(f"kvm_serial.backend.implementations.{module_name}")
+    except ModuleNotFoundError:
+        mod = import_module(f"backend.implementations.{module_name}")
+    return getattr(mod, class_name)
 
 
 class Mode(Enum):
@@ -19,6 +29,14 @@ class Mode(Enum):
     PYNPUT = 2
     TTY = 3
     CURSES = 4
+
+
+_MODE_IMPLEMENTATIONS = {
+    Mode.USB: ("pyusbop", "PyUSBOp"),
+    Mode.PYNPUT: ("pynputop", "PynputOp"),
+    Mode.TTY: ("ttyop", "TtyOp"),
+    Mode.CURSES: ("cursesop", "CursesOp"),
+}
 
 
 class KeyboardListener(InputHandler):
@@ -56,31 +74,14 @@ class KeyboardListener(InputHandler):
         self.thread.join()
 
     def run_keyboard(self):
-        # Select operation mode
-        keyboard_handler: BaseOp
-
         if self.mode is Mode.NONE:
             return  # noop
-        elif self.mode is Mode.USB:
-            from backend.implementations.pyusbop import PyUSBOp
-
-            keyboard_handler = PyUSBOp(self.serial_port, layout=self.layout)
-        elif self.mode is Mode.PYNPUT:
-            from backend.implementations.pynputop import PynputOp
-
-            keyboard_handler = PynputOp(self.serial_port, layout=self.layout)
-        elif self.mode is Mode.TTY:
-            from backend.implementations.ttyop import TtyOp
-
-            keyboard_handler = TtyOp(self.serial_port, layout=self.layout)
-        elif self.mode is Mode.CURSES:
-            from backend.implementations.cursesop import CursesOp
-
-            keyboard_handler = CursesOp(self.serial_port, layout=self.layout)
-        else:
+        if self.mode not in _MODE_IMPLEMENTATIONS:
             raise ValueError(f"Unknown keyboard mode: {self.mode!r}")
 
-        keyboard_handler.run()
+        module_name, class_name = _MODE_IMPLEMENTATIONS[self.mode]
+        Impl = _load_implementation(module_name, class_name)
+        Impl(self.serial_port, layout=self.layout).run()
 
 
 def keyboard_main():

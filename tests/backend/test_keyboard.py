@@ -66,68 +66,32 @@ class TestKeyboardMain:
 
     def test_keyboard_module_fallback_import(self, monkeypatch, sys_modules_patch):
         """
-        Test that keyboard.py falls back to importing implementations.baseop.BaseOp
-        if kvm_serial.backend.implementations.baseop import fails with ModuleNotFoundError.
-
-        This is a horrible test that by necessity has to mess around with both
-        __import__ and sys.modules. It makes an effort to restore these afterwards.
+        Test that _load_implementation falls back to backend.implementations.*
+        when kvm_serial.backend.implementations.* import fails.
 
         Mocks:
-            - builtins.__import__: Raises ModuleNotFoundError for kvm_serial.backend.implementations.baseop
-            - sys.modules: Injects a mock implementations.baseop.BaseOp
-            - KeyboardListener: Mocked to avoid running threads
-            - logging.basicConfig: Avoids side effects
+            - keyboard.import_module: Raises ModuleNotFoundError for kvm_serial.*,
+              returns a mock module for the backend.* fallback path
         Asserts:
-            - The fallback import path is used (implementations.baseop.BaseOp)
-            - KeyboardListener can still be constructed and used
+            - The fallback import path is used and returns the expected class
         """
-        import importlib
+        from importlib import import_module as real_import_module
+        from kvm_serial.backend import keyboard as kb_mod
 
-        # Save original sys.modules entries to restore after test
-        orig_kvm_serial = sys.modules.get("kvm_serial")
-        orig_baseop = sys.modules.get("kvm_serial.backend.implementations.baseop")
+        mock_module = MagicMock()
+        mock_handler = MagicMock()
+        mock_module.TestHandler = mock_handler
 
-        try:
-            # Remove relevant modules from sys.modules
-            sys.modules.pop("kvm_serial.backend.implementations.baseop", None)
-            sys.modules.pop("kvm_serial", None)
+        def import_side_effect(name, *args, **kwargs):
+            if name.startswith("kvm_serial.backend.implementations."):
+                raise ModuleNotFoundError(name)
+            if name == "backend.implementations.testmod":
+                return mock_module
+            return real_import_module(name, *args, **kwargs)
 
-            # Patch __import__ to raise ModuleNotFoundError for the primary import
-            orig_import = __import__
-
-            def import_side_effect(name, *args, **kwargs):
-                if name == "kvm_serial.backend.implementations.baseop":
-                    raise ModuleNotFoundError
-                return orig_import(name, *args, **kwargs)
-
-            monkeypatch.setattr("builtins.__import__", import_side_effect)
-
-            # Inject a mock implementations.baseop.BaseOp
-            mock_baseop = MagicMock()
-            sys.modules["implementations.baseop"] = MagicMock(BaseOp=mock_baseop)
-
-            # Patch KeyboardListener and logging.basicConfig
-            from kvm_serial.backend import keyboard as kb_mod
-
-            # Ensure module is in sys.modules before reload
-            sys.modules["kvm_serial.backend.keyboard"] = kb_mod
-
-            with (
-                patch.object(kb_mod, "KeyboardListener", MagicMock()),
-                patch("logging.basicConfig", lambda *a, **k: None),
-            ):
-                # Reload the module to trigger the import logic
-                importlib.reload(kb_mod)
-                # Now, BaseOp should be the mock from implementations.baseop
-                assert hasattr(kb_mod, "BaseOp")
-                assert kb_mod.BaseOp is mock_baseop
-        finally:
-            # Restore sys.modules to its original state
-            sys.modules.pop("implementations.baseop", None)
-            if orig_kvm_serial is not None:
-                sys.modules["kvm_serial"] = orig_kvm_serial
-            if orig_baseop is not None:
-                sys.modules["kvm_serial.backend.implementations.baseop"] = orig_baseop
+        with patch.object(kb_mod, "import_module", side_effect=import_side_effect):
+            result = kb_mod._load_implementation("testmod", "TestHandler")
+            assert result is mock_handler
 
 
 # Mock Serial
@@ -236,7 +200,7 @@ class TestKeyboard:
         mock_ttyop = MagicMock()
         mock_cursesop = MagicMock()
 
-        import_path = "backend.implementations"
+        import_path = "kvm_serial.backend.implementations"
         sys_modules_backup = dict()
         try:
             # Backup originals if present
