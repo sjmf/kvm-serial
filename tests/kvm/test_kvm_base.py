@@ -138,11 +138,16 @@ class KVMTestBase(unittest.TestCase):
 
     def _setup_hardware_mocks(self):
         """Set up hardware-related mocking to prevent device access."""
+        # Import video module explicitly to avoid string-based patch resolution
+        # failures when kvm_serial.backend is pre-loaded in sys.modules without
+        # the video submodule attribute (cross-group test pollution).
+        from kvm_serial.backend import video as video_mod
+
         # Create individual patches for hardware components
         hardware_patches = [
             # Video capture mocking
-            patch("kvm_serial.backend.video.CaptureDevice"),
-            patch("kvm_serial.backend.video.CameraProperties"),
+            patch.object(video_mod, "CaptureDevice"),
+            patch.object(video_mod, "CameraProperties"),
             patch("kvm_serial.kvm.CaptureDevice"),
             patch("kvm_serial.kvm.VideoCaptureWorker"),
             # Serial communication mocking
