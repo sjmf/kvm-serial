@@ -18,6 +18,9 @@ kvm.dist
 uv.lock
 .venv/
 
+# MkDocs build output
+site/
+
 # Icon generation intermediate files
 assets/icon.iconset/
 assets/icon_*.png

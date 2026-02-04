@@ -1,0 +1,38 @@
+site_name: KVM Serial
+site_description: A Software KVM using the CH9329 UART Serial to USB HID controller
+site_url: https://sjmf.github.io/kvm-serial/
+repo_url: https://github.com/sjmf/kvm-serial
+repo_name: sjmf/kvm-serial
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+  features:
+    - navigation.sections
+    - content.code.copy
+
+nav:
+  - Home: index.md
+  - Installation: INSTALLATION.md
+  - Keyboard Modes: MODES.md
+  - Building: BUILD.md
+  - Testing: TESTING.md
+  - CI/CD Workflows: workflows.md
+  - Contributing: CONTRIBUTING.md
+
+markdown_extensions:
+  - tables
+  - admonition
+  - pymdownx.highlight:
+      anchor_linenums: true
+  - pymdownx.superfences
