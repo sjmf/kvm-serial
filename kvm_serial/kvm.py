@@ -25,6 +25,7 @@ from PyQt5.QtWidgets import (
     QMenu,
     QStatusBar,
     QMessageBox,
+    QFileDialog,
     QGraphicsView,
     QGraphicsScene,
     QGraphicsPixmapItem,
@@ -375,6 +376,11 @@ class KVMQtGui(QMainWindow):
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
+        # Screenshot
+        screenshot_action = QAction("Take Screenshot", self)
+        screenshot_action.triggered.connect(self._take_screenshot)
+        file_menu.addAction(screenshot_action)
+
         # Quit
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._on_quit)
@@ -697,6 +703,59 @@ class KVMQtGui(QMainWindow):
         self.__init_serial()
 
         logging.info("Settings loaded from configuration file.")
+
+    def _take_screenshot(self):
+        """
+        Capture the current video frame and save to clipboard/file.
+
+        Copies the frame to the clipboard, then opens a file dialog for
+        saving to disk. If the user cancels the dialog, the frame is
+        still available on the clipboard.
+        """
+        pixmap = self.video_pixmap_item.pixmap()
+        if pixmap is None or pixmap.isNull():
+            QMessageBox.warning(self, "Screenshot", "No video frame available to capture.")
+            return
+
+        # Copy to clipboard
+        clipboard = QApplication.clipboard()
+        if clipboard is not None:
+            clipboard.setPixmap(pixmap)
+
+        # Offer file save dialog
+        default_name = time.strftime("kvm_screenshot_%Y%m%d_%H%M%S.png")
+        default_dir = os.path.expanduser("~")
+        default_path = os.path.join(default_dir, default_name)
+
+        filepath, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Screenshot",
+            default_path,
+            "PNG Image (*.png)",
+        )
+
+        if filepath:
+            if pixmap.save(filepath, "PNG"):
+                QMessageBox.information(
+                    self,
+                    "Screenshot",
+                    f"Screenshot saved to:\n{filepath}\n\n"
+                    "The image has also been copied to the clipboard.",
+                )
+            else:
+                logging.error(f"Failed to save screenshot to {filepath}")
+                QMessageBox.warning(
+                    self,
+                    "Screenshot",
+                    f"Failed to save screenshot to:\n{filepath}\n\n"
+                    "The image has been copied to the clipboard.",
+                )
+        else:
+            QMessageBox.information(
+                self,
+                "Screenshot",
+                "Screenshot copied to clipboard.",
+            )
 
     def _save_settings(self):
         """

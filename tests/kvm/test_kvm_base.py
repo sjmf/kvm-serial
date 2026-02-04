@@ -98,6 +98,7 @@ class KVMTestBase(unittest.TestCase):
             "QMenu",
             "QStatusBar",
             "QMessageBox",
+            "QFileDialog",
             "QGraphicsView",
             "QGraphicsScene",
             "QGraphicsPixmapItem",
