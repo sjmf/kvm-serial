@@ -1,0 +1,1992 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Software KVM using the CH9329 UART Serial to USB HID controller">
+      
+      
+      
+        <link rel="canonical" href="https://sjmf.github.io/kvm-serial/TESTING/">
+      
+      
+        <link rel="prev" href="../BUILD/">
+      
+      
+        <link rel="next" href="../workflows/">
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.1">
+    
+    
+      
+        <title>Testing - KVM Serial</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#testing-guide-for-kvm-serial" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="KVM Serial" class="md-header__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            KVM Serial
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              Testing
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="KVM Serial" class="md-nav__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    KVM Serial
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Keyboard Modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+    
+  
+  
+  
+    <li class="md-nav__item md-nav__item--active">
+      
+      <input class="md-nav__toggle md-toggle" type="checkbox" id="__toc">
+      
+      
+        
+      
+      
+        <label class="md-nav__link md-nav__link--active" for="__toc">
+          
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+          <span class="md-nav__icon md-icon"></span>
+        </label>
+      
+      <a href="./" class="md-nav__link md-nav__link--active">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+      
+        
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-testing-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Testing Challenge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Testing Challenge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-makes-this-hard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Makes This Hard?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-core-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Core Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-test-class-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base Test Class Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mocking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mocking Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mocking Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-pyqt5-gui-component-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. PyQt5 GUI Component Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-hardware-abstraction-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Hardware Abstraction Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-module-level-import-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Module-Level Import Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-context-manager-pattern-for-targeted-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Context Manager Pattern for Targeted Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-test-mixins-for-domain-specific-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Test Mixins for Domain-Specific Utilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-mock-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Mock Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-invalid-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Invalid Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-mock-at-boundaries-not-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Mock at Boundaries, Not Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-verify-behaviour-not-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Verify Behaviour, Not Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-type-appropriate-assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use Type-Appropriate Assertions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-test-initialisation-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Test Initialisation State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-module-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Module Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-early-module-mocking-with-pytest_configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Early Module Mocking with pytest_configure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-organisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Organisation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Organisation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Naming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#directory-structure-and-test-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Structure and Test Isolation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Directory Structure and Test Isolation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-separate-pytest-invocations-matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Separate pytest Invocations Matter
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Execution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues and Solutions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#issue-tests-fail-with-display-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Tests Fail with Display Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-import-errors-in-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Import Errors in Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-tests-pass-individually-but-fail-in-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Tests Pass Individually but Fail in Suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-attributeerror-mock-object-has-no-attribute-x" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: "AttributeError: Mock object has no attribute X"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-serial-exception-not-caught" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Serial Exception Not Caught
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous Integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+      
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#the-testing-challenge" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Testing Challenge
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="The Testing Challenge">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-makes-this-hard" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What Makes This Hard?
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#the-core-strategy" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        The Core Strategy
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#architecture" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Architecture
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Architecture">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#base-test-class-pattern" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Base Test Class Pattern
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mock-lifecycle" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mock Lifecycle
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#mocking-strategies" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mocking Strategies
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mocking Strategies">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-pyqt5-gui-component-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. PyQt5 GUI Component Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-hardware-abstraction-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Hardware Abstraction Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-module-level-import-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Module-Level Import Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-context-manager-pattern-for-targeted-mocking" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Context Manager Pattern for Targeted Mocking
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-test-mixins-for-domain-specific-utilities" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Test Mixins for Domain-Specific Utilities
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-patterns" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Patterns
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Patterns">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#creating-mock-devices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Creating Mock Devices
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#error-handling-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Error Handling Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#testing-invalid-input" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Testing Invalid Input
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#best-practices" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Best Practices
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Best Practices">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#1-mock-at-boundaries-not-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        1. Mock at Boundaries, Not Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#2-verify-behaviour-not-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        2. Verify Behaviour, Not Implementation
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#3-use-type-appropriate-assertions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        3. Use Type-Appropriate Assertions
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#4-test-initialisation-state" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        4. Test Initialisation State
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#5-module-cleanup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        5. Module Cleanup
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#6-early-module-mocking-with-pytest_configure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        6. Early Module Mocking with pytest_configure
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#test-organisation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Test Organisation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Test Organisation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#categories" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Categories
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#file-naming" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        File Naming
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#directory-structure-and-test-isolation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Directory Structure and Test Isolation
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Directory Structure and Test Isolation">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#why-separate-pytest-invocations-matter" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Why Separate pytest Invocations Matter
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#running-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Running Tests
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Running Tests">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#basic-execution" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Basic Execution
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#configuration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Configuration
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#common-issues-and-solutions" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Common Issues and Solutions
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Common Issues and Solutions">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#issue-tests-fail-with-display-errors" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Tests Fail with Display Errors
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-import-errors-in-tests" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Import Errors in Tests
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-tests-pass-individually-but-fail-in-suite" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Tests Pass Individually but Fail in Suite
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-attributeerror-mock-object-has-no-attribute-x" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: "AttributeError: Mock object has no attribute X"
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#issue-serial-exception-not-caught" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Issue: Serial Exception Not Caught
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#continuous-integration" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Continuous Integration
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#future-enhancements" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Future Enhancements
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#summary" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Summary
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="testing-guide-for-kvm-serial">Testing Guide for kvm-serial</h1>
+<h2 id="overview">Overview</h2>
+<p>This guide explains how <code>kvm-serial</code> achieves reliable automated testing for a PyQt5 GUI application that controls physical hardware. The challenge: how do you test an application that creates windows and talks to serial devices when you're running in a headless CI environment with no hardware attached?</p>
+<p>The answer involves extensive mocking: done carefully to avoid turning tests into meaningless stub checks. This document explains the testing approach and why these patterns matter for maintaining a robust test suite.</p>
+<h2 id="the-testing-challenge">The Testing Challenge</h2>
+<h3 id="what-makes-this-hard">What Makes This Hard?</h3>
+<p>Testing kvm-serial isn't like testing a typical Python library. Several unique constraints exist:</p>
+<p><strong>GUI Framework Limitations</strong>: PyQt5 expects a graphical environment. When you import the main application module, Qt immediately tries to initialise windows, menus, and event loops. In a headless CI environment (like GitHub Actions), this fails with errors about missing display servers. While a virtual X server could be installed to work around this, mocking the GUI framework is cleaner and faster.</p>
+<p><strong>Hardware Dependencies</strong>: The application's core purpose is controlling serial devices and capturing video from cameras. Real hardware isn't available during testing, and even if it were, tests shouldn't depend on specific physical devices being connected.</p>
+<p><strong>Import-Time Side Effects</strong>: Python executes code during module import. If an application creates a <code>QApplication</code> instance at the module level, it spawns a GUI before any test mocking can intercept it.</p>
+<p><strong>State Management</strong>: Qt applications maintain global state. Without careful cleanup between tests, one test's mocks can pollute another test's environment, causing mysterious failures that only appear when running the full suite.</p>
+<h3 id="the-core-strategy">The Core Strategy</h3>
+<p>The solution: <strong>Mock everything external before it can be imported, test the logic without side effects, then aggressively clean up.</strong></p>
+<p>This means mocking the Qt framework itself, mocking hardware APIs, and carefully controlling when and how modules get loaded into Python's import system. The result is tests that verify logic (event handling, state management, error recovery) without ever touching a GUI or serial port.</p>
+<h2 id="architecture">Architecture</h2>
+<h3 id="base-test-class-pattern">Base Test Class Pattern</h3>
+<p><code>KVMTestBase</code> provides centralised mocking infrastructure that all test classes inherit:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestMyFeature</span><span class="p">(</span><span class="n">KVMTestBase</span><span class="p">):</span>
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_something</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>        <span class="n">app</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_kvm_app</span><span class="p">()</span>  <span class="c1"># Already mocked</span>
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>        <span class="c1"># Test logic here</span>
+</code></pre></div>
+<p>This inheritance pattern centralises all the mocking complexity in one place. Instead of every test file duplicating the same Qt mocking setup, they inherit from <code>KVMTestBase</code> and get it automatically. The base class handles starting patches before tests run and stopping them afterwards, preventing mock leakage between tests. It also provides utility methods for common operations like creating mock cameras or serial ports, making tests more readable and maintainable.</p>
+<h3 id="mock-lifecycle">Mock Lifecycle</h3>
+<ol>
+<li><strong>setUp()</strong> - Create and start all patches before module import</li>
+<li><strong>Test execution</strong> - Use mocked components</li>
+<li><strong>tearDown()</strong> - Stop patches and clear modules from <code>sys.modules</code></li>
+</ol>
+<p><strong>Critical:</strong> Module cleanup prevents test cross-contamination by forcing fresh imports.</p>
+<h2 id="mocking-strategies">Mocking Strategies</h2>
+<h3 id="1-pyqt5-gui-component-mocking">1. PyQt5 GUI Component Mocking</h3>
+<p><strong>Why:</strong> Prevent actual window creation and Qt application startup.</p>
+<p><strong>Approach:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">_setup_qt_mocks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>    <span class="n">patches</span> <span class="o">=</span> <span class="p">[]</span>
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a>    <span class="c1"># Mock QApplication to prevent GUI startup</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>    <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;PyQt5.QtWidgets.QApplication&quot;</span><span class="p">))</span>
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a>    <span class="c1"># Mock QMainWindow.__init__ to skip window creation</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">mock_qmainwindow_init</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a>        <span class="k">pass</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>    <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;PyQt5.QtWidgets.QMainWindow.__init__&quot;</span><span class="p">,</span> 
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>                        <span class="n">mock_qmainwindow_init</span><span class="p">))</span>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>    <span class="c1"># Mock all widget classes</span>
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>    <span class="k">for</span> <span class="n">widget</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;QLabel&quot;</span><span class="p">,</span> <span class="s2">&quot;QMenu&quot;</span><span class="p">,</span> <span class="s2">&quot;QMessageBox&quot;</span><span class="p">,</span> <span class="o">...</span><span class="p">]:</span>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a>        <span class="n">patches</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">patch</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;PyQt5.QtWidgets.</span><span class="si">{</span><span class="n">widget</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">))</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>
+<a id="__codelineno-1-17" name="__codelineno-1-17" href="#__codelineno-1-17"></a>    <span class="k">return</span> <span class="n">patches</span>
+</code></pre></div>
+<p><strong>Key insight:</strong> Mock both classes and methods. Class mocks prevent instantiation issues; method mocks handle calls on instances.</p>
+<h3 id="2-hardware-abstraction-mocking">2. Hardware Abstraction Mocking</h3>
+<p><strong>Why:</strong> Tests shouldn't require physical devices.</p>
+<p><strong>Approach:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">_setup_hardware_mocks</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>    <span class="k">return</span> <span class="p">[</span>
+<a id="__codelineno-2-3" name="__codelineno-2-3" href="#__codelineno-2-3"></a>        <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;kvm_serial.backend.video.CaptureDevice&quot;</span><span class="p">),</span>
+<a id="__codelineno-2-4" name="__codelineno-2-4" href="#__codelineno-2-4"></a>        <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;kvm_serial.utils.communication.list_serial_ports&quot;</span><span class="p">),</span>
+<a id="__codelineno-2-5" name="__codelineno-2-5" href="#__codelineno-2-5"></a>        <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;kvm_serial.kvm.Serial&quot;</span><span class="p">),</span>
+<a id="__codelineno-2-6" name="__codelineno-2-6" href="#__codelineno-2-6"></a>    <span class="p">]</span>
+</code></pre></div></p>
+<p><strong>Pattern:</strong> Mock at the interface boundary where the application interacts with hardware libraries.</p>
+<h3 id="3-module-level-import-mocking">3. Module-Level Import Mocking</h3>
+<p><strong>Critical timing issue:</strong> Mocks must exist before importing the tested module.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">setUp</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-3-2" name="__codelineno-3-2" href="#__codelineno-3-2"></a>    <span class="c1"># Start patches FIRST</span>
+<a id="__codelineno-3-3" name="__codelineno-3-3" href="#__codelineno-3-3"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">qt_patches</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_setup_qt_mocks</span><span class="p">()</span>
+<a id="__codelineno-3-4" name="__codelineno-3-4" href="#__codelineno-3-4"></a>    <span class="k">for</span> <span class="n">patcher</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">qt_patches</span><span class="p">:</span>
+<a id="__codelineno-3-5" name="__codelineno-3-5" href="#__codelineno-3-5"></a>        <span class="n">patcher</span><span class="o">.</span><span class="n">start</span><span class="p">()</span>
+<a id="__codelineno-3-6" name="__codelineno-3-6" href="#__codelineno-3-6"></a>
+<a id="__codelineno-3-7" name="__codelineno-3-7" href="#__codelineno-3-7"></a>    <span class="c1"># Import AFTER mocking</span>
+<a id="__codelineno-3-8" name="__codelineno-3-8" href="#__codelineno-3-8"></a>    <span class="kn">from</span><span class="w"> </span><span class="nn">kvm_serial</span><span class="w"> </span><span class="kn">import</span> <span class="n">kvm</span>
+<a id="__codelineno-3-9" name="__codelineno-3-9" href="#__codelineno-3-9"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">kvm_module</span> <span class="o">=</span> <span class="n">kvm</span>
+</code></pre></div>
+<p><strong>Why this matters:</strong> Python imports execute module code. If GUI initialisation happens during import, you've already created windows before mocking can prevent it.</p>
+<h3 id="4-context-manager-pattern-for-targeted-mocking">4. Context Manager Pattern for Targeted Mocking</h3>
+<p>For test-specific mocking beyond the base infrastructure:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_serial_port_selection</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-4-2" name="__codelineno-4-2" href="#__codelineno-4-2"></a>    <span class="n">app</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_kvm_app</span><span class="p">()</span>
+<a id="__codelineno-4-3" name="__codelineno-4-3" href="#__codelineno-4-3"></a>
+<a id="__codelineno-4-4" name="__codelineno-4-4" href="#__codelineno-4-4"></a>    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">patch_kvm_method</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="s2">&quot;_KVMQtGui__init_serial&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">mock</span><span class="p">:</span>
+<a id="__codelineno-4-5" name="__codelineno-4-5" href="#__codelineno-4-5"></a>        <span class="n">app</span><span class="o">.</span><span class="n">_on_serial_port_selected</span><span class="p">(</span><span class="s2">&quot;/dev/ttyUSB0&quot;</span><span class="p">)</span>
+<a id="__codelineno-4-6" name="__codelineno-4-6" href="#__codelineno-4-6"></a>        <span class="n">mock</span><span class="o">.</span><span class="n">assert_called_once</span><span class="p">()</span>
+</code></pre></div>
+<p>Python's context managers (<code>with</code> statements) provide automatic cleanup: when the block exits, the patch is automatically removed, even if an exception occurs. This makes it immediately clear which parts of the test are using mocked behaviour and which aren't, improving test readability.</p>
+<h3 id="5-test-mixins-for-domain-specific-utilities">5. Test Mixins for Domain-Specific Utilities</h3>
+<p>Mixins provide specialised testing utilities without cluttering the base class:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a><span class="k">class</span><span class="w"> </span><span class="nc">TestKVMDeviceManagement</span><span class="p">(</span>
+<a id="__codelineno-5-2" name="__codelineno-5-2" href="#__codelineno-5-2"></a>    <span class="n">KVMTestBase</span><span class="p">,</span>
+<a id="__codelineno-5-3" name="__codelineno-5-3" href="#__codelineno-5-3"></a>    <span class="n">KVMTestMixins</span><span class="o">.</span><span class="n">SerialTestMixin</span><span class="p">,</span>
+<a id="__codelineno-5-4" name="__codelineno-5-4" href="#__codelineno-5-4"></a>    <span class="n">KVMTestMixins</span><span class="o">.</span><span class="n">VideoTestMixin</span>
+<a id="__codelineno-5-5" name="__codelineno-5-5" href="#__codelineno-5-5"></a><span class="p">):</span>
+<a id="__codelineno-5-6" name="__codelineno-5-6" href="#__codelineno-5-6"></a>    <span class="k">def</span><span class="w"> </span><span class="nf">test_populate_serial_ports</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-5-7" name="__codelineno-5-7" href="#__codelineno-5-7"></a>        <span class="n">test_ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_mock_serial_ports</span><span class="p">()</span>  <span class="c1"># From mixin</span>
+<a id="__codelineno-5-8" name="__codelineno-5-8" href="#__codelineno-5-8"></a>        <span class="c1"># Test logic</span>
+</code></pre></div>
+<p>Each mixin adds domain-specific helper methods without forcing every test to inherit functionality it doesn't need. <code>SerialTestMixin</code> provides methods for creating mock serial ports, <code>VideoTestMixin</code> handles mock cameras, and <code>SettingsTestMixin</code> helps with configuration file testing. Tests can mix and match these based on what they're testing.</p>
+<h2 id="common-patterns">Common Patterns</h2>
+<h3 id="creating-mock-devices">Creating Mock Devices</h3>
+<p><strong>Serial ports:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a><span class="n">test_ports</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_mock_serial_ports</span><span class="p">()</span>
+<a id="__codelineno-6-2" name="__codelineno-6-2" href="#__codelineno-6-2"></a><span class="c1"># Returns: [&quot;/dev/ttyUSB0&quot;, &quot;/dev/ttyUSB1&quot;, &quot;/dev/ttyACM0&quot;]</span>
+</code></pre></div>
+<p><strong>Cameras:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a><span class="n">cameras</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_mock_cameras</span><span class="p">(</span><span class="n">count</span><span class="o">=</span><span class="mi">2</span><span class="p">)</span>
+<a id="__codelineno-7-2" name="__codelineno-7-2" href="#__codelineno-7-2"></a><span class="c1"># Each has: .index, .width, .height, __str__()</span>
+</code></pre></div>
+<h3 id="error-handling-tests">Error Handling Tests</h3>
+<p><strong>Pattern for exception testing:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a><span class="k">with</span> <span class="p">(</span>
+<a id="__codelineno-8-2" name="__codelineno-8-2" href="#__codelineno-8-2"></a>    <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;module.function&quot;</span><span class="p">,</span> <span class="n">side_effect</span><span class="o">=</span><span class="ne">Exception</span><span class="p">(</span><span class="s2">&quot;Failed&quot;</span><span class="p">)),</span>
+<a id="__codelineno-8-3" name="__codelineno-8-3" href="#__codelineno-8-3"></a>    <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;PyQt5.QtWidgets.QMessageBox.critical&quot;</span><span class="p">)</span> <span class="k">as</span> <span class="n">mock_msg</span>
+<a id="__codelineno-8-4" name="__codelineno-8-4" href="#__codelineno-8-4"></a><span class="p">):</span>
+<a id="__codelineno-8-5" name="__codelineno-8-5" href="#__codelineno-8-5"></a>    <span class="n">app</span><span class="o">.</span><span class="n">method_under_test</span><span class="p">()</span>
+<a id="__codelineno-8-6" name="__codelineno-8-6" href="#__codelineno-8-6"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">assert_error_handling</span><span class="p">(</span><span class="n">mock_msg</span><span class="p">)</span>
+</code></pre></div>
+<p>This pattern ensures robust error handling: the test verifies that exceptions don't crash the application <em>and</em> that users receive appropriate error messages. Many tests only check one or the other, missing subtle bugs where errors are caught but users aren't informed.</p>
+<h3 id="testing-invalid-input">Testing Invalid Input</h3>
+<p>Use <code>subTest</code> for multiple invalid cases:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a><span class="n">invalid_ports</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;None found&quot;</span><span class="p">,</span> <span class="s2">&quot;Error&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;&quot;</span><span class="p">]</span>
+<a id="__codelineno-9-2" name="__codelineno-9-2" href="#__codelineno-9-2"></a><span class="k">for</span> <span class="n">invalid_port</span> <span class="ow">in</span> <span class="n">invalid_ports</span><span class="p">:</span>
+<a id="__codelineno-9-3" name="__codelineno-9-3" href="#__codelineno-9-3"></a>    <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">subTest</span><span class="p">(</span><span class="n">port</span><span class="o">=</span><span class="n">invalid_port</span><span class="p">):</span>
+<a id="__codelineno-9-4" name="__codelineno-9-4" href="#__codelineno-9-4"></a>        <span class="n">app</span><span class="o">.</span><span class="n">serial_port_var</span> <span class="o">=</span> <span class="n">invalid_port</span>
+<a id="__codelineno-9-5" name="__codelineno-9-5" href="#__codelineno-9-5"></a>        <span class="n">app</span><span class="o">.</span><span class="n">_KVMQtGui__init_serial</span><span class="p">()</span>
+<a id="__codelineno-9-6" name="__codelineno-9-6" href="#__codelineno-9-6"></a>        <span class="bp">self</span><span class="o">.</span><span class="n">assertIsNone</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">serial_port</span><span class="p">)</span>
+</code></pre></div>
+<p>Without <code>subTest</code>, the first failure would stop the test, leaving other cases untested. Using <code>subTest</code> means all invalid inputs get tested even if some fail, and test output clearly identifies which specific input caused problems, making debugging much faster.</p>
+<h2 id="best-practices">Best Practices</h2>
+<h3 id="1-mock-at-boundaries-not-implementation">1. Mock at Boundaries, Not Implementation</h3>
+<p>❌ <strong>Don't mock:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;kvm_serial.kvm.KVMQtGui._internal_helper&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>✅ <strong>Do mock:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;serial.Serial&quot;</span><span class="p">)</span>
+<a id="__codelineno-11-2" name="__codelineno-11-2" href="#__codelineno-11-2"></a><span class="n">patch</span><span class="p">(</span><span class="s2">&quot;cv2.VideoCapture&quot;</span><span class="p">)</span>
+</code></pre></div>
+<p>Mock external dependencies, not internal code (except when deliberately isolating units).</p>
+<h3 id="2-verify-behaviour-not-implementation">2. Verify Behaviour, Not Implementation</h3>
+<p>❌ <strong>Don't test:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a><span class="n">mock_method</span><span class="o">.</span><span class="n">assert_called</span><span class="p">()</span>
+</code></pre></div>
+<p>✅ <strong>Do test:</strong></p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">serial_port_var</span><span class="p">,</span> <span class="n">expected_port</span><span class="p">)</span>
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">keyboard_op</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">)</span>
+</code></pre></div>
+<p>Focus on observable outcomes rather than internal method calls.</p>
+<h3 id="3-use-type-appropriate-assertions">3. Use Type-Appropriate Assertions</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a><span class="c1"># For lists</span>
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="nb">len</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">baud_rates</span><span class="p">),</span> <span class="mi">8</span><span class="p">)</span>
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertIn</span><span class="p">(</span><span class="mi">9600</span><span class="p">,</span> <span class="n">app</span><span class="o">.</span><span class="n">baud_rates</span><span class="p">)</span>
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a><span class="c1"># For booleans</span>
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertFalse</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">keyboard_var</span><span class="p">)</span>
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertTrue</span><span class="p">(</span><span class="nb">hasattr</span><span class="p">(</span><span class="n">app</span><span class="p">,</span> <span class="s2">&quot;video_worker&quot;</span><span class="p">))</span>
+<a id="__codelineno-14-8" name="__codelineno-14-8" href="#__codelineno-14-8"></a>
+<a id="__codelineno-14-9" name="__codelineno-14-9" href="#__codelineno-14-9"></a><span class="c1"># For None</span>
+<a id="__codelineno-14-10" name="__codelineno-14-10" href="#__codelineno-14-10"></a><span class="bp">self</span><span class="o">.</span><span class="n">assertIsNone</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">serial_port</span><span class="p">)</span>
+</code></pre></div>
+<h3 id="4-test-initialisation-state">4. Test Initialisation State</h3>
+<p>After creating the app, verify default values:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">test_default_values</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>    <span class="n">app</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">create_kvm_app</span><span class="p">()</span>
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">target_fps</span><span class="p">,</span> <span class="mi">30</span><span class="p">)</span>
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">assertFalse</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">keyboard_var</span><span class="p">)</span>
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    <span class="bp">self</span><span class="o">.</span><span class="n">assertEqual</span><span class="p">(</span><span class="n">app</span><span class="o">.</span><span class="n">video_var</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+</code></pre></div>
+<p>Catches regression in default configuration.</p>
+<h3 id="5-module-cleanup">5. Module Cleanup</h3>
+<p><strong>Always</strong> remove tested modules in tearDown:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-16-1" name="__codelineno-16-1" href="#__codelineno-16-1"></a><span class="k">def</span><span class="w"> </span><span class="nf">tearDown</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
+<a id="__codelineno-16-2" name="__codelineno-16-2" href="#__codelineno-16-2"></a>    <span class="n">patch</span><span class="o">.</span><span class="n">stopall</span><span class="p">()</span>
+<a id="__codelineno-16-3" name="__codelineno-16-3" href="#__codelineno-16-3"></a>
+<a id="__codelineno-16-4" name="__codelineno-16-4" href="#__codelineno-16-4"></a>    <span class="k">for</span> <span class="n">module</span> <span class="ow">in</span> <span class="p">[</span><span class="s2">&quot;kvm_serial.kvm&quot;</span><span class="p">,</span> <span class="s2">&quot;kvm_serial.backend.video&quot;</span><span class="p">]:</span>
+<a id="__codelineno-16-5" name="__codelineno-16-5" href="#__codelineno-16-5"></a>        <span class="k">if</span> <span class="n">module</span> <span class="ow">in</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">:</span>
+<a id="__codelineno-16-6" name="__codelineno-16-6" href="#__codelineno-16-6"></a>            <span class="k">del</span> <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="n">module</span><span class="p">]</span>
+</code></pre></div>
+<p>Prevents test interdependencies and ensures fresh imports.</p>
+<h3 id="6-early-module-mocking-with-pytest_configure">6. Early Module Mocking with pytest_configure</h3>
+<p><strong>The Problem</strong>: Some production modules use module-level imports like <code>from serial.tools import list_ports</code>. This import executes when Python loads the module, <em>before</em> any test setup can mock it. The real <code>serial</code> module gets loaded and cached in <code>sys.modules</code>, making any subsequent mocking attempts ineffective since Python won't re-import an already cached module.</p>
+<p><strong>Why Not Modify Production Code?</strong>: We could add <code>try/except</code> blocks or lazy imports to production code, but that would be polluting the codebase to accommodate tests: exactly backwards. Tests should adapt to production code, not the other way around.</p>
+<p><strong>The Solution</strong>: Use pytest's <code>pytest_configure</code> hook to inject mocks into Python's module system before any test collection begins. This runs even before pytest discovers test files, ensuring mocks are in place for module-level imports.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-17-1" name="__codelineno-17-1" href="#__codelineno-17-1"></a><span class="c1"># tests/utils/conftest.py</span>
+<a id="__codelineno-17-2" name="__codelineno-17-2" href="#__codelineno-17-2"></a><span class="kn">import</span><span class="w"> </span><span class="nn">sys</span>
+<a id="__codelineno-17-3" name="__codelineno-17-3" href="#__codelineno-17-3"></a><span class="kn">from</span><span class="w"> </span><span class="nn">unittest.mock</span><span class="w"> </span><span class="kn">import</span> <span class="n">MagicMock</span>
+<a id="__codelineno-17-4" name="__codelineno-17-4" href="#__codelineno-17-4"></a><span class="kn">from</span><span class="w"> </span><span class="nn">tests._utilities</span><span class="w"> </span><span class="kn">import</span> <span class="n">MockSerial</span>
+<a id="__codelineno-17-5" name="__codelineno-17-5" href="#__codelineno-17-5"></a>
+<a id="__codelineno-17-6" name="__codelineno-17-6" href="#__codelineno-17-6"></a><span class="k">def</span><span class="w"> </span><span class="nf">pytest_configure</span><span class="p">(</span><span class="n">config</span><span class="p">):</span>
+<a id="__codelineno-17-7" name="__codelineno-17-7" href="#__codelineno-17-7"></a><span class="w">    </span><span class="sd">&quot;&quot;&quot;Called before test collection begins&quot;&quot;&quot;</span>
+<a id="__codelineno-17-8" name="__codelineno-17-8" href="#__codelineno-17-8"></a>    <span class="c1"># Create mock hierarchy - must be connected so imports work</span>
+<a id="__codelineno-17-9" name="__codelineno-17-9" href="#__codelineno-17-9"></a>    <span class="n">mock_list_ports</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+<a id="__codelineno-17-10" name="__codelineno-17-10" href="#__codelineno-17-10"></a>    <span class="n">mock_list_ports</span><span class="o">.</span><span class="n">comports</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">(</span><span class="n">return_value</span><span class="o">=</span><span class="p">[])</span>
+<a id="__codelineno-17-11" name="__codelineno-17-11" href="#__codelineno-17-11"></a>
+<a id="__codelineno-17-12" name="__codelineno-17-12" href="#__codelineno-17-12"></a>    <span class="n">mock_tools</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+<a id="__codelineno-17-13" name="__codelineno-17-13" href="#__codelineno-17-13"></a>    <span class="n">mock_tools</span><span class="o">.</span><span class="n">list_ports</span> <span class="o">=</span> <span class="n">mock_list_ports</span>
+<a id="__codelineno-17-14" name="__codelineno-17-14" href="#__codelineno-17-14"></a>
+<a id="__codelineno-17-15" name="__codelineno-17-15" href="#__codelineno-17-15"></a>    <span class="n">mock_serial_mod</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+<a id="__codelineno-17-16" name="__codelineno-17-16" href="#__codelineno-17-16"></a>    <span class="n">mock_serial_mod</span><span class="o">.</span><span class="n">Serial</span> <span class="o">=</span> <span class="n">MockSerial</span>
+<a id="__codelineno-17-17" name="__codelineno-17-17" href="#__codelineno-17-17"></a>    <span class="n">mock_serial_mod</span><span class="o">.</span><span class="n">SerialException</span> <span class="o">=</span> <span class="ne">Exception</span>
+<a id="__codelineno-17-18" name="__codelineno-17-18" href="#__codelineno-17-18"></a>    <span class="n">mock_serial_mod</span><span class="o">.</span><span class="n">tools</span> <span class="o">=</span> <span class="n">mock_tools</span>
+<a id="__codelineno-17-19" name="__codelineno-17-19" href="#__codelineno-17-19"></a>
+<a id="__codelineno-17-20" name="__codelineno-17-20" href="#__codelineno-17-20"></a>    <span class="c1"># Inject into sys.modules - hierarchy must match</span>
+<a id="__codelineno-17-21" name="__codelineno-17-21" href="#__codelineno-17-21"></a>    <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="s1">&#39;serial&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mock_serial_mod</span>
+<a id="__codelineno-17-22" name="__codelineno-17-22" href="#__codelineno-17-22"></a>    <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="s1">&#39;serial.tools&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mock_tools</span>
+<a id="__codelineno-17-23" name="__codelineno-17-23" href="#__codelineno-17-23"></a>    <span class="n">sys</span><span class="o">.</span><span class="n">modules</span><span class="p">[</span><span class="s1">&#39;serial.tools.list_ports&#39;</span><span class="p">]</span> <span class="o">=</span> <span class="n">mock_list_ports</span>
+</code></pre></div>
+<p><strong>Why the Hierarchy Matters</strong>: Notice how <code>mock_serial_mod.tools</code> points to the same object as <code>sys.modules['serial.tools']</code>. This is crucial. When Python imports <code>serial.tools.list_ports</code>, it follows the hierarchy: first it finds <code>serial</code> in <code>sys.modules</code>, then accesses its <code>.tools</code> attribute, then accesses <code>.list_ports</code>. If these aren't the same object references, Python creates multiple mock instances. Tests will fail with mysterious assertion errors like <code>Expected 'method' to be called once. Called 0 times.</code> because the code under test called a <em>different</em> mock instance than the one being asserted against.</p>
+<p><strong>The sys.modules Pollution Tradeoff</strong>: This approach modifies global state (<code>sys.modules</code>) that persists across all tests in a pytest session. That sounds dangerous: and it is. The tradeoff is that <code>pytest tests/</code> will fail in ways that are unclear to the developer, so we have to work around this. The CI workflow runs test groups in separate pytest invocations (backend, utils, kvm, control), giving each a fresh Python process with clean <code>sys.modules</code>.</p>
+<p>This means:</p>
+<ul>
+<li>Each test group can safely mock <code>sys.modules</code> without affecting others</li>
+<li>Running <code>pytest tests/</code> locally might fail due to mock conflicts, but CI will pass</li>
+<li>Always test using the same commands as CI: <code>pytest tests/backend/</code>, <code>pytest tests/utils/</code>, etc.</li>
+</ul>
+<p><strong>Where to Use This</strong>: Only test directories that import production code with module-level serial imports need this pattern. Currently: <code>tests/utils/</code> and <code>tests/backend/</code>. The KVM tests don't need it because they mock at a higher level.</p>
+<h2 id="test-organisation">Test Organisation</h2>
+<h3 id="categories">Categories</h3>
+<p>Tests are organised by feature area (see Test_Categories document):</p>
+<ol>
+<li><strong>Initialization &amp; Configuration</strong> (<code>test_kvm_init.py</code>)</li>
+<li>Window setup</li>
+<li>Menu creation</li>
+<li>Settings loading/saving</li>
+<li>
+<p>Device discovery</p>
+</li>
+<li>
+<p><strong>Device Management</strong> (<code>test_kvm_device_mgmt.py</code>)</p>
+</li>
+<li>Serial port selection</li>
+<li>Camera enumeration</li>
+<li>Baud rate configuration</li>
+<li>
+<p>Connection error handling</p>
+</li>
+<li>
+<p><strong>Settings Persistence</strong> (covered in init tests)</p>
+</li>
+<li>INI file operations</li>
+<li>Default value handling</li>
+<li>
+<p>Invalid settings recovery</p>
+</li>
+<li>
+<p><strong>Event Handling</strong> (future expansion)</p>
+</li>
+<li>Mouse coordinate translation</li>
+<li>Keyboard event processing</li>
+<li>
+<p>Focus management</p>
+</li>
+<li>
+<p><strong>Video Processing</strong> (future expansion)</p>
+</li>
+<li>Frame capture logic</li>
+<li>Frame rate management</li>
+<li>Error handling</li>
+</ol>
+<h3 id="file-naming">File Naming</h3>
+<ul>
+<li><code>test_kvm_base.py</code> - Base classes and utilities</li>
+<li><code>test_kvm_*.py</code> - Feature-specific test suites</li>
+<li>Mirrors source structure for easy navigation</li>
+</ul>
+<h3 id="directory-structure-and-test-isolation">Directory Structure and Test Isolation</h3>
+<p>The test suite is organised to match how CI runs tests: this organisation isn't arbitrary, it's essential for the mocking strategy to work:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-18-1" name="__codelineno-18-1" href="#__codelineno-18-1"></a>tests/
+<a id="__codelineno-18-2" name="__codelineno-18-2" href="#__codelineno-18-2"></a>├── backend/           # Backend implementation tests
+<a id="__codelineno-18-3" name="__codelineno-18-3" href="#__codelineno-18-3"></a>│   ├── conftest.py   # Serial module mocking for backend
+<a id="__codelineno-18-4" name="__codelineno-18-4" href="#__codelineno-18-4"></a>│   └── ...
+<a id="__codelineno-18-5" name="__codelineno-18-5" href="#__codelineno-18-5"></a>├── kvm/              # GUI application tests
+<a id="__codelineno-18-6" name="__codelineno-18-6" href="#__codelineno-18-6"></a>│   └── ...
+<a id="__codelineno-18-7" name="__codelineno-18-7" href="#__codelineno-18-7"></a>├── utils/            # Utility module tests
+<a id="__codelineno-18-8" name="__codelineno-18-8" href="#__codelineno-18-8"></a>│   ├── conftest.py   # Serial module mocking for utils
+<a id="__codelineno-18-9" name="__codelineno-18-9" href="#__codelineno-18-9"></a>│   └── ...
+<a id="__codelineno-18-10" name="__codelineno-18-10" href="#__codelineno-18-10"></a>└── test_control.py   # Control module tests
+</code></pre></div>
+<h4 id="why-separate-pytest-invocations-matter">Why Separate pytest Invocations Matter</h4>
+<p>The GitHub Actions workflow (<code>.github/workflows/test.yml</code>) deliberately runs each test group as a separate command:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-19-1" name="__codelineno-19-1" href="#__codelineno-19-1"></a>pytest<span class="w"> </span>tests/backend/<span class="w">  </span><span class="c1"># Separate process</span>
+<a id="__codelineno-19-2" name="__codelineno-19-2" href="#__codelineno-19-2"></a>pytest<span class="w"> </span>tests/utils/<span class="w">    </span><span class="c1"># Separate process</span>
+<a id="__codelineno-19-3" name="__codelineno-19-3" href="#__codelineno-19-3"></a>pytest<span class="w"> </span>tests/kvm/<span class="w">      </span><span class="c1"># Separate process</span>
+<a id="__codelineno-19-4" name="__codelineno-19-4" href="#__codelineno-19-4"></a>pytest<span class="w"> </span>tests/test_control.py<span class="w">  </span><span class="c1"># Separate process</span>
+</code></pre></div>
+<p>This isn't just for organisation: it's fundamental to how the mocking works. Each pytest invocation spawns a fresh Python interpreter with a clean <code>sys.modules</code> dictionary. This means:</p>
+<p><strong>The Good</strong>: Test groups with different mocking needs (like <code>tests/utils/</code> and <code>tests/kvm/</code>) can each pollute <code>sys.modules</code> however they want without interfering with each other. The <code>pytest_configure</code> hook in <code>tests/utils/conftest.py</code> mocks the serial module for utils tests, and by the time <code>tests/kvm/</code> runs, that's in a completely different process with no memory of those mocks.</p>
+<p><strong>The Gotcha</strong>: Running <code>pytest tests/</code> locally runs <em>all</em> test groups in one process. The <code>pytest_configure</code> hooks from multiple <code>conftest.py</code> files all run in the same <code>sys.modules</code>, causing conflicts. Tests might fail locally but pass in CI.</p>
+<p><strong>Best Practice</strong>: Always test using the CI commands. If you're working on backend code, run <code>pytest tests/backend/</code>. If you need to verify everything works, run each group separately just like CI does.</p>
+<p>This is an intentional tradeoff: running the entire suite locally is awkward in exchange for being able to mock aggressively without complex isolation machinery.</p>
+<h2 id="running-tests">Running Tests</h2>
+<h3 id="basic-execution">Basic Execution</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-20-1" name="__codelineno-20-1" href="#__codelineno-20-1"></a><span class="c1"># Run all tests</span>
+<a id="__codelineno-20-2" name="__codelineno-20-2" href="#__codelineno-20-2"></a>pytest
+<a id="__codelineno-20-3" name="__codelineno-20-3" href="#__codelineno-20-3"></a>
+<a id="__codelineno-20-4" name="__codelineno-20-4" href="#__codelineno-20-4"></a><span class="c1"># Run specific test file</span>
+<a id="__codelineno-20-5" name="__codelineno-20-5" href="#__codelineno-20-5"></a>pytest<span class="w"> </span>tests/test_kvm_init.py
+<a id="__codelineno-20-6" name="__codelineno-20-6" href="#__codelineno-20-6"></a>
+<a id="__codelineno-20-7" name="__codelineno-20-7" href="#__codelineno-20-7"></a><span class="c1"># Run specific test</span>
+<a id="__codelineno-20-8" name="__codelineno-20-8" href="#__codelineno-20-8"></a>pytest<span class="w"> </span>tests/test_kvm_init.py::TestKVMInitialization::test_window_initialization
+<a id="__codelineno-20-9" name="__codelineno-20-9" href="#__codelineno-20-9"></a>
+<a id="__codelineno-20-10" name="__codelineno-20-10" href="#__codelineno-20-10"></a><span class="c1"># Verbose output</span>
+<a id="__codelineno-20-11" name="__codelineno-20-11" href="#__codelineno-20-11"></a>pytest<span class="w"> </span>-v
+<a id="__codelineno-20-12" name="__codelineno-20-12" href="#__codelineno-20-12"></a>
+<a id="__codelineno-20-13" name="__codelineno-20-13" href="#__codelineno-20-13"></a><span class="c1"># With coverage</span>
+<a id="__codelineno-20-14" name="__codelineno-20-14" href="#__codelineno-20-14"></a>pytest<span class="w"> </span>--cov<span class="o">=</span>kvm_serial
+</code></pre></div>
+<h3 id="configuration">Configuration</h3>
+<p>Tests configured in <code>pyproject.toml</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-21-1" name="__codelineno-21-1" href="#__codelineno-21-1"></a><span class="k">[tool.pytest.ini_options]</span>
+<a id="__codelineno-21-2" name="__codelineno-21-2" href="#__codelineno-21-2"></a><span class="n">testpaths</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;tests&quot;</span><span class="p">]</span>
+<a id="__codelineno-21-3" name="__codelineno-21-3" href="#__codelineno-21-3"></a><span class="n">python_files</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;test_*.py&quot;</span><span class="p">]</span>
+<a id="__codelineno-21-4" name="__codelineno-21-4" href="#__codelineno-21-4"></a><span class="n">addopts</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="p">[</span><span class="s2">&quot;-v&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--tb=short&quot;</span><span class="p">,</span><span class="w"> </span><span class="s2">&quot;--cov=kvm_serial&quot;</span><span class="p">]</span>
+<a id="__codelineno-21-5" name="__codelineno-21-5" href="#__codelineno-21-5"></a><span class="n">timeout</span><span class="w"> </span><span class="o">=</span><span class="w"> </span><span class="mi">5</span>
+</code></pre></div>
+<p><strong>Timeout protection:</strong> Safeguard against event loop issues or runaway threads during testing.</p>
+<h2 id="common-issues-and-solutions">Common Issues and Solutions</h2>
+<h3 id="issue-tests-fail-with-display-errors">Issue: Tests Fail with Display Errors</h3>
+<p><strong>Cause:</strong> GUI initialisation not properly mocked, causing Qt to attempt creating windows.</p>
+<p><strong>Solution:</strong> Ensure <code>_setup_qt_mocks</code> includes all used Qt components. Add missing widgets to mock lists. Tests may also timeout if event loops are created: check that <code>QApplication</code> and <code>QTimer</code> are mocked.</p>
+<h3 id="issue-import-errors-in-tests">Issue: Import Errors in Tests</h3>
+<p><strong>Cause:</strong> Module imported before mocks established.</p>
+<p><strong>Solution:</strong> Move import inside <code>setUp</code> after starting patches.</p>
+<h3 id="issue-tests-pass-individually-but-fail-in-suite">Issue: Tests Pass Individually but Fail in Suite</h3>
+<p><strong>Cause:</strong> Missing module cleanup in <code>tearDown</code>.</p>
+<p><strong>Solution:</strong> Verify all tested modules are removed from <code>sys.modules</code>.</p>
+<h3 id="issue-attributeerror-mock-object-has-no-attribute-x">Issue: "AttributeError: Mock object has no attribute X"</h3>
+<p><strong>Cause:</strong> Mock needs return value or side effect configuration.</p>
+<p><strong>Solution:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-22-1" name="__codelineno-22-1" href="#__codelineno-22-1"></a><span class="n">mock_obj</span> <span class="o">=</span> <span class="n">MagicMock</span><span class="p">()</span>
+<a id="__codelineno-22-2" name="__codelineno-22-2" href="#__codelineno-22-2"></a><span class="n">mock_obj</span><span class="o">.</span><span class="n">method</span><span class="o">.</span><span class="n">return_value</span> <span class="o">=</span> <span class="n">expected_value</span>
+</code></pre></div></p>
+<h3 id="issue-serial-exception-not-caught">Issue: Serial Exception Not Caught</h3>
+<p><strong>Cause:</strong> Exception mock not configured properly.</p>
+<p><strong>Solution:</strong>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-23-1" name="__codelineno-23-1" href="#__codelineno-23-1"></a><span class="k">with</span> <span class="n">patch</span><span class="p">(</span><span class="s2">&quot;serial.Serial&quot;</span><span class="p">,</span> <span class="n">side_effect</span><span class="o">=</span><span class="n">SerialException</span><span class="p">(</span><span class="s2">&quot;Port not available&quot;</span><span class="p">)):</span>
+<a id="__codelineno-23-2" name="__codelineno-23-2" href="#__codelineno-23-2"></a>    <span class="c1"># Test code</span>
+</code></pre></div></p>
+<h2 id="continuous-integration">Continuous Integration</h2>
+<p>Tests run automatically via GitHub Actions (see <code>.github/workflows/test.yml</code>). Key considerations:</p>
+<ul>
+<li>Headless environment (no X server)</li>
+<li>All GUI mocking must be comprehensive  </li>
+<li>Timeout protection essential</li>
+<li>Coverage reporting to track test completeness</li>
+</ul>
+<h2 id="future-enhancements">Future Enhancements</h2>
+<p>Potential test suite improvements:</p>
+<ol>
+<li><strong>Event Handling Tests</strong></li>
+<li>Mouse coordinate translation logic</li>
+<li>Keyboard event processing</li>
+<li>
+<p>Serial communication triggers</p>
+</li>
+<li>
+<p><strong>Video Processing Tests</strong>  </p>
+</li>
+<li>Frame capture request logic</li>
+<li>Frame rate management</li>
+<li>
+<p>Canvas size updates</p>
+</li>
+<li>
+<p><strong>Integration Tests</strong></p>
+</li>
+<li>End-to-end workflows</li>
+<li>Settings persistence across restarts</li>
+<li>
+<p>Device reconnection scenarios</p>
+</li>
+<li>
+<p><strong>Performance Tests</strong></p>
+</li>
+<li>Frame rate under load</li>
+<li>Memory usage patterns</li>
+<li>Serial communication latency</li>
+</ol>
+<h2 id="summary">Summary</h2>
+<p>The kvm-serial test suite demonstrates effective PyQt5 application testing through:</p>
+<ul>
+<li><strong>Comprehensive mocking</strong> preventing unwanted side effects</li>
+<li><strong>Inheritance-based organisation</strong> providing reusable infrastructure</li>
+<li><strong>Clear patterns</strong> for common testing scenarios</li>
+<li><strong>Proper isolation</strong> ensuring test independence</li>
+</ul>
+<p>These strategies enable confident refactoring and feature development while maintaining reliable test coverage.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>

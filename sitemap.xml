@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/BUILD/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/CONTRIBUTING/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/INSTALLATION/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/MODES/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/TESTING/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+    <url>
+         <loc>https://sjmf.github.io/kvm-serial/workflows/</loc>
+         <lastmod>2026-02-04</lastmod>
+    </url>
+</urlset>
