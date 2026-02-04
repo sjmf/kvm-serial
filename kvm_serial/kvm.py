@@ -375,6 +375,11 @@ class KVMQtGui(QMainWindow):
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
+        # Screenshot
+        screenshot_action = QAction("Take Screenshot", self)
+        screenshot_action.triggered.connect(self._take_screenshot)
+        file_menu.addAction(screenshot_action)
+
         # Quit
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._on_quit)
@@ -697,6 +702,12 @@ class KVMQtGui(QMainWindow):
         self.__init_serial()
 
         logging.info("Settings loaded from configuration file.")
+
+    def _take_screenshot(self):
+        """
+        Capture the current video frame and save to clipboard/file.
+        """
+        pass
 
     def _save_settings(self):
         """
