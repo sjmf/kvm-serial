@@ -20,6 +20,8 @@ __Note:__ On modern Windows and Mac, this application is signed without a paid d
 
 In order to run the binary app on Mac OSX, you will need to *right click -> Open* it. Otherwise, the above prompt will not show the "Open" option.
 
+As of MacOS Tahoe, the solution is to run `xattr -dr com.apple.quarantine ./KVM\ Serial.app` on the app from the terminal. The right-click solution no longer works.
+
 On Windows, you will need to click "More info" on the SmartScreen dialog to "Run anyway".
 
 As always, do not run apps on your machine which you do not trust. The entire build chain and source code for this application is available in the GitHub repository for you to verify if desired.
