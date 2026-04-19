@@ -591,6 +591,118 @@ class TestKVMSettingsPersistence(
             mock_detect.assert_not_called()
             self.assertEqual(app.keyboard_layout_var, "en_US")
 
+    def test_resolution_stored_in_var_when_menu_empty(self):
+        """Saved resolution is stored in resolution_var even when menu is unpopulated.
+
+        This is the common case: settings load fires at t=100ms but camera
+        enumeration hasn't finished yet, so the resolution menu has no actions.
+        """
+        app = self.create_kvm_app()
+        app.video_devices = self.create_mock_cameras(1)
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+        app.resolution_menu = MagicMock()
+        app.resolution_menu.actions.return_value = []  # empty menu
+
+        settings = self.create_test_settings({"resolution": "1920x1080"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+            self.patch_kvm_method(app, "_on_resolution_selected") as mock_select,
+        ):
+            app._load_settings("test_config.ini")
+
+        self.assertEqual(app.resolution_var, "1920x1080")
+        mock_select.assert_not_called()  # menu was empty, defer to populate
+
+    def test_resolution_applied_immediately_when_menu_already_populated(self):
+        """Saved resolution calls _on_resolution_selected when menu already has the item.
+
+        This handles the rare race where camera enumeration finishes before settings load.
+        """
+        app = self.create_kvm_app()
+        app.video_devices = self.create_mock_cameras(1)
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        res_action = MagicMock()
+        res_action.text.return_value = "1920x1080"
+        app.resolution_menu = MagicMock()
+        app.resolution_menu.actions.return_value = [res_action]
+
+        settings = self.create_test_settings({"resolution": "1920x1080"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+            self.patch_kvm_method(app, "_on_resolution_selected") as mock_select,
+        ):
+            app._load_settings("test_config.ini")
+
+        mock_select.assert_called_once_with(1920, 1080)
+
+    def test_invalid_resolution_format_in_settings_is_ignored(self):
+        """Malformed resolution string logs a warning and does not update resolution_var."""
+        app = self.create_kvm_app()
+        app.video_devices = self.create_mock_cameras(1)
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+        app.resolution_menu = MagicMock()
+        app.resolution_menu.actions.return_value = []
+
+        settings = self.create_test_settings({"resolution": "notaresolution"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+        self.assertEqual(app.resolution_var, "")  # unchanged from default
+
+    def test_populate_resolution_menu_applies_stored_resolution_to_video_worker(self):
+        """After menu is populated, stored resolution_var is applied to video worker.
+
+        This is the normal path: _load_settings stores resolution_var, then
+        _populate_resolution_menu is called once cameras are found.
+        """
+        app = self.create_kvm_app()
+        app.video_var = 0
+        app.resolution_var = "1920x1080"
+        app.video_worker = MagicMock()
+
+        actions = []
+        menu = MagicMock()
+        menu.addAction.side_effect = lambda a: actions.append(a)
+        menu.addSeparator.side_effect = lambda: None
+        menu.actions.side_effect = lambda: list(actions)
+        menu.clear.side_effect = actions.clear
+        app.resolution_menu = menu
+
+        class _FakeQAction:
+            def __init__(self, label, parent=None):
+                self._text = label
+                self._checked = False
+                self.triggered = MagicMock()
+
+            def text(self):
+                return self._text
+
+            def setCheckable(self, v):
+                pass
+
+            def setChecked(self, v):
+                self._checked = v
+
+        with (
+            patch("kvm_serial.kvm.enumerate_resolutions", return_value=[(1920, 1080)]),
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+        ):
+            app._populate_resolution_menu(0)
+
+        app.video_worker.set_camera_index.assert_called_with(0, width=1920, height=1080)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

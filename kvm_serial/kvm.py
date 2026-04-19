@@ -676,20 +676,22 @@ class KVMQtGui(QMainWindow):
             self.video_device_idx = 0
             self.video_worker.set_camera_index(0)
 
-        # Load resolution setting and apply if valid and present in menu
+        # Load resolution setting — store for use when the resolution menu is populated.
+        # The menu may be empty here because camera enumeration is asynchronous;
+        # _populate_resolution_menu applies the stored value once cameras are found.
         saved_res = kvm.get("resolution", "")
         if saved_res:
-            # Check it exists in the populated menu before applying
-            available = [a.text() for a in self.resolution_menu.actions()]
-            if saved_res in available:
-                parts = saved_res.split("x")
-                try:
-                    w, h = int(parts[0]), int(parts[1])
+            parts = saved_res.split("x")
+            try:
+                w, h = int(parts[0]), int(parts[1])
+                self.resolution_var = saved_res
+                # If the menu is already populated (camera enum finished before settings
+                # load), apply immediately so the video worker uses the right dimensions.
+                available = [a.text() for a in self.resolution_menu.actions()]
+                if saved_res in available:
                     self._on_resolution_selected(w, h)
-                except (ValueError, IndexError):
-                    logging.warning(f"Invalid resolution in settings: {saved_res}")
-            else:
-                logging.debug(f"Saved resolution {saved_res} not in menu, ignoring")
+            except (ValueError, IndexError):
+                logging.warning(f"Invalid resolution in settings: {saved_res}")
 
         # Load other boolean settings
         self.window_var = kvm.get("windowed", "False") == "True"
@@ -1218,6 +1220,17 @@ class KVMQtGui(QMainWindow):
         resize_action = QAction("Resize window", self)
         resize_action.triggered.connect(self._on_resize_window_to_resolution)
         self.resolution_menu.addAction(resize_action)
+
+        # Apply any resolution loaded from settings to the video worker now that the
+        # menu exists and the video worker is ready. (Covers the common case where
+        # _load_settings runs before camera enumeration completes.)
+        if self.resolution_var:
+            parts = self.resolution_var.split("x")
+            try:
+                w, h = int(parts[0]), int(parts[1])
+                self.video_worker.set_camera_index(self.video_var, width=w, height=h)
+            except (ValueError, IndexError):
+                pass
 
     def _on_use_default_selected(self):
         """
