@@ -146,9 +146,13 @@ class VideoCaptureWorker(QThread):
             # Initialise camera if needed
             if not self.camera_initialised:
                 try:
-                    self.video_device.setCamera(self.video_device_idx)
+                    self.video_device.setCamera(
+                        self.video_device_idx,
+                        width=self.camera_width,
+                        height=self.camera_height,
+                    )
                     self.camera_initialised = True
-                    # Update dimensions from actual camera output
+                    # Reflect what the backend actually negotiated (may differ from request)
                     if hasattr(self.video_device, "camera_width"):
                         self.camera_width = self.video_device.camera_width
                         self.camera_height = self.video_device.camera_height

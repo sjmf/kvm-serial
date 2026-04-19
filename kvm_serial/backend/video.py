@@ -222,15 +222,24 @@ class CaptureDevice(InputHandler):
         cameras = CaptureDevice.getCameras()
         self.setCamera(camIndex=cameras[camIndex].index)
 
-    def setCamera(self, camIndex=0):
+    def setCamera(self, camIndex=0, width=None, height=None):
         self.cam = cv2.VideoCapture(camIndex, CAMERA_BACKEND)
 
         if not self.cam.isOpened():
             raise CaptureDeviceException(f"Camera {camIndex} failed to open")
 
-        # On Windows, DirectShow defaults to 640x480 YUY2 (see issue #19)
         if sys.platform == "win32":
-            _configure_dshow_camera(self.cam)
+            # On Windows, DirectShow defaults to 640x480 YUY2 and requires explicit
+            # configuration. Use requested dimensions if provided (see issue #19).
+            req_w = width if width is not None else 1920
+            req_h = height if height is not None else 1080
+            _configure_dshow_camera(self.cam, width=req_w, height=req_h)
+        elif width is not None and height is not None:
+            # Request the user-selected resolution from the backend before the first read.
+            # The backend may not honour it exactly; frame.shape below captures what was
+            # actually negotiated and becomes the authoritative coordinate space.
+            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
+            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
 
         # Verify the camera can actually capture frames
         ret, frame = self.cam.read()
