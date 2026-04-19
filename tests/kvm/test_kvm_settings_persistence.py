@@ -164,6 +164,7 @@ class TestKVMSettingsPersistence(
             "serial_port": "/dev/ttyUSB1",
             "video_device": "2",
             "baud_rate": "115200",
+            "resolution": "",
             "windowed": "True",
             "statusbar": "False",
             "verbose": "True",

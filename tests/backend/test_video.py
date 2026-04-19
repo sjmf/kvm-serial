@@ -380,7 +380,7 @@ class TestSetCameraWindows:
             device = CaptureDevice()
             device.setCamera(0)
 
-            mock_configure.assert_called_once_with(mock_cam)
+            mock_configure.assert_called_once_with(mock_cam, width=1920, height=1080)
 
     def test_skips_configure_dshow_on_macos(self):
         from kvm_serial.backend import video as video_mod
