@@ -86,9 +86,10 @@ def _setup_qt_mocks(self):
 **Approach:**
 ```python
 def _setup_hardware_mocks(self):
+    from kvm_serial.backend import video as video_mod
     return [
-        patch("kvm_serial.backend.video.CaptureDevice"),
-        patch("kvm_serial.backend.video.CameraProperties"),
+        patch.object(video_mod, "CaptureDevice"),
+        patch.object(video_mod, "CameraProperties"),
         patch("kvm_serial.kvm.CaptureDevice"),
         patch("kvm_serial.kvm.VideoCaptureWorker"),
         patch("kvm_serial.utils.communication.list_serial_ports"),
@@ -97,6 +98,8 @@ def _setup_hardware_mocks(self):
         patch("kvm_serial.kvm.MouseOp"),
     ]
 ```
+
+`patch.object` is used for the two `video_mod` patches rather than string-based `patch()` because `kvm_serial.backend` may already be in `sys.modules` without the `video` submodule attribute attached, which causes string-based patches to silently target a stale reference. Importing the module explicitly and using `patch.object` avoids this cross-group test pollution issue.
 
 Three additional single-target mocks are set up via their own methods: `_setup_serial_mock()` patches `serial.Serial`, `_setup_cv2_mock()` patches `cv2.cvtColor`, and `_setup_settings_mock()` patches `kvm_serial.kvm.settings_util`.
 
@@ -357,6 +360,9 @@ Tests are organised by feature area:
 
 6. **Paste** (`test_kvm_paste.py`)
    - Clipboard-to-remote text transmission, scancode sequencing
+
+7. **Screenshot** (`test_kvm_screenshot.py`)
+   - Screen capture and save functionality
 
 ### File Naming
 
