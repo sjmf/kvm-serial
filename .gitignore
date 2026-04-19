@@ -17,6 +17,7 @@ kvm.build
 kvm.dist
 uv.lock
 .venv/
+CLAUDE.md
 
 # MkDocs build output
 site/
