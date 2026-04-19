@@ -10,6 +10,7 @@ Uses native platform APIs to discover supported resolutions for a capture device
 Falls back to an empty list on failure; callers should present a curated preset
 list in that case.
 """
+
 import logging
 import sys
 from typing import List, Tuple
