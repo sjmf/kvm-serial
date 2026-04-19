@@ -1194,6 +1194,15 @@ class KVMQtGui(QMainWindow):
             logging.info(f"Enumerated {len(resolutions)} resolutions for device {device_index}")
 
         self.resolution_menu.clear()
+
+        use_max_action = QAction("Use Default", self)
+        use_max_action.setCheckable(True)
+        use_max_action.setChecked(self.resolution_var == "")
+        use_max_action.triggered.connect(self._on_use_default_selected)
+        self.resolution_menu.addAction(use_max_action)
+
+        self.resolution_menu.addSeparator()
+
         for width, height in resolutions:
             label = f"{width}x{height}"
             action = QAction(label, self)
@@ -1204,9 +1213,37 @@ class KVMQtGui(QMainWindow):
             )
             self.resolution_menu.addAction(action)
 
+        self.resolution_menu.addSeparator()
+
+        resize_action = QAction("Resize window", self)
+        resize_action.triggered.connect(self._on_resize_window_to_resolution)
+        self.resolution_menu.addAction(resize_action)
+
+    def _on_use_default_selected(self):
+        """
+        Clear any explicit resolution override, reverting to the device's negotiated resolution.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _on_use_default_selected()")
+
+        for action in self.resolution_menu.actions():
+            action.setChecked(action.text() == "Use Default")
+
+        self.resolution_var = ""
+
+        # Restore dimensions from the currently selected CameraProperties (negotiated by OpenCV)
+        selected_camera = next((c for c in self.video_devices if c.index == self.video_var), None)
+        if selected_camera:
+            self.video_worker.set_camera_index(
+                self.video_var, width=selected_camera.width, height=selected_camera.height
+            )
+        else:
+            self.video_worker.set_camera_index(self.video_var)
+        logging.info("Resolution set to maximum (device default)")
+
     def _on_resolution_selected(self, width: int, height: int):
         """
-        Handle selection of a capture resolution.
+        Handle selection of an explicit capture resolution.
         """
         if self.resolution_menu is None:
             raise TypeError("Initialise resolution_menu before calling _on_resolution_selected()")
@@ -1218,6 +1255,20 @@ class KVMQtGui(QMainWindow):
         self.resolution_var = label
         self.video_worker.set_camera_index(self.video_var, width=width, height=height)
         logging.info(f"Selected resolution: {label}")
+
+    def _on_resize_window_to_resolution(self):
+        """
+        Resize the main window so the video view matches the current camera resolution exactly.
+        """
+        camera_width = self.video_worker.camera_width
+        camera_height = self.video_worker.camera_height
+
+        # Measure the chrome overhead (menubar + statusbar + any margins)
+        chrome_w = self.width() - self.video_view.width()
+        chrome_h = self.height() - self.video_view.height()
+
+        self.resize(camera_width + chrome_w, camera_height + chrome_h)
+        logging.info(f"Window resized to {camera_width}x{camera_height} (native resolution)")
 
     def _request_video_frame(self):
         """
