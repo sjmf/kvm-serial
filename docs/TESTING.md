@@ -49,6 +49,37 @@ This inheritance pattern centralises all the mocking complexity in one place. In
 
 **Critical:** Module cleanup prevents test cross-contamination by forcing fresh imports.
 
+## Adding a New Test
+
+The minimal skeleton for a KVM GUI test:
+
+```python
+from tests.kvm.test_kvm_base import KVMTestBase
+
+class TestMyFeature(KVMTestBase):
+    def test_something(self):
+        app = self.create_kvm_app()   # KVMQtGui with all hardware mocked
+        # arrange
+        app.serial_port_var = "/dev/ttyUSB0"
+        # act
+        app._KVMQtGui__init_serial()  # double-underscore = name-mangled private method
+        # assert
+        self.assertIsNotNone(app.serial_port)
+```
+
+`KVMTestBase.setUp()` starts all mocks and imports `kvm_serial.kvm`; `tearDown()` stops them and flushes the module from `sys.modules`. You don't need to define `setUp`/`tearDown` at all — the base class handles both. If you do override `setUp`, call `super().setUp()` first.
+
+To access private methods use Python's name-mangling convention: `__method` defined in `KVMQtGui` is called as `app._KVMQtGui__method()`.
+
+For tests that need serial port or camera helpers, mix in the relevant class:
+
+```python
+class TestMyFeature(KVMTestBase, KVMTestMixins.SerialTestMixin):
+    def test_port_list(self):
+        ports = self.create_mock_serial_ports()   # from KVMTestBase
+        self.setup_serial_test_data()              # from SerialTestMixin
+```
+
 ## Mocking Strategies
 
 ### 1. PyQt5 GUI Component Mocking
@@ -86,14 +117,24 @@ def _setup_qt_mocks(self):
 **Approach:**
 ```python
 def _setup_hardware_mocks(self):
+    from kvm_serial.backend import video as video_mod
     return [
-        patch("kvm_serial.backend.video.CaptureDevice"),
+        patch.object(video_mod, "CaptureDevice"),
+        patch.object(video_mod, "CameraProperties"),
+        patch("kvm_serial.kvm.CaptureDevice"),
+        patch("kvm_serial.kvm.VideoCaptureWorker"),
         patch("kvm_serial.utils.communication.list_serial_ports"),
-        patch("kvm_serial.kvm.Serial"),
+        patch("kvm_serial.kvm.list_serial_ports"),
+        patch("kvm_serial.kvm.QtOp"),
+        patch("kvm_serial.kvm.MouseOp"),
     ]
 ```
 
-**Pattern:** Mock at the interface boundary where the application interacts with hardware libraries.
+`patch.object` is used for the two `video_mod` patches rather than string-based `patch()` because `kvm_serial.backend` may already be in `sys.modules` without the `video` submodule attribute attached, which causes string-based patches to silently target a stale reference. Importing the module explicitly and using `patch.object` avoids this cross-group test pollution issue.
+
+Three additional single-target mocks are set up via their own methods: `_setup_serial_mock()` patches `serial.Serial`, `_setup_cv2_mock()` patches `cv2.cvtColor`, and `_setup_settings_mock()` patches `kvm_serial.kvm.settings_util`.
+
+**Pattern:** Mock at the point where the application module imports and uses hardware libraries, not at the library itself — this ensures the patch applies to the exact name binding in `kvm.py`.
 
 ### 3. Module-Level Import Mocking
 
@@ -143,27 +184,51 @@ class TestKVMDeviceManagement(
         # Test logic
 ```
 
-Each mixin adds domain-specific helper methods without forcing every test to inherit functionality it doesn't need. `SerialTestMixin` provides methods for creating mock serial ports, `VideoTestMixin` handles mock cameras, and `SettingsTestMixin` helps with configuration file testing. Tests can mix and match these based on what they're testing.
+Each mixin adds domain-specific helper methods without forcing every test to inherit functionality it doesn't need. `SerialTestMixin` provides `setup_serial_test_data()` and `assert_serial_initialization()`. `VideoTestMixin` provides `setup_video_test_data()` and `assert_video_device_selection()`. `SettingsTestMixin` provides `create_test_settings()` and `assert_settings_loaded()`. Tests can mix and match these based on what they're testing.
+
+A `create_kvm_test_class(*mixins)` factory function is also available to build combined test classes programmatically.
 
 ## Common Patterns
 
 ### Creating Mock Devices
 
-**Serial ports:**
+`KVMTestBase` provides these factory helpers:
 
 ```python
+# Serial port name lists
 test_ports = self.create_mock_serial_ports()
 # Returns: ["/dev/ttyUSB0", "/dev/ttyUSB1", "/dev/ttyACM0"]
+
+# Camera MagicMock objects with .index, .width, .height, __str__()
+cameras = self.create_mock_cameras(count=2)
+
+# A mock Serial instance with .close() pre-configured
+serial = self.create_mock_serial_instance()
+
+# Default application settings dict (for settings tests)
+settings = self.get_default_settings()
+
+# Default baud rate list as the app defines it
+rates = self.get_default_baud_rates()
+
+# Instantiate a KVMQtGui with all hardware safely mocked
+app = self.create_kvm_app()
 ```
 
-**Cameras:**
+### Patching App Methods
+
+`patch_kvm_method()` patches a method on a live `KVMQtGui` instance without string-based target lookup:
 
 ```python
-cameras = self.create_mock_cameras(count=2)
-# Each has: .index, .width, .height, __str__()
+app = self.create_kvm_app()
+with self.patch_kvm_method(app, "_populate_serial_ports") as mock_populate:
+    app._KVMQtGui__init_devices()
+    mock_populate.assert_called_once()
 ```
 
 ### Error Handling Tests
+
+`assert_error_handling(mock_messagebox_method, expected_calls=1)` wraps `assert_called_once()` / `assertEqual(call_count, N)` on a mocked `QMessageBox` method, giving a consistent failure message across tests.
 
 **Pattern for exception testing:**
 
@@ -206,28 +271,30 @@ patch("kvm_serial.kvm.KVMQtGui._internal_helper")
 ✅ **Do mock:**
 
 ```python
-patch("serial.Serial")
-patch("cv2.VideoCapture")
+patch("serial.Serial")   # external library — pre-mocked by conftest, patched before kvm.py imports it
+patch("cv2.cvtColor")    # external library attribute used by the application
 ```
 
-Mock external dependencies, not internal code (except when deliberately isolating units).
+Mock external dependencies, not internal code (except when deliberately isolating units). Note that for names imported into a module via `from x import y`, you must patch them at the application's import point rather than the library — see [Hardware Abstraction Mocking](#2-hardware-abstraction-mocking) for detail.
 
-### 2. Verify Behaviour, Not Implementation
+### 2. Prefer Observable Outcomes Over Call Assertions
 
-❌ **Don't test:**
+Where possible, verify state rather than implementation:
+
+❌ **Fragile** — breaks if the implementation is refactored even when behaviour is correct:
 
 ```python
 mock_method.assert_called()
 ```
 
-✅ **Do test:**
+✅ **Robust** — tests what the user or caller would actually observe:
 
 ```python
 self.assertEqual(app.serial_port_var, expected_port)
 self.assertTrue(app.keyboard_op is not None)
 ```
 
-Focus on observable outcomes rather than internal method calls.
+Call-count assertions (`assert_called_once`, `assert_not_called`) are still appropriate when the *number of calls* is itself the observable behaviour — for example, verifying that an expensive device enumeration is not repeated unnecessarily, or that an error dialog is shown exactly once. Use them deliberately, not as a substitute for checking outcomes.
 
 ### 3. Use Type-Appropriate Assertions
 
@@ -267,7 +334,12 @@ Catches regression in default configuration.
 def tearDown(self):
     patch.stopall()
 
-    for module in ["kvm_serial.kvm", "kvm_serial.backend.video"]:
+    for module in [
+        "kvm_serial.kvm",
+        "kvm_serial.backend.video",
+        "kvm_serial.utils.communication",
+        "kvm_serial.utils.settings",
+    ]:
         if module in sys.modules:
             del sys.modules[module]
 ```
@@ -280,10 +352,10 @@ Prevents test interdependencies and ensures fresh imports.
 
 **Why Not Modify Production Code?**: We could add `try/except` blocks or lazy imports to production code, but that would be polluting the codebase to accommodate tests: exactly backwards. Tests should adapt to production code, not the other way around.
 
-**The Solution**: Use pytest's `pytest_configure` hook to inject mocks into Python's module system before any test collection begins. This runs even before pytest discovers test files, ensuring mocks are in place for module-level imports.
+**The Solution**: Use pytest's `pytest_configure` hook in `tests/conftest.py` to inject mocks into Python's module system before any test collection begins. This runs even before pytest discovers test files, ensuring mocks are in place for module-level imports across the entire test suite.
 
 ```python
-# tests/utils/conftest.py
+# tests/conftest.py
 import sys
 from unittest.mock import MagicMock
 from tests._utilities import MockSerial
@@ -310,48 +382,36 @@ def pytest_configure(config):
 
 **Why the Hierarchy Matters**: Notice how `mock_serial_mod.tools` points to the same object as `sys.modules['serial.tools']`. This is crucial. When Python imports `serial.tools.list_ports`, it follows the hierarchy: first it finds `serial` in `sys.modules`, then accesses its `.tools` attribute, then accesses `.list_ports`. If these aren't the same object references, Python creates multiple mock instances. Tests will fail with mysterious assertion errors like `Expected 'method' to be called once. Called 0 times.` because the code under test called a *different* mock instance than the one being asserted against.
 
-**The sys.modules Pollution Tradeoff**: This approach modifies global state (`sys.modules`) that persists across all tests in a pytest session. That sounds dangerous: and it is. The tradeoff is that `pytest tests/` will fail in ways that are unclear to the developer, so we have to work around this. The CI workflow runs test groups in separate pytest invocations (backend, utils, kvm, control), giving each a fresh Python process with clean `sys.modules`.
+By placing this in the root `tests/conftest.py`, the mocks apply to all test groups in a single pytest run, so `pytest tests/` works correctly. The CI workflow still runs each group as a separate step, but this is for coverage accumulation (`--cov-append`), not for isolation.
 
-This means:
-
-- Each test group can safely mock `sys.modules` without affecting others
-- Running `pytest tests/` locally might fail due to mock conflicts, but CI will pass
-- Always test using the same commands as CI: `pytest tests/backend/`, `pytest tests/utils/`, etc.
-
-**Where to Use This**: Only test directories that import production code with module-level serial imports need this pattern. Currently: `tests/utils/` and `tests/backend/`. The KVM tests don't need it because they mock at a higher level.
+**Caution — sys.modules is global state**: the injected mocks persist for the entire pytest session and cannot be undone. If a future test ever needs the *real* `serial` module (e.g. an integration test against physical hardware), it cannot coexist in the same pytest invocation. Similarly, adding a second `pytest_configure` hook in a subdirectory `conftest.py` that tries to install a different mock for the same module keys will silently win or lose depending on conftest load order, causing hard-to-diagnose failures. Keep all serial mocking in the single root conftest.
 
 ## Test Organisation
 
 ### Categories
 
-Tests are organised by feature area (see Test_Categories document):
+Tests are organised by feature area:
 
 1. **Initialization & Configuration** (`test_kvm_init.py`)
-   - Window setup
-   - Menu creation
-   - Settings loading/saving
-   - Device discovery
+   - Window setup, menu creation, device discovery
 
 2. **Device Management** (`test_kvm_device_mgmt.py`)
-   - Serial port selection
-   - Camera enumeration
-   - Baud rate configuration
-   - Connection error handling
+   - Serial port selection, camera enumeration, baud rate configuration, connection error handling
 
-3. **Settings Persistence** (covered in init tests)
-   - INI file operations
-   - Default value handling
-   - Invalid settings recovery
+3. **Settings Persistence** (`test_kvm_settings_persistence.py`)
+   - INI file operations, default value handling, invalid settings recovery
 
-4. **Event Handling** (future expansion)
-   - Mouse coordinate translation
-   - Keyboard event processing
-   - Focus management
+4. **Event Handling** (`test_kvm_events.py`)
+   - Mouse coordinate translation, keyboard event processing, focus management
 
-5. **Video Processing** (future expansion)
-   - Frame capture logic
-   - Frame rate management
-   - Error handling
+5. **Video Processing** (`test_kvm_video.py`)
+   - Frame capture logic, frame rate management, error handling
+
+6. **Paste** (`test_kvm_paste.py`)
+   - Clipboard-to-remote text transmission, scancode sequencing
+
+7. **Screenshot** (`test_kvm_screenshot.py`)
+   - Screen capture and save functionality
 
 ### File Naming
 
@@ -359,43 +419,22 @@ Tests are organised by feature area (see Test_Categories document):
 - `test_kvm_*.py` - Feature-specific test suites
 - Mirrors source structure for easy navigation
 
-### Directory Structure and Test Isolation
-
-The test suite is organised to match how CI runs tests: this organisation isn't arbitrary, it's essential for the mocking strategy to work:
+### Directory Structure
 
 ```text
 tests/
+├── conftest.py        # Root-level serial module mocking (applies to all groups)
+├── _utilities.py      # Shared test utilities and MockSerial
 ├── backend/           # Backend implementation tests
-│   ├── conftest.py   # Serial module mocking for backend
 │   └── ...
-├── kvm/              # GUI application tests
+├── kvm/               # GUI application tests
 │   └── ...
-├── utils/            # Utility module tests
-│   ├── conftest.py   # Serial module mocking for utils
+├── utils/             # Utility module tests
 │   └── ...
-└── test_control.py   # Control module tests
+└── test_control.py    # Control module tests
 ```
 
-#### Why Separate pytest Invocations Matter
-
-The GitHub Actions workflow (`.github/workflows/test.yml`) deliberately runs each test group as a separate command:
-
-```bash
-pytest tests/backend/  # Separate process
-pytest tests/utils/    # Separate process
-pytest tests/kvm/      # Separate process
-pytest tests/test_control.py  # Separate process
-```
-
-This isn't just for organisation: it's fundamental to how the mocking works. Each pytest invocation spawns a fresh Python interpreter with a clean `sys.modules` dictionary. This means:
-
-**The Good**: Test groups with different mocking needs (like `tests/utils/` and `tests/kvm/`) can each pollute `sys.modules` however they want without interfering with each other. The `pytest_configure` hook in `tests/utils/conftest.py` mocks the serial module for utils tests, and by the time `tests/kvm/` runs, that's in a completely different process with no memory of those mocks.
-
-**The Gotcha**: Running `pytest tests/` locally runs *all* test groups in one process. The `pytest_configure` hooks from multiple `conftest.py` files all run in the same `sys.modules`, causing conflicts. Tests might fail locally but pass in CI.
-
-**Best Practice**: Always test using the CI commands. If you're working on backend code, run `pytest tests/backend/`. If you need to verify everything works, run each group separately just like CI does.
-
-This is an intentional tradeoff: running the entire suite locally is awkward in exchange for being able to mock aggressively without complex isolation machinery.
+The root `tests/conftest.py` contains the `pytest_configure` hook that mocks serial modules for the entire suite. Running `pytest tests/` works correctly. The CI workflow runs each group in a separate step for coverage accumulation (`--cov-append`), not because isolation requires it.
 
 ## Running Tests
 
@@ -406,10 +445,10 @@ This is an intentional tradeoff: running the entire suite locally is awkward in 
 pytest
 
 # Run specific test file
-pytest tests/test_kvm_init.py
+pytest tests/kvm/test_kvm_init.py
 
 # Run specific test
-pytest tests/test_kvm_init.py::TestKVMInitialization::test_window_initialization
+pytest tests/kvm/test_kvm_init.py::TestKVMInitialization::test_window_initialization
 
 # Verbose output
 pytest -v
@@ -426,7 +465,7 @@ Tests configured in `pyproject.toml`:
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = ["-v", "--tb=short", "--cov=kvm_serial"]
+addopts = ["-v", "--tb=short", "--cov=kvm_serial", "--cov-report=term-missing", "--cov-report=lcov:lcov.info"]
 timeout = 5
 ```
 
@@ -485,22 +524,12 @@ Tests run automatically via GitHub Actions (see `.github/workflows/test.yml`). K
 
 Potential test suite improvements:
 
-1. **Event Handling Tests**
-   - Mouse coordinate translation logic
-   - Keyboard event processing
-   - Serial communication triggers
-
-2. **Video Processing Tests**  
-   - Frame capture request logic
-   - Frame rate management
-   - Canvas size updates
-
-3. **Integration Tests**
+1. **Integration Tests**
    - End-to-end workflows
    - Settings persistence across restarts
    - Device reconnection scenarios
 
-4. **Performance Tests**
+2. **Performance Tests**
    - Frame rate under load
    - Memory usage patterns
    - Serial communication latency
