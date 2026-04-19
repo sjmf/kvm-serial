@@ -115,7 +115,7 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
     finally:
         fd.close()
 
-    resolutions.sort(key=lambda r: r[0] * r[1])
+    resolutions.sort()
     return resolutions
 
 
@@ -149,7 +149,7 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
             seen.add((w, h))
             resolutions.append((w, h))
 
-    resolutions.sort(key=lambda r: r[0] * r[1])
+    resolutions.sort()
     return resolutions
 
 
@@ -248,5 +248,5 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
             except Exception:
                 pass
 
-    resolutions.sort(key=lambda r: r[0] * r[1])
+    resolutions.sort()
     return resolutions
