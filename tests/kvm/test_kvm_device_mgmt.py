@@ -336,5 +336,165 @@ class TestKVMDeviceManagement(
         self.assertIn("keyboard_layout_menu", str(context.exception))
 
 
+class _FakeQAction:
+    """Minimal QAction stand-in that stores label, checkable, and checked state."""
+
+    def __init__(self, label, parent=None):
+        self._text = label
+        self._checkable = False
+        self._checked = False
+        self.triggered = MagicMock()
+        self.triggered.connect = MagicMock()
+
+    def text(self):
+        return self._text
+
+    def setCheckable(self, v):
+        self._checkable = v
+
+    def isChecked(self):
+        return self._checked
+
+    def setChecked(self, v):
+        self._checked = v
+
+    def isSeparator(self):
+        return False
+
+
+class _FakeSeparator:
+    def text(self):
+        return ""
+
+    def isSeparator(self):
+        return True
+
+    def setChecked(self, v):
+        pass
+
+    def isChecked(self):
+        return False
+
+
+class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
+    """Tests for the Resolution submenu and related handlers."""
+
+    def _make_tracking_menu(self):
+        """Return a mock menu that tracks added actions via addAction/addSeparator."""
+        actions = []
+
+        menu = MagicMock()
+        menu.addAction.side_effect = lambda a: actions.append(a)
+        menu.addSeparator.side_effect = lambda: actions.append(_FakeSeparator())
+        menu.actions.side_effect = lambda: list(actions)
+        menu.clear.side_effect = actions.clear
+        return menu
+
+    def _populate(self, app, resolution_var="", resolutions=None):
+        """Wire a tracking menu + fake QAction onto app and populate the resolution menu."""
+        app.resolution_var = resolution_var
+        app.video_var = 0
+        app.video_devices = self.create_mock_cameras(1)
+        app.resolution_menu = self._make_tracking_menu()
+        with (
+            patch("kvm_serial.kvm.enumerate_resolutions", return_value=resolutions or []),
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+        ):
+            app._populate_resolution_menu(0)
+
+    def test_populate_resolution_menu_contains_use_default(self):
+        app = self.create_kvm_app()
+        self._populate(app)
+        labels = [a.text() for a in app.resolution_menu.actions()]
+        self.assertIn("Use Default", labels)
+
+    def test_populate_resolution_menu_contains_resize_window(self):
+        app = self.create_kvm_app()
+        self._populate(app)
+        labels = [a.text() for a in app.resolution_menu.actions()]
+        self.assertIn("Resize window", labels)
+
+    def test_populate_resolution_menu_has_two_separators(self):
+        app = self.create_kvm_app()
+        self._populate(app)
+        separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
+        self.assertEqual(len(separators), 2)
+
+    def test_use_default_checked_when_resolution_var_empty(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_use_default_unchecked_when_resolution_var_set(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080", resolutions=[(1920, 1080)])
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertFalse(use_default.isChecked())
+
+    def test_on_resolution_selected_updates_var_and_unchecks_use_default(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="", resolutions=[(1920, 1080)])
+        app.video_worker = MagicMock()
+
+        app._on_resolution_selected(1920, 1080)
+
+        self.assertEqual(app.resolution_var, "1920x1080")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertFalse(use_default.isChecked())
+
+    def test_on_use_default_selected_clears_resolution_var(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080")
+        app.video_worker = MagicMock()
+
+        app._on_use_default_selected()
+
+        self.assertEqual(app.resolution_var, "")
+
+    def test_on_use_default_selected_checks_use_default_action(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080", resolutions=[(1920, 1080)])
+        app.video_worker = MagicMock()
+
+        app._on_use_default_selected()
+
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_on_use_default_selected_restores_camera_dims(self):
+        app = self.create_kvm_app()
+        cameras = self.create_mock_cameras(1)
+        cameras[0].index = 0
+        cameras[0].width = 1280
+        cameras[0].height = 720
+        app.video_devices = cameras
+        app.video_var = 0
+        app.video_worker = MagicMock()
+        self._populate(app)
+
+        app._on_use_default_selected()
+
+        app.video_worker.set_camera_index.assert_called_with(0, width=1280, height=720)
+
+    def test_resize_window_to_resolution(self):
+        app = self.create_kvm_app()
+        app.video_worker = MagicMock()
+        app.video_worker.camera_width = 1920
+        app.video_worker.camera_height = 1080
+        app.video_view = MagicMock()
+        app.video_view.width.return_value = 800
+        app.video_view.height.return_value = 600
+
+        with (
+            patch.object(app, "width", return_value=840),
+            patch.object(app, "height", return_value=640),
+            patch.object(app, "resize") as mock_resize,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_resize.assert_called_once_with(1960, 1120)  # 1920+40, 1080+40
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
