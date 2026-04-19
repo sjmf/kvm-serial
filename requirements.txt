@@ -7,3 +7,6 @@ screeninfo>=0.6.7
 # GUI
 pyqt5>=5.15.11
 toml>=0.10.2
+# Platform-specific: resolution enumeration via native APIs
+pyobjc-framework-AVFoundation>=9.0; sys_platform == "darwin"
+comtypes>=1.4.0; sys_platform == "win32"
