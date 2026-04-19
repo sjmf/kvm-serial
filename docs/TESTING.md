@@ -179,9 +179,25 @@ settings = self.get_default_settings()
 
 # Default baud rate list as the app defines it
 rates = self.get_default_baud_rates()
+
+# Instantiate a KVMQtGui with all hardware safely mocked
+app = self.create_kvm_app()
+```
+
+### Patching App Methods
+
+`patch_kvm_method()` patches a method on a live `KVMQtGui` instance without string-based target lookup:
+
+```python
+app = self.create_kvm_app()
+with self.patch_kvm_method(app, "_populate_serial_ports") as mock_populate:
+    app._KVMQtGui__init_devices()
+    mock_populate.assert_called_once()
 ```
 
 ### Error Handling Tests
+
+`assert_error_handling(mock_messagebox_method, expected_calls=1)` wraps `assert_called_once()` / `assertEqual(call_count, N)` on a mocked `QMessageBox` method, giving a consistent failure message across tests.
 
 **Pattern for exception testing:**
 
