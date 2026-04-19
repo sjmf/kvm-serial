@@ -237,6 +237,12 @@ Without `subTest`, the first failure would stop the test, leaving other cases un
 patch("kvm_serial.kvm.KVMQtGui._internal_helper")
 ```
 
+### 2. Prefer Observable Outcomes Over Call Assertions
+
+Where possible, verify state rather than implementation:
+
+❌ **Fragile** — breaks if the implementation is refactored even when behaviour is correct:
+
 ✅ **Do mock:**
 
 ```python
@@ -246,16 +252,11 @@ patch("cv2.cvtColor")    # external library attribute used by the application
 
 Mock external dependencies, not internal code (except when deliberately isolating units). Note that for names imported into a module via `from x import y`, you must patch them at the application's import point rather than the library — see [Hardware Abstraction Mocking](#2-hardware-abstraction-mocking) for detail.
 
-
-### 2. Verify Behaviour, Not Implementation
-
-❌ **Don't test:**
-
 ```python
 mock_method.assert_called()
 ```
 
-✅ **Do test:**
+✅ **Robust** — tests what the user or caller would actually observe:
 
 ```python
 self.assertEqual(app.serial_port_var, expected_port)
