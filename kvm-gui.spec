@@ -61,7 +61,22 @@ hiddenimports = [
     'kvm_serial.utils',
     'kvm_serial.utils.settings',
     'kvm_serial.utils.communication',
+    'kvm_serial.utils.resolution_probe',
 ]
+
+# Platform-specific imports for native resolution enumeration
+if sys.platform == 'darwin':
+    hiddenimports += [
+        'AVFoundation',
+        'CoreMedia',
+    ]
+elif sys.platform == 'win32':
+    hiddenimports += [
+        'comtypes',
+        'comtypes.client',
+        'comtypes.gen',
+    ]
+# Linux: fcntl is stdlib, no extra hiddenimports needed
 
 # Collect any data files from kvm_serial package
 datas = [
