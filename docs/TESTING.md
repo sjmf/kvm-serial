@@ -67,7 +67,7 @@ class TestMyFeature(KVMTestBase):
         self.assertIsNotNone(app.serial_port)
 ```
 
-`KVMTestBase.setUp()` starts all mocks and imports `kvm_serial.kvm`; `tearDown()` stops them and flushes the module from `sys.modules`. You do not need to call `super()` — the base class handles both.
+`KVMTestBase.setUp()` starts all mocks and imports `kvm_serial.kvm`; `tearDown()` stops them and flushes the module from `sys.modules`. You don't need to define `setUp`/`tearDown` at all — the base class handles both. If you do override `setUp`, call `super().setUp()` first.
 
 To access private methods use Python's name-mangling convention: `__method` defined in `KVMQtGui` is called as `app._KVMQtGui__method()`.
 
