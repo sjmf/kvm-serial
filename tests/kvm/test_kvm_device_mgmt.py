@@ -477,6 +477,28 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
 
         app.video_worker.set_camera_index.assert_called_with(0, width=1280, height=720)
 
+    def test_on_use_default_selected_menu_none_raises(self):
+        app = self.create_kvm_app()
+        app.resolution_menu = None
+        with self.assertRaises(TypeError):
+            app._on_use_default_selected()
+
+    def test_on_use_default_no_matching_camera_calls_set_without_dims(self):
+        app = self.create_kvm_app()
+        app.video_worker = MagicMock()
+        self._populate(app)
+        # Override after populate so no camera matches video_var=99
+        app.video_devices = []
+        app.video_var = 99
+        app._on_use_default_selected()
+        app.video_worker.set_camera_index.assert_called_with(99)
+
+    def test_on_resolution_selected_menu_none_raises(self):
+        app = self.create_kvm_app()
+        app.resolution_menu = None
+        with self.assertRaises(TypeError):
+            app._on_resolution_selected(1920, 1080)
+
     def test_resize_window_to_resolution(self):
         app = self.create_kvm_app()
         app.video_worker = MagicMock()

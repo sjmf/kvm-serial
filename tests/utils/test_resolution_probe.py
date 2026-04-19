@@ -38,6 +38,43 @@ class TestEnumerateResolutionsDispatch:
             result = enumerate_resolutions(0)
         assert isinstance(result, list)
 
+    def test_dispatches_to_v4l2_on_linux(self):
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_v4l2", return_value=[(1920, 1080)]
+            ) as mock_fn,
+        ):
+            mock_sys.platform = "linux"
+            result = enumerate_resolutions(0)
+        mock_fn.assert_called_once_with(0)
+        assert result == [(1920, 1080)]
+
+    def test_dispatches_to_avfoundation_on_darwin(self):
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_avfoundation",
+                return_value=[(1280, 720)],
+            ) as mock_fn,
+        ):
+            mock_sys.platform = "darwin"
+            result = enumerate_resolutions(0)
+        mock_fn.assert_called_once_with(0)
+        assert result == [(1280, 720)]
+
+    def test_dispatches_to_directshow_on_win32(self):
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_directshow", return_value=[(640, 480)]
+            ) as mock_fn,
+        ):
+            mock_sys.platform = "win32"
+            result = enumerate_resolutions(0)
+        mock_fn.assert_called_once_with(0)
+        assert result == [(640, 480)]
+
     def test_exception_returns_empty(self):
         with patch("kvm_serial.utils.resolution_probe.sys") as mock_sys:
             mock_sys.platform = "linux"
@@ -242,5 +279,32 @@ class TestEnumerateAVFoundation:
 class TestEnumerateDirectShow:
     def test_import_error_returns_empty(self):
         with patch.dict("sys.modules", {"comtypes": None, "comtypes.client": None}):
+            result = _enumerate_directshow(0)
+        assert result == []
+
+    def test_delegates_to_directshow_resolutions_when_import_succeeds(self):
+        mock_comtypes = MagicMock()
+        mock_client = MagicMock()
+        with (
+            patch.dict("sys.modules", {"comtypes": mock_comtypes, "comtypes.client": mock_client}),
+            patch(
+                "kvm_serial.utils.resolution_probe._directshow_resolutions",
+                return_value=[(1920, 1080)],
+            ) as mock_fn,
+        ):
+            result = _enumerate_directshow(0)
+        mock_fn.assert_called_once_with(0)
+        assert result == [(1920, 1080)]
+
+    def test_exception_in_directshow_resolutions_returns_empty(self):
+        mock_comtypes = MagicMock()
+        mock_client = MagicMock()
+        with (
+            patch.dict("sys.modules", {"comtypes": mock_comtypes, "comtypes.client": mock_client}),
+            patch(
+                "kvm_serial.utils.resolution_probe._directshow_resolutions",
+                side_effect=RuntimeError("COM error"),
+            ),
+        ):
             result = _enumerate_directshow(0)
         assert result == []
