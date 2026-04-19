@@ -491,22 +491,12 @@ Tests run automatically via GitHub Actions (see `.github/workflows/test.yml`). K
 
 Potential test suite improvements:
 
-1. **Event Handling Tests**
-   - Mouse coordinate translation logic
-   - Keyboard event processing
-   - Serial communication triggers
-
-2. **Video Processing Tests**  
-   - Frame capture request logic
-   - Frame rate management
-   - Canvas size updates
-
-3. **Integration Tests**
+1. **Integration Tests**
    - End-to-end workflows
    - Settings persistence across restarts
    - Device reconnection scenarios
 
-4. **Performance Tests**
+2. **Performance Tests**
    - Frame rate under load
    - Memory usage patterns
    - Serial communication latency
