@@ -49,6 +49,37 @@ This inheritance pattern centralises all the mocking complexity in one place. In
 
 **Critical:** Module cleanup prevents test cross-contamination by forcing fresh imports.
 
+## Adding a New Test
+
+The minimal skeleton for a KVM GUI test:
+
+```python
+from tests.kvm.test_kvm_base import KVMTestBase
+
+class TestMyFeature(KVMTestBase):
+    def test_something(self):
+        app = self.create_kvm_app()   # KVMQtGui with all hardware mocked
+        # arrange
+        app.serial_port_var = "/dev/ttyUSB0"
+        # act
+        app._KVMQtGui__init_serial()  # double-underscore = name-mangled private method
+        # assert
+        self.assertIsNotNone(app.serial_port)
+```
+
+`KVMTestBase.setUp()` starts all mocks and imports `kvm_serial.kvm`; `tearDown()` stops them and flushes the module from `sys.modules`. You do not need to call `super()` — the base class handles both.
+
+To access private methods use Python's name-mangling convention: `__method` defined in `KVMQtGui` is called as `app._KVMQtGui__method()`.
+
+For tests that need serial port or camera helpers, mix in the relevant class:
+
+```python
+class TestMyFeature(KVMTestBase, KVMTestMixins.SerialTestMixin):
+    def test_port_list(self):
+        ports = self.create_mock_serial_ports()   # from KVMTestBase
+        self.setup_serial_test_data()              # from SerialTestMixin
+```
+
 ## Mocking Strategies
 
 ### 1. PyQt5 GUI Component Mocking
@@ -263,7 +294,7 @@ self.assertEqual(app.serial_port_var, expected_port)
 self.assertTrue(app.keyboard_op is not None)
 ```
 
-Focus on observable outcomes rather than internal method calls.
+Call-count assertions (`assert_called_once`, `assert_not_called`) are still appropriate when the *number of calls* is itself the observable behaviour — for example, verifying that an expensive device enumeration is not repeated unnecessarily, or that an error dialog is shown exactly once. Use them deliberately, not as a substitute for checking outcomes.
 
 ### 3. Use Type-Appropriate Assertions
 
