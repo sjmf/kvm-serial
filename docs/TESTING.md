@@ -240,11 +240,12 @@ patch("kvm_serial.kvm.KVMQtGui._internal_helper")
 ✅ **Do mock:**
 
 ```python
-patch("serial.Serial")
-patch("cv2.VideoCapture")
+patch("serial.Serial")   # external library — pre-mocked by conftest, patched before kvm.py imports it
+patch("cv2.cvtColor")    # external library attribute used by the application
 ```
 
-Mock external dependencies, not internal code (except when deliberately isolating units).
+Mock external dependencies, not internal code (except when deliberately isolating units). Note that for names imported into a module via `from x import y`, you must patch them at the application's import point rather than the library — see [Hardware Abstraction Mocking](#2-hardware-abstraction-mocking) for detail.
+
 
 ### 2. Verify Behaviour, Not Implementation
 
