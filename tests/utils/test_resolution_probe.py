@@ -11,6 +11,7 @@ from kvm_serial.utils.resolution_probe import (
     _enumerate_v4l2,
     _enumerate_avfoundation,
     _enumerate_directshow,
+    _directshow_resolutions,
 )
 
 
@@ -308,3 +309,158 @@ class TestEnumerateDirectShow:
         ):
             result = _enumerate_directshow(0)
         assert result == []
+
+
+class TestDirectShowResolutions:
+    """Tests _directshow_resolutions with a fully mocked COM stack.
+
+    Key wiring: `import comtypes.client` inside the function causes Python to set
+    sys.modules['comtypes'].client = sys.modules['comtypes.client'], so we explicitly
+    pre-set mock_comtypes.client = mock_client to be safe. `from comtypes.gen import
+    DirectShowLib as ds` resolves to mock_gen.DirectShowLib.
+    """
+
+    def _build_stack(self, resolutions=None):
+        """Return a fully wired COM mock stack as a dict of named objects."""
+        if resolutions is None:
+            resolutions = [(1920, 1080)]
+
+        mock_ctypes = MagicMock(name="ctypes")
+        mock_comtypes = MagicMock(name="comtypes")
+        mock_client = MagicMock(name="comtypes.client")
+        mock_gen = MagicMock(name="comtypes.gen")
+        mock_comtypes.client = mock_client
+        mock_comtypes.COMError = OSError  # must be a real exception class
+
+        ds = mock_gen.DirectShowLib
+        ds.FORMAT_VideoInfo = "FORMAT_VideoInfo_sentinel"  # real value for equality
+
+        # Media types for the single output pin
+        mts, cast_returns = [], []
+        for w, h in resolutions:
+            mt = MagicMock()
+            mt.formattype = ds.FORMAT_VideoInfo
+            vi = MagicMock()
+            vi.bmiHeader.biWidth = w
+            vi.bmiHeader.biHeight = h
+            cr = MagicMock()
+            cr.contents = vi
+            mts.append(mt)
+            cast_returns.append(cr)
+        mock_ctypes.cast.side_effect = cast_returns
+
+        enum_mt = MagicMock()
+        enum_mt.Next.side_effect = [(mt, 1) for mt in mts] + [(None, 0)]
+
+        pin = MagicMock()
+        pin_info = MagicMock()
+        pin_info.dir = 0  # PINDIR_OUTPUT
+        pin.QueryPinInfo.return_value = pin_info
+        pin.EnumMediaTypes.return_value = enum_mt
+
+        enum_pins = MagicMock()
+        enum_pins.Next.side_effect = [(pin, 1), (None, 0)]
+
+        filter_ = MagicMock()
+        filter_.EnumPins.return_value = enum_pins
+
+        moniker = MagicMock()
+        moniker.BindToObject.return_value = filter_
+
+        enum_moniker = MagicMock()
+        enum_moniker.Next.side_effect = [(moniker, 1), (None, 0)]
+
+        dev_enum = MagicMock()
+        dev_enum.CreateClassEnumerator.return_value = enum_moniker
+        mock_client.CreateObject.return_value = dev_enum
+
+        return {
+            "modules": {
+                "ctypes": mock_ctypes,
+                "comtypes": mock_comtypes,
+                "comtypes.client": mock_client,
+                "comtypes.gen": mock_gen,
+            },
+            "ctypes": mock_ctypes,
+            "comtypes": mock_comtypes,
+            "client": mock_client,
+            "ds": ds,
+            "dev_enum": dev_enum,
+            "enum_moniker": enum_moniker,
+            "moniker": moniker,
+            "filter_": filter_,
+            "enum_pins": enum_pins,
+            "pin": pin,
+            "pin_info": pin_info,
+            "enum_mt": enum_mt,
+        }
+
+    def test_enum_moniker_none_returns_empty(self):
+        s = self._build_stack()
+        s["dev_enum"].CreateClassEnumerator.return_value = None
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_device_index_out_of_range_returns_empty(self):
+        s = self._build_stack()  # one moniker at index 0
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(1) == []
+
+    def test_com_error_in_moniker_loop_returns_empty(self):
+        s = self._build_stack()
+        s["enum_moniker"].Next.side_effect = OSError("COMError")
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_output_pin_with_wrong_dir_skipped(self):
+        s = self._build_stack()
+        s["pin_info"].dir = 1  # not PINDIR_OUTPUT → skipped
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_com_error_on_enum_media_types_skipped(self):
+        s = self._build_stack()
+        s["pin"].EnumMediaTypes.side_effect = OSError("COMError")
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_non_video_info_format_skipped(self):
+        s = self._build_stack()
+        mt = MagicMock()
+        mt.formattype = "not_video_info"
+        s["enum_mt"].Next.side_effect = [(mt, 1), (None, 0)]
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_exception_in_cast_is_swallowed(self):
+        s = self._build_stack()
+        s["ctypes"].cast.side_effect = RuntimeError("bad cast")
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_zero_dimension_filtered_out(self):
+        s = self._build_stack(resolutions=[(0, 480), (1920, 1080)])
+        with patch.dict("sys.modules", s["modules"]):
+            result = _directshow_resolutions(0)
+        assert (0, 480) not in result
+        assert (1920, 1080) in result
+
+    def test_com_error_in_pin_loop_returns_empty(self):
+        s = self._build_stack()
+        s["enum_pins"].Next.side_effect = OSError("COMError in pin loop")
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_com_error_in_media_type_loop_returns_partial(self):
+        s = self._build_stack(resolutions=[(1920, 1080)])
+        s["enum_mt"].Next.side_effect = OSError("COMError in mt loop")
+        with patch.dict("sys.modules", s["modules"]):
+            assert _directshow_resolutions(0) == []
+
+    def test_returns_deduplicated_sorted_resolutions(self):
+        s = self._build_stack(resolutions=[(1920, 1080), (1280, 720), (1920, 1080)])
+        with patch.dict("sys.modules", s["modules"]):
+            result = _directshow_resolutions(0)
+        assert result.count((1920, 1080)) == 1
+        assert (1280, 720) in result
+        assert list(result) == sorted(result)
