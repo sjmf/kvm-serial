@@ -38,6 +38,7 @@ try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
+    from kvm_serial.utils.resolution_probe import enumerate_resolutions, RESOLUTION_PRESETS
     from kvm_serial.backend.video import CameraProperties, CaptureDevice
     from kvm_serial.backend.implementations.qtop import QtOp
     from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
@@ -48,6 +49,7 @@ except ModuleNotFoundError:
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
     from utils import scancode_to_ascii, string_to_scancodes
+    from utils.resolution_probe import enumerate_resolutions, RESOLUTION_PRESETS
     from backend.video import CameraProperties, CaptureDevice
     from backend.implementations.qtop import QtOp
     from backend.implementations.mouseop import MouseOp, MouseButton
@@ -266,6 +268,7 @@ class KVMQtGui(QMainWindow):
     baud_rate_var: int = -1
     video_device_var: str = "Loading cameras..."
     keyboard_layout_var: str = "en_GB"
+    resolution_var: str = ""  # "WIDTHxHEIGHT", empty means auto (from camera enumeration)
 
     window_var: bool = False
     show_status_var: bool = True
@@ -402,10 +405,11 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
-        # Serial Port, Baud, Video, and Keyboard Layout submenus
+        # Serial Port, Baud, Video, Resolution, and Keyboard Layout submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
         self.video_device_menu = options_menu.addMenu("Video Device")
+        self.resolution_menu = options_menu.addMenu("Resolution")
         self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
         # Hide Mouse Pointer option
@@ -630,6 +634,7 @@ class KVMQtGui(QMainWindow):
             self.video_device_menu is None
             or self.baud_rate_menu is None
             or self.serial_port_menu is None
+            or self.resolution_menu is None
         ):
             raise TypeError("Initialise all menus before calling _load_settings")
 
@@ -666,6 +671,21 @@ class KVMQtGui(QMainWindow):
             # Use default (first device)
             self.video_device_idx = 0
             self.video_worker.set_camera_index(0)
+
+        # Load resolution setting and apply if valid and present in menu
+        saved_res = kvm.get("resolution", "")
+        if saved_res:
+            # Check it exists in the populated menu before applying
+            available = [a.text() for a in self.resolution_menu.actions()]
+            if saved_res in available:
+                parts = saved_res.split("x")
+                try:
+                    w, h = int(parts[0]), int(parts[1])
+                    self._on_resolution_selected(w, h)
+                except (ValueError, IndexError):
+                    logging.warning(f"Invalid resolution in settings: {saved_res}")
+            else:
+                logging.debug(f"Saved resolution {saved_res} not in menu, ignoring")
 
         # Load other boolean settings
         self.window_var = kvm.get("windowed", "False") == "True"
@@ -765,6 +785,7 @@ class KVMQtGui(QMainWindow):
             "serial_port": self.serial_port_var,
             "video_device": str(self.video_var),
             "baud_rate": str(self.baud_rate_var),
+            "resolution": self.resolution_var,
             "windowed": str(self.window_var),
             "statusbar": str(self.show_status_var),
             "verbose": str(self.verbose_var),
@@ -1045,6 +1066,8 @@ class KVMQtGui(QMainWindow):
                 first_camera.index, width=first_camera.width, height=first_camera.height
             )
 
+            self._populate_resolution_menu(first_camera.index)
+
             # Start video frame timer now that camera enumeration is complete
             if not self.video_update_timer.isActive():
                 self.video_update_timer.start(1000 // self.target_fps)
@@ -1143,6 +1166,54 @@ class KVMQtGui(QMainWindow):
             logging.warning(
                 f"Selected video device: {device_label} (index: {device_idx}) - dimensions unknown"
             )
+
+        self._populate_resolution_menu(device_idx)
+
+    def _populate_resolution_menu(self, device_index: int):
+        """
+        Populate the resolution menu for the given camera index.
+
+        Calls the native platform enumerator; falls back to RESOLUTION_PRESETS if
+        enumeration returns nothing (dep absent, device not accessible, etc.).
+        The current resolution_var selection is preserved when repopulating.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _populate_resolution_menu()")
+
+        resolutions = enumerate_resolutions(device_index)
+        if not resolutions:
+            resolutions = RESOLUTION_PRESETS
+            logging.debug(
+                f"Resolution enumeration unavailable for device {device_index}, using presets"
+            )
+        else:
+            logging.info(f"Enumerated {len(resolutions)} resolutions for device {device_index}")
+
+        self.resolution_menu.clear()
+        for width, height in resolutions:
+            label = f"{width}x{height}"
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(label == self.resolution_var)
+            action.triggered.connect(
+                lambda checked, w=width, h=height: self._on_resolution_selected(w, h)
+            )
+            self.resolution_menu.addAction(action)
+
+    def _on_resolution_selected(self, width: int, height: int):
+        """
+        Handle selection of a capture resolution.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _on_resolution_selected()")
+
+        label = f"{width}x{height}"
+        for action in self.resolution_menu.actions():
+            action.setChecked(action.text() == label)
+
+        self.resolution_var = label
+        self.video_worker.set_camera_index(self.video_var, width=width, height=height)
+        logging.info(f"Selected resolution: {label}")
 
     def _request_video_frame(self):
         """
