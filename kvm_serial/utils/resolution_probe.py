@@ -61,6 +61,23 @@ def enumerate_resolutions(device_index: int) -> List[Resolution]:
 
 
 def _enumerate_v4l2(device_index: int) -> List[Resolution]:
+    """
+    Enumerate supported resolutions for a V4L2 capture device via ioctl.
+
+    Opens /dev/videoN and issues VIDIOC_ENUM_FMT to iterate over pixel formats,
+    then VIDIOC_ENUM_FRAMESIZES to collect discrete (width, height) pairs for each
+    format. Stepwise and continuous frame-size types are skipped. Duplicate
+    resolutions reported across multiple pixel formats are deduplicated.
+
+    Returns an empty list if the device cannot be opened or no discrete sizes
+    are reported.
+
+    References:
+        VIDIOC_ENUM_FMT:
+            https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/vidioc-enum-fmt.html
+        VIDIOC_ENUM_FRAMESIZES / v4l2_frmsizeenum:
+            https://www.kernel.org/doc/html/latest/userspace-api/media/v4l/vidioc-enum-framesizes.html
+    """
     import fcntl
     import struct
 
@@ -84,6 +101,10 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
     try:
         fmt_index = 0
         while True:
+            # Loop termination relies on fcntl.ioctl raising OSError when fmt_index exceeds the
+            # device's format count. The V4L2 spec guarantees EINVAL for out-of-range indices, so
+            # compliant kernel drivers *should* always break out.
+
             # struct v4l2_fmtdesc: u32 index, u32 type, u32 flags, u8[32] desc, u32 pixelformat, u32[4] reserved
             fmt_buf = struct.pack("=II32sII4I", fmt_index, 1, b"", 0, 0, 0, 0, 0, 0)
             try:
@@ -96,6 +117,9 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
 
             size_index = 0
             while True:
+                # Loop termination: ioctl raises OSError (EINVAL) when size_index exceeds the
+                # discrete frame count, or the else-branch breaks on stepwise/continuous types.
+
                 # struct v4l2_frmsizeenum: u32 index, u32 pixel_format, u32 type,
                 # then union (discrete: u32 w, u32 h  OR  stepwise: 6×u32)
                 size_buf = struct.pack("=III8I", size_index, pixelformat, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -135,6 +159,23 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
 
 
 def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
+    """
+    Enumerate supported resolutions for a macOS capture device via AVFoundation.
+
+    Requires `pyobjc-framework-AVFoundation` (optional dependency); returns an
+    empty list if the import fails. Uses AVCaptureDevice.devicesWithMediaType_
+    to list video devices, then iterates the device's format list and extracts
+    CMVideoDimensions via CoreMedia.CMVideoFormatDescriptionGetDimensions.
+    Duplicate resolutions across formats are deduplicated.
+
+    References:
+        AVCaptureDevice.devicesWithMediaType_:
+            https://developer.apple.com/documentation/avfoundation/avcapturedevice/1390520-deviceswithmediatype
+        AVCaptureDevice.formats:
+            https://developer.apple.com/documentation/avfoundation/avcapturedevice/formats
+        CMVideoFormatDescriptionGetDimensions:
+            https://developer.apple.com/documentation/coremedia/cmvideoformatdescriptiongetdimensions(_:)
+    """
     try:
         import AVFoundation
         import CoreMedia
@@ -178,6 +219,14 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
 
 
 def _enumerate_directshow(device_index: int) -> List[Resolution]:
+    """
+    Enumerate supported resolutions for a Windows capture device via DirectShow.
+
+    Requires `comtypes` (optional dependency); returns an empty list if the import
+    fails. Delegates to _directshow_resolutions for the actual COM enumeration,
+    catching any exception it raises so that a partial or broken DirectShow
+    environment degrades gracefully.
+    """
     try:
         import comtypes
         import comtypes.client
@@ -193,7 +242,30 @@ def _enumerate_directshow(device_index: int) -> List[Resolution]:
 
 
 def _directshow_resolutions(device_index: int) -> List[Resolution]:
-    """Enumerate media types from a DirectShow video capture filter."""
+    """
+    Walk a DirectShow video capture filter's media types and collect resolutions.
+
+    Uses ICreateDevEnum/IEnumMoniker to locate the video capture device at
+    device_index, then IEnumPins to find its output pins (PINDIR_OUTPUT = 0).
+    For each output pin, IEnumMediaTypes yields AM_MEDIA_TYPE structures; those
+    with formattype FORMAT_VideoInfo are cast to VIDEOINFOHEADER to read
+    biWidth/biHeight. Negative heights (top-down DIBs) are normalised with abs().
+
+    Raises any COM or ctypes exception to the caller (_enumerate_directshow),
+    which handles them as a graceful fallback.
+
+    References:
+        ICreateDevEnum:
+            https://learn.microsoft.com/en-us/windows/win32/api/strmif/nn-strmif-icreatedevenum
+        IEnumMoniker:
+            https://learn.microsoft.com/en-us/windows/win32/api/objidl/nn-objidl-ienummoniker
+        IEnumPins:
+            https://learn.microsoft.com/en-us/windows/win32/api/strmif/nn-strmif-ienumpins
+        IEnumMediaTypes:
+            https://learn.microsoft.com/en-us/windows/win32/api/strmif/nn-strmif-ienummediatypes
+        VIDEOINFOHEADER:
+            https://learn.microsoft.com/en-us/previous-versions/windows/desktop/api/amvideo/ns-amvideo-videoinfoheader
+    """
     import ctypes
     import comtypes
     import comtypes.client
@@ -215,6 +287,8 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
 
     monikers = []
     while True:
+        # Loop termination: IEnumMoniker::Next returns fetched == 0 (COM S_FALSE) when the
+        # device list is exhausted. COMError provides a secondary exit for broken enumerators.
         try:
             moniker, fetched = enum_moniker.Next(1)
             if fetched == 0:
@@ -236,6 +310,9 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
     seen: set = set()
 
     while True:
+        # Loop termination: IEnumPins::Next returns fetched == 0 when all pins have been
+        # visited. The two continue paths both return to the top of this loop, so Next is
+        # always called to advance the enumerator before any per-pin processing is skipped.
         try:
             pin, fetched = enum_pins.Next(1)
             if fetched == 0:
@@ -253,6 +330,8 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
             continue
 
         while True:
+            # Loop termination: IEnumMediaTypes::Next returns fetched == 0 when all
+            # media types for this pin have been examined.
             try:
                 mt, fetched = enum_mt.Next(1)
                 if fetched == 0:
