@@ -40,6 +40,7 @@ def enumerate_resolutions(device_index: int) -> List[Resolution]:
     Returns an empty list if enumeration is not available on this platform or
     if the device cannot be queried.
     """
+    logger.debug("Enumerating resolutions for device %d on %s", device_index, sys.platform)
     try:
         if sys.platform == "linux":
             return _enumerate_v4l2(device_index)
@@ -47,6 +48,8 @@ def enumerate_resolutions(device_index: int) -> List[Resolution]:
             return _enumerate_avfoundation(device_index)
         elif sys.platform == "win32":
             return _enumerate_directshow(device_index)
+        else:
+            logger.debug("Resolution enumeration not implemented for platform %s", sys.platform)
     except Exception:
         logger.debug("Resolution enumeration failed", exc_info=True)
     return []
@@ -71,9 +74,10 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
     try:
         fd = open(device_path, "rb")
     except OSError:
-        logger.debug(f"Cannot open {device_path}")
+        logger.debug("V4L2: cannot open %s", device_path)
         return []
 
+    logger.debug("V4L2: opened %s", device_path)
     resolutions: List[Resolution] = []
     seen: set = set()
 
@@ -88,6 +92,7 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
                 break
 
             pixelformat = struct.unpack("=II32sII4I", result)[3]
+            logger.debug("V4L2: format index %d, pixelformat 0x%08X", fmt_index, pixelformat)
 
             size_index = 0
             while True:
@@ -106,8 +111,11 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
                     if (width, height) not in seen:
                         seen.add((width, height))
                         resolutions.append((width, height))
+                        logger.debug("V4L2: found %dx%d", width, height)
                 else:
-                    # Stepwise or continuous — skip, not worth iterating
+                    logger.debug(
+                        "V4L2: pixelformat 0x%08X is stepwise/continuous, skipping", pixelformat
+                    )
                     break
 
                 size_index += 1
@@ -117,6 +125,7 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
         fd.close()
 
     resolutions.sort()
+    logger.info("V4L2: enumerated %d resolution(s) from %s", len(resolutions), device_path)
     return resolutions
 
 
@@ -134,11 +143,18 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
         return []
 
     devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)
+    logger.debug("AVFoundation: %d capture device(s) found", len(devices))
     if device_index >= len(devices):
-        logger.debug(f"AVFoundation: no device at index {device_index}")
+        logger.debug("AVFoundation: no device at index %d", device_index)
         return []
 
     device = devices[device_index]
+    try:
+        device_name = device.localizedName()
+    except Exception:
+        device_name = f"device[{device_index}]"
+    logger.debug("AVFoundation: querying '%s'", device_name)
+
     resolutions: List[Resolution] = []
     seen: set = set()
 
@@ -149,8 +165,10 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
         if (w, h) not in seen:
             seen.add((w, h))
             resolutions.append((w, h))
+            logger.debug("AVFoundation: found %dx%d", w, h)
 
     resolutions.sort()
+    logger.info("AVFoundation: enumerated %d resolution(s) for '%s'", len(resolutions), device_name)
     return resolutions
 
 
@@ -205,9 +223,12 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
         except comtypes.COMError:
             break
 
+    logger.debug("DirectShow: %d video capture device(s) found", len(monikers))
     if device_index >= len(monikers):
+        logger.debug("DirectShow: no device at index %d", device_index)
         return []
 
+    logger.debug("DirectShow: enumerating device at index %d", device_index)
     filter_ = monikers[device_index].BindToObject(None, None, ds.IID_IBaseFilter)
     enum_pins = filter_.EnumPins()
 
@@ -246,8 +267,12 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
                     if w > 0 and h > 0 and (w, h) not in seen:
                         seen.add((w, h))
                         resolutions.append((w, h))
+                        logger.debug("DirectShow: found %dx%d", w, h)
             except Exception:
                 pass
 
     resolutions.sort()
+    logger.info(
+        "DirectShow: enumerated %d resolution(s) for device %d", len(resolutions), device_index
+    )
     return resolutions
