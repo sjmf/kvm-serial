@@ -186,6 +186,8 @@ class KVMTestBase(unittest.TestCase):
             mock_camera.index = i
             mock_camera.width = 1280
             mock_camera.height = 720
+            mock_camera.default_resolution = (1280, 720)
+            mock_camera.resolutions = [(1280, 720)]
             cameras.append(mock_camera)
         return cameras
 

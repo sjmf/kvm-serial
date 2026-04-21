@@ -394,12 +394,11 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         """Wire a tracking menu + fake QAction onto app and populate the resolution menu."""
         app.resolution_var = resolution_var
         app.video_var = 0
-        app.video_devices = self.create_mock_cameras(1)
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = resolutions or []
+        app.video_devices = cameras
         app.resolution_menu = self._make_tracking_menu()
-        with (
-            patch("kvm_serial.kvm.enumerate_resolutions", return_value=resolutions or []),
-            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
-        ):
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
             app._populate_resolution_menu(0)
 
     def test_populate_resolution_menu_contains_use_default(self):
@@ -466,8 +465,7 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         app = self.create_kvm_app()
         cameras = self.create_mock_cameras(1)
         cameras[0].index = 0
-        cameras[0].width = 1280
-        cameras[0].height = 720
+        cameras[0].default_resolution = (1280, 720)
         app.video_devices = cameras
         app.video_var = 0
         app.video_worker = MagicMock()

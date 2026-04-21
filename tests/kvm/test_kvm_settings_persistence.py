@@ -695,10 +695,11 @@ class TestKVMSettingsPersistence(
             def setChecked(self, v):
                 self._checked = v
 
-        with (
-            patch("kvm_serial.kvm.enumerate_resolutions", return_value=[(1920, 1080)]),
-            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
-        ):
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1920, 1080)]
+        app.video_devices = cameras
+
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
             app._populate_resolution_menu(0)
 
         app.video_worker.set_camera_index.assert_called_with(0, width=1920, height=1080)
