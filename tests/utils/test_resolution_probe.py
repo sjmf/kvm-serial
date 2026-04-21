@@ -6,11 +6,15 @@ import pytest
 from unittest.mock import MagicMock, patch, mock_open
 
 from kvm_serial.utils.resolution_probe import (
+    DeviceInfo,
+    enumerate_devices,
     enumerate_resolutions,
     RESOLUTION_PRESETS,
     _enumerate_v4l2,
     _enumerate_avfoundation,
     _avfoundation_device_list,
+    _enumerate_devices_avfoundation,
+    _enumerate_devices_directshow,
     _enumerate_directshow,
     _directshow_resolutions,
 )
@@ -535,3 +539,209 @@ class TestDirectShowResolutions:
         assert result.count((1920, 1080)) == 1
         assert (1280, 720) in result
         assert list(result) == sorted(result)
+
+
+# ---------------------------------------------------------------------------
+# enumerate_devices dispatch
+# ---------------------------------------------------------------------------
+
+
+class TestEnumerateDevicesDispatch:
+    def test_returns_list_on_unsupported_platform(self):
+        with patch("kvm_serial.utils.resolution_probe.sys") as mock_sys:
+            mock_sys.platform = "unsupported"
+            result = enumerate_devices()
+        assert result == []
+
+    def test_dispatches_to_avfoundation_on_darwin(self):
+        info = DeviceInfo(0, "FaceTime", "uid0", [(1920, 1080)], (1920, 1080), 30)
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_devices_avfoundation",
+                return_value=[info],
+            ) as mock_fn,
+        ):
+            mock_sys.platform = "darwin"
+            result = enumerate_devices()
+        mock_fn.assert_called_once()
+        assert result == [info]
+
+    def test_dispatches_to_directshow_on_win32(self):
+        info = DeviceInfo(0, "USB Cam", "uid0", [(1280, 720)], (1280, 720), 30)
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_devices_directshow",
+                return_value=[info],
+            ) as mock_fn,
+        ):
+            mock_sys.platform = "win32"
+            result = enumerate_devices()
+        mock_fn.assert_called_once()
+        assert result == [info]
+
+    def test_exception_returns_empty(self):
+        with (
+            patch("kvm_serial.utils.resolution_probe.sys") as mock_sys,
+            patch(
+                "kvm_serial.utils.resolution_probe._enumerate_devices_avfoundation",
+                side_effect=RuntimeError("boom"),
+            ),
+        ):
+            mock_sys.platform = "darwin"
+            result = enumerate_devices()
+        assert result == []
+
+
+# ---------------------------------------------------------------------------
+# _enumerate_devices_avfoundation
+# ---------------------------------------------------------------------------
+
+
+class TestEnumerateDevicesAVFoundation:
+    def test_import_error_returns_empty(self):
+        with patch.dict("sys.modules", {"AVFoundation": None, "CoreMedia": None}):
+            result = _enumerate_devices_avfoundation()
+        assert result == []
+
+    def test_empty_device_list_returns_empty(self):
+        mock_av, mock_cm = _make_av_mock([])
+        with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
+            result = _enumerate_devices_avfoundation()
+        assert result == []
+
+    def test_returns_one_deviceinfo_per_device(self):
+        mock_av = MagicMock()
+        mock_cm = MagicMock()
+
+        device = MagicMock()
+        device.localizedName.return_value = "FaceTime HD Camera"
+        device.uniqueID.return_value = "uid-abc"
+        device.formats.return_value = []
+        # activeFormat dims
+        dims = MagicMock()
+        dims.width, dims.height = 1920, 1080
+        mock_cm.CMVideoFormatDescriptionGetDimensions.return_value = dims
+        device.activeFormat.return_value.videoSupportedFrameRateRanges.return_value = []
+
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = [
+            device
+        ]
+
+        with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
+            result = _enumerate_devices_avfoundation()
+
+        assert len(result) == 1
+        info = result[0]
+        assert isinstance(info, DeviceInfo)
+        assert info.index == 0
+        assert info.name == "FaceTime HD Camera"
+        assert info.unique_id == "uid-abc"
+        assert info.default_resolution == (1920, 1080)
+
+    def test_resolutions_deduplicated_and_sorted(self):
+        mock_av = MagicMock()
+        mock_cm = MagicMock()
+
+        fmt1, fmt2, fmt3 = MagicMock(), MagicMock(), MagicMock()
+
+        call_count = [0]
+
+        def dims_for(desc):
+            d = MagicMock()
+            pairs = [(1920, 1080), (1280, 720), (1920, 1080)]
+            w, h = pairs[call_count[0] % len(pairs)]
+            call_count[0] += 1
+            d.width, d.height = w, h
+            return d
+
+        mock_cm.CMVideoFormatDescriptionGetDimensions.side_effect = dims_for
+
+        device = MagicMock()
+        device.localizedName.return_value = "Test Cam"
+        device.uniqueID.return_value = "uid"
+        device.formats.return_value = [fmt1, fmt2, fmt3]
+        device.activeFormat.return_value.videoSupportedFrameRateRanges.return_value = []
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = [
+            device
+        ]
+
+        with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
+            result = _enumerate_devices_avfoundation()
+
+        assert len(result) == 1
+        resolutions = result[0].resolutions
+        assert resolutions.count((1920, 1080)) == 1
+        assert (1280, 720) in resolutions
+        assert list(resolutions) == sorted(resolutions)
+
+    def test_fps_from_active_format(self):
+        mock_av = MagicMock()
+        mock_cm = MagicMock()
+
+        rate_range = MagicMock()
+        rate_range.maxFrameRate.return_value = 60.0
+
+        device = MagicMock()
+        device.localizedName.return_value = "Cam"
+        device.uniqueID.return_value = "uid"
+        device.formats.return_value = []
+        dims = MagicMock()
+        dims.width, dims.height = 1920, 1080
+        mock_cm.CMVideoFormatDescriptionGetDimensions.return_value = dims
+        device.activeFormat.return_value.videoSupportedFrameRateRanges.return_value = [rate_range]
+
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = [
+            device
+        ]
+
+        with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
+            result = _enumerate_devices_avfoundation()
+
+        assert result[0].fps == 60
+
+
+# ---------------------------------------------------------------------------
+# _enumerate_devices_directshow
+# ---------------------------------------------------------------------------
+
+
+class TestEnumerateDevicesDirectShow:
+    def test_import_error_returns_empty(self):
+        with patch.dict("sys.modules", {"comtypes": None, "comtypes.client": None}):
+            result = _enumerate_devices_directshow()
+        assert result == []
+
+    def test_returns_one_deviceinfo_per_moniker(self):
+        from tests.utils.test_resolution_probe import TestDirectShowResolutions
+
+        s = TestDirectShowResolutions()._build_stack(resolutions=[(1920, 1080), (1280, 720)])
+        with (
+            patch.dict("sys.modules", s["modules"]),
+            patch(
+                "kvm_serial.utils.resolution_probe._directshow_resolutions",
+                return_value=[(1280, 720), (1920, 1080)],
+            ),
+        ):
+            result = _enumerate_devices_directshow()
+
+        assert len(result) == 1
+        info = result[0]
+        assert isinstance(info, DeviceInfo)
+        assert info.index == 0
+        assert info.resolutions == [(1280, 720), (1920, 1080)]
+        assert info.default_resolution == (1920, 1080)
+
+    def test_exception_returns_empty(self):
+        mock_comtypes = MagicMock()
+        mock_client = MagicMock()
+        with (
+            patch.dict("sys.modules", {"comtypes": mock_comtypes, "comtypes.client": mock_client}),
+            patch(
+                "kvm_serial.utils.resolution_probe._directshow_devices",
+                side_effect=RuntimeError("COM error"),
+            ),
+        ):
+            result = _enumerate_devices_directshow()
+        assert result == []

@@ -13,7 +13,7 @@ list in that case.
 
 import logging
 import sys
-from typing import List, Tuple
+from typing import List, NamedTuple, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +31,56 @@ RESOLUTION_PRESETS: List[Resolution] = [
     (2560, 1440),
     (3840, 2160),
 ]
+
+
+class DeviceInfo(NamedTuple):
+    """
+    Platform-native description of a video capture device.
+
+    Returned by enumerate_devices(); consumed by CaptureDevice.getCameras() to
+    build CameraProperties without opening any device.
+
+    Fields:
+        index       — OpenCV capture index (same ordering as the native enumerator).
+        name        — Human-readable device name from the OS.
+        unique_id   — Platform-specific stable identifier: macOS uniqueID,
+                      Windows filter name (DevicePath unavailable without IPropertyBag),
+                      Linux /dev/videoN path.
+        resolutions — All (width, height) pairs supported by the device, sorted.
+        default_resolution — Active/preferred resolution at enumeration time.
+        fps         — Maximum fps reported by the active format (0 if unknown).
+    """
+
+    index: int
+    name: str
+    unique_id: str
+    resolutions: List[Resolution]
+    default_resolution: Resolution
+    fps: int
+
+
+def enumerate_devices() -> List[DeviceInfo]:
+    """
+    Return fully-populated DeviceInfo for all video capture devices without
+    opening any device.
+
+    Uses the same native enumerator as OpenCV for each platform so that
+    DeviceInfo.index is positionally aligned with cv2.VideoCapture(index).
+    Returns an empty list if enumeration is unavailable or fails.
+    """
+    logger.debug("Enumerating video devices on %s", sys.platform)
+    try:
+        if sys.platform == "linux":
+            return _enumerate_devices_v4l2()
+        elif sys.platform == "darwin":
+            return _enumerate_devices_avfoundation()
+        elif sys.platform == "win32":
+            return _enumerate_devices_directshow()
+        else:
+            logger.debug("Device enumeration not implemented for platform %s", sys.platform)
+    except Exception:
+        logger.debug("Device enumeration failed", exc_info=True)
+    return []
 
 
 def enumerate_resolutions(device_index: int) -> List[Resolution]:
@@ -151,6 +201,236 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
     resolutions.sort()
     logger.info("V4L2: enumerated %d resolution(s) from %s", len(resolutions), device_path)
     return resolutions
+
+
+# ---------------------------------------------------------------------------
+# Full-device enumeration — returns DeviceInfo without opening any device
+# ---------------------------------------------------------------------------
+
+
+def _enumerate_devices_v4l2() -> List[DeviceInfo]:
+    """
+    Enumerate V4L2 capture devices by scanning /dev/video0..15.
+
+    Probes each path with VIDIOC_QUERYCAP; skips entries that are not video
+    capture devices. The DeviceInfo.index matches the N in /dev/videoN, which
+    is the same index cv2.VideoCapture(N, CAP_V4L2) opens.
+
+    Returns an empty list if no devices are found or fcntl is unavailable.
+    """
+    import fcntl
+    import struct
+
+    VIDIOC_QUERYCAP = 0x80685600
+    V4L2_CAP_VIDEO_CAPTURE = 0x00000001
+    # struct v4l2_capability: u8[16] driver, u8[32] card, u8[32] bus_info,
+    # u32 version, u32 capabilities, u32 device_caps, u32[3] reserved = 104 bytes
+    CAP_BUF_SIZE = 104
+
+    result: List[DeviceInfo] = []
+    for n in range(16):
+        device_path = f"/dev/video{n}"
+        try:
+            fd = open(device_path, "rb")
+        except OSError:
+            continue
+        try:
+            cap_buf = b"\x00" * CAP_BUF_SIZE
+            cap_buf = fcntl.ioctl(fd, VIDIOC_QUERYCAP, cap_buf)
+            caps = struct.unpack_from("=I", cap_buf, 80)[0]
+            if not (caps & V4L2_CAP_VIDEO_CAPTURE):
+                continue
+            name = cap_buf[16:48].rstrip(b"\x00").decode("utf-8", errors="replace") or device_path
+        except Exception:
+            name = device_path
+        finally:
+            fd.close()
+
+        resolutions = _enumerate_v4l2(n)
+        default_res = resolutions[-1] if resolutions else (1920, 1080)
+        logger.info("V4L2: device %d '%s': %d resolution(s)", n, name, len(resolutions))
+        result.append(
+            DeviceInfo(
+                index=n,
+                name=name,
+                unique_id=device_path,
+                resolutions=resolutions,
+                default_resolution=default_res,
+                fps=0,
+            )
+        )
+
+    return result
+
+
+def _enumerate_devices_avfoundation() -> List[DeviceInfo]:
+    """
+    Return DeviceInfo for all macOS capture devices using AVFoundation.
+
+    Requires pyobjc-framework-AVFoundation. Uses the same discovery session as
+    OpenCV (via _avfoundation_device_list) so indices are positionally aligned.
+    Default resolution comes from the device's activeFormat; fps is the maximum
+    from activeFormat.videoSupportedFrameRateRanges.
+    """
+    try:
+        import AVFoundation
+        import CoreMedia
+    except ImportError:
+        logger.debug("pyobjc-framework-AVFoundation not available")
+        return []
+
+    devices = _avfoundation_device_list(AVFoundation)
+    result: List[DeviceInfo] = []
+
+    for index, device in enumerate(devices):
+        name = f"Camera {index}"
+        unique_id = str(index)
+        resolutions: List[Resolution] = []
+        default_res: Resolution = (1920, 1080)
+        fps = 0
+
+        try:
+            name = str(device.localizedName())
+        except Exception:
+            pass
+        try:
+            unique_id = str(device.uniqueID())
+        except Exception:
+            pass
+
+        try:
+            active_fmt = device.activeFormat()
+            if active_fmt:
+                desc = active_fmt.formatDescription()
+                dims = CoreMedia.CMVideoFormatDescriptionGetDimensions(desc)
+                default_res = (int(dims.width), int(dims.height))
+                for rate_range in active_fmt.videoSupportedFrameRateRanges():
+                    try:
+                        f = int(rate_range.maxFrameRate())
+                        if f > fps:
+                            fps = f
+                    except Exception:
+                        pass
+        except Exception:
+            logger.debug("AVFoundation: failed to read active format for '%s'", name, exc_info=True)
+
+        seen: set = set()
+        try:
+            for fmt in device.formats():
+                try:
+                    desc = fmt.formatDescription()
+                    dims = CoreMedia.CMVideoFormatDescriptionGetDimensions(desc)
+                    w, h = int(dims.width), int(dims.height)
+                    if (w, h) not in seen:
+                        seen.add((w, h))
+                        resolutions.append((w, h))
+                except Exception:
+                    pass
+        except Exception:
+            logger.debug("AVFoundation: failed to enumerate formats for '%s'", name, exc_info=True)
+
+        resolutions.sort()
+        if not resolutions and default_res != (0, 0):
+            resolutions = [default_res]
+
+        logger.info(
+            "AVFoundation: device %d '%s': %d resolution(s), default %dx%d @ %dfps",
+            index,
+            name,
+            len(resolutions),
+            default_res[0],
+            default_res[1],
+            fps,
+        )
+        result.append(
+            DeviceInfo(
+                index=index,
+                name=name,
+                unique_id=unique_id,
+                resolutions=resolutions,
+                default_resolution=default_res,
+                fps=fps,
+            )
+        )
+
+    return result
+
+
+def _enumerate_devices_directshow() -> List[DeviceInfo]:
+    """
+    Return DeviceInfo for all Windows DirectShow video capture devices.
+
+    Requires comtypes. Uses the same ICreateDevEnum path as _directshow_resolutions
+    so indices are positionally aligned with OpenCV's CAP_DSHOW backend. Device
+    name comes from IBaseFilter.QueryFilterInfo().achName (the filter's friendly
+    name).  Returns an empty list if comtypes is unavailable or enumeration fails.
+    """
+    try:
+        import comtypes
+        import comtypes.client
+    except ImportError:
+        logger.debug("comtypes not available")
+        return []
+
+    try:
+        return _directshow_devices()
+    except Exception:
+        logger.debug("DirectShow device enumeration failed", exc_info=True)
+        return []
+
+
+def _directshow_devices() -> List[DeviceInfo]:
+    """Walk DirectShow monikers and build DeviceInfo for each capture device."""
+    import comtypes
+    import comtypes.client
+
+    comtypes.client.GetModule("quartz.dll")
+    from comtypes.gen import DirectShowLib as ds  # type: ignore
+
+    dev_enum = comtypes.client.CreateObject(ds.CLSID_SystemDeviceEnum, interface=ds.ICreateDevEnum)
+    enum_moniker = dev_enum.CreateClassEnumerator(ds.CLSID_VideoInputDeviceCategory, 0)
+    if enum_moniker is None:
+        return []
+
+    monikers = []
+    while True:
+        try:
+            moniker, fetched = enum_moniker.Next(1)
+            if fetched == 0:
+                break
+            monikers.append(moniker)
+        except comtypes.COMError:
+            break
+
+    result: List[DeviceInfo] = []
+    for index, moniker in enumerate(monikers):
+        name = f"Camera {index}"
+        unique_id = f"dshow:{index}"
+
+        try:
+            filter_ = moniker.BindToObject(None, None, ds.IID_IBaseFilter)
+            filter_info = filter_.QueryFilterInfo()
+            if filter_info.achName:
+                name = str(filter_info.achName)
+                unique_id = name
+        except Exception:
+            logger.debug("DirectShow: failed to get filter name for device %d", index)
+
+        resolutions = _directshow_resolutions(index)
+        default_res = resolutions[-1] if resolutions else (1920, 1080)
+        logger.info("DirectShow: device %d '%s': %d resolution(s)", index, name, len(resolutions))
+        result.append(
+            DeviceInfo(
+                index=index,
+                name=name,
+                unique_id=unique_id,
+                resolutions=resolutions,
+                default_resolution=default_res,
+                fps=0,
+            )
+        )
+
+    return result
 
 
 # ---------------------------------------------------------------------------
