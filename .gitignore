@@ -1,5 +1,7 @@
 .idea/
 .vscode/
+.claude/
+CLAUDE.md
 .DS_Store
 ._.DS_Store
 __pycache__
@@ -17,7 +19,6 @@ kvm.build
 kvm.dist
 uv.lock
 .venv/
-CLAUDE.md
 
 # MkDocs build output
 site/
