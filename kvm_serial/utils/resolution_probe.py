@@ -475,17 +475,25 @@ def _avfoundation_device_list(AVFoundation) -> list:
             AVFoundation.AVMediaTypeVideo,
             AVFoundation.AVCaptureDevicePositionUnspecified,
         )
-        devices = list(session.devices())
-        logger.debug("AVFoundation: discovery session returned %d device(s)", len(devices))
+        # OpenCV's CAP_AVFOUNDATION backend iterates DiscoverySession devices in
+        # reverse order (verified empirically via scripts/verify_avfoundation_alignment.py
+        # with N cameras attached — OpenCV idx N maps to session idx (count-1-N)).
+        # Reverse here so our indices line up with cv2.VideoCapture(idx).
+        devices = list(session.devices())[::-1]
+        logger.debug(
+            "AVFoundation: discovery session returned %d device(s) (reversed for OpenCV alignment)",
+            len(devices),
+        )
         return devices
     except Exception:
         logger.debug(
             "AVFoundation: discovery session unavailable, falling back to devicesWithMediaType_",
             exc_info=True,
         )
+        # Same reversal applies to the legacy API path; see comment above.
         return list(
             AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)
-        )
+        )[::-1]
 
 
 def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
