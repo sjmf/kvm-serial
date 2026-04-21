@@ -158,19 +158,71 @@ def _enumerate_v4l2(device_index: int) -> List[Resolution]:
 # ---------------------------------------------------------------------------
 
 
+def _avfoundation_device_list(AVFoundation) -> list:
+    """
+    Return the ordered list of AVCaptureDevice objects using the same discovery
+    session as OpenCV's CAP_AVFOUNDATION backend.
+
+    OpenCV uses AVCaptureDeviceDiscoverySession with BuiltInWideAngleCamera +
+    External device types (see cap_avfoundation_mac.mm). Using the deprecated
+    devicesWithMediaType_ instead applies a different filter and produces a
+    different device ordering when multiple cameras are present, breaking the
+    positional mapping between our resolution enumeration and OpenCV indices.
+
+    Falls back to devicesWithMediaType_ if the discovery session API is
+    unavailable (pre-10.15 systems or unexpected AVFoundation layout).
+
+    References:
+        AVCaptureDeviceDiscoverySession:
+            https://developer.apple.com/documentation/avfoundation/avcapturedevicediscoverysession
+        OpenCV cap_avfoundation_mac.mm:
+            https://github.com/opencv/opencv/blob/4.x/modules/videoio/src/cap_avfoundation_mac.mm
+    """
+    try:
+        # AVCaptureDeviceTypeExternal was added in macOS 14; fall back to the
+        # deprecated ExternalUnknown on older systems (available since macOS 10.15).
+        try:
+            external_type = AVFoundation.AVCaptureDeviceTypeExternal
+        except AttributeError:
+            external_type = AVFoundation.AVCaptureDeviceTypeExternalUnknown
+
+        device_types = [
+            AVFoundation.AVCaptureDeviceTypeBuiltInWideAngleCamera,
+            external_type,
+        ]
+        session = AVFoundation.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_(
+            device_types,
+            AVFoundation.AVMediaTypeVideo,
+            AVFoundation.AVCaptureDevicePositionUnspecified,
+        )
+        devices = list(session.devices())
+        logger.debug("AVFoundation: discovery session returned %d device(s)", len(devices))
+        return devices
+    except Exception:
+        logger.debug(
+            "AVFoundation: discovery session unavailable, falling back to devicesWithMediaType_",
+            exc_info=True,
+        )
+        return list(
+            AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)
+        )
+
+
 def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
     """
     Enumerate supported resolutions for a macOS capture device via AVFoundation.
 
     Requires `pyobjc-framework-AVFoundation` (optional dependency); returns an
-    empty list if the import fails. Uses AVCaptureDevice.devicesWithMediaType_
-    to list video devices, then iterates the device's format list and extracts
-    CMVideoDimensions via CoreMedia.CMVideoFormatDescriptionGetDimensions.
-    Duplicate resolutions across formats are deduplicated.
+    empty list if the import fails. Uses AVCaptureDeviceDiscoverySession with
+    the same device types as OpenCV's CAP_AVFOUNDATION backend so that device
+    indices are aligned between resolution enumeration and frame capture.
+    Iterates the device's format list and extracts CMVideoDimensions via
+    CoreMedia.CMVideoFormatDescriptionGetDimensions. Duplicate resolutions
+    across formats are deduplicated.
 
     References:
-        AVCaptureDevice.devicesWithMediaType_:
-            https://developer.apple.com/documentation/avfoundation/avcapturedevice/1390520-deviceswithmediatype
+        AVCaptureDeviceDiscoverySession:
+            https://developer.apple.com/documentation/avfoundation/avcapturedevicediscoverysession
         AVCaptureDevice.formats:
             https://developer.apple.com/documentation/avfoundation/avcapturedevice/formats
         CMVideoFormatDescriptionGetDimensions:
@@ -183,7 +235,7 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
         logger.debug("pyobjc-framework-AVFoundation not available")
         return []
 
-    devices = AVFoundation.AVCaptureDevice.devicesWithMediaType_(AVFoundation.AVMediaTypeVideo)
+    devices = _avfoundation_device_list(AVFoundation)
     logger.debug("AVFoundation: %d capture device(s) found", len(devices))
     if device_index >= len(devices):
         logger.debug("AVFoundation: no device at index %d", device_index)

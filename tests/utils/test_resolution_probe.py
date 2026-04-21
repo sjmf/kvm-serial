@@ -10,6 +10,7 @@ from kvm_serial.utils.resolution_probe import (
     RESOLUTION_PRESETS,
     _enumerate_v4l2,
     _enumerate_avfoundation,
+    _avfoundation_device_list,
     _enumerate_directshow,
     _directshow_resolutions,
 )
@@ -232,6 +233,76 @@ class TestEnumerateV4L2:
         assert result.count((1920, 1080)) == 1
 
 
+def _make_av_mock(devices):
+    """Return (mock_av, mock_cm) with the discovery session wired to return `devices`."""
+    mock_av = MagicMock()
+    mock_cm = MagicMock()
+    # Wire discovery session so list(session.devices()) == devices
+    mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = (
+        devices
+    )
+    return mock_av, mock_cm
+
+
+class TestAVFoundationDeviceList:
+    """Tests for the _avfoundation_device_list helper."""
+
+    def test_uses_discovery_session(self):
+        mock_av = MagicMock()
+        device = MagicMock()
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = [
+            device
+        ]
+        result = _avfoundation_device_list(mock_av)
+        assert result == [device]
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.assert_called_once()
+
+    def test_falls_back_to_devicesWithMediaType_on_session_failure(self):
+        mock_av = MagicMock()
+        device = MagicMock()
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.side_effect = RuntimeError(
+            "session unavailable"
+        )
+        mock_av.AVCaptureDevice.devicesWithMediaType_.return_value = [device]
+        result = _avfoundation_device_list(mock_av)
+        assert result == [device]
+
+    def test_uses_external_type_on_macos14(self):
+        """On macOS 14+ AVCaptureDeviceTypeExternal should be used."""
+        mock_av = MagicMock()
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = (
+            []
+        )
+        _avfoundation_device_list(mock_av)
+        call_args = (
+            mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.call_args
+        )
+        device_types = call_args[0][0]
+        assert mock_av.AVCaptureDeviceTypeExternal in device_types
+
+    def test_falls_back_to_external_unknown_when_external_missing(self):
+        """On older macOS, AVCaptureDeviceTypeExternal is absent; use ExternalUnknown."""
+        mock_av = MagicMock(spec=[])  # spec=[] → no attributes by default
+        # Only define what we need
+        mock_av.AVCaptureDeviceTypeBuiltInWideAngleCamera = "builtin"
+        mock_av.AVCaptureDeviceTypeExternalUnknown = "external_unknown"
+        mock_av.AVMediaTypeVideo = "video"
+        mock_av.AVCaptureDevicePositionUnspecified = 0
+        session = MagicMock()
+        session.devices.return_value = []
+        mock_av.AVCaptureDeviceDiscoverySession = MagicMock()
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value = (
+            session
+        )
+        result = _avfoundation_device_list(mock_av)
+        assert result == []
+        call_args = (
+            mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.call_args
+        )
+        device_types = call_args[0][0]
+        assert "external_unknown" in device_types
+
+
 class TestEnumerateAVFoundation:
     def test_import_error_returns_empty(self):
         with patch.dict("sys.modules", {"AVFoundation": None, "CoreMedia": None}):
@@ -239,9 +310,7 @@ class TestEnumerateAVFoundation:
         assert result == []
 
     def test_out_of_range_index_returns_empty(self):
-        mock_av = MagicMock()
-        mock_cm = MagicMock()
-        mock_av.AVCaptureDevice.devicesWithMediaType_.return_value = []
+        mock_av, mock_cm = _make_av_mock([])
         with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
             result = _enumerate_avfoundation(0)
         assert result == []
@@ -267,7 +336,9 @@ class TestEnumerateAVFoundation:
 
         device = MagicMock()
         device.formats.return_value = [fmt1, fmt2, fmt3]
-        mock_av.AVCaptureDevice.devicesWithMediaType_.return_value = [device]
+        mock_av.AVCaptureDeviceDiscoverySession.discoverySessionWithDeviceTypes_mediaType_position_.return_value.devices.return_value = [
+            device
+        ]
 
         with patch.dict("sys.modules", {"AVFoundation": mock_av, "CoreMedia": mock_cm}):
             result = _enumerate_avfoundation(0)
