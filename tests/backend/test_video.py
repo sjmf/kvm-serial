@@ -47,7 +47,7 @@ class TestCameraProperties:
                 index=1, width=1280, height=720, fps=60, format=0
             )  # CV_8U format
 
-            expected = "1: 1280x720@60fps (CV_8U/0)"
+            expected = "1 (1280x720@60fps)"
             assert str(props) == expected
 
 
@@ -215,8 +215,55 @@ class TestMeasureFramerate:
         assert fps == 0
 
 
-class TestGetCamerasWindows:
-    """Tests for getCameras() on Windows with DirectShow configuration"""
+def _patch_no_native(video_mod):
+    """Patch enumerate_devices to return [] so getCameras() falls back to OpenCV probe."""
+    return patch("kvm_serial.utils.resolution_probe.enumerate_devices", return_value=[])
+
+
+class TestGetCamerasNative:
+    """Tests for getCameras() using the native enumeration path."""
+
+    def test_uses_native_enumeration_when_available(self):
+        from kvm_serial.backend.video import CaptureDevice, CameraProperties
+        from kvm_serial.utils.resolution_probe import DeviceInfo
+
+        info = DeviceInfo(0, "FaceTime HD Camera", "uid0", [(1920, 1080)], (1920, 1080), 30)
+        with patch("kvm_serial.utils.resolution_probe.enumerate_devices", return_value=[info]):
+            cameras = CaptureDevice.getCameras()
+
+        assert len(cameras) == 1
+        assert isinstance(cameras[0], CameraProperties)
+        assert cameras[0].name == "FaceTime HD Camera"
+        assert cameras[0].width == 1920
+        assert cameras[0].height == 1080
+        assert cameras[0].fps == 30
+        assert cameras[0].resolutions == [(1920, 1080)]
+
+    def test_falls_back_to_opencv_when_native_empty(self):
+        from kvm_serial.backend import video as video_mod
+        from kvm_serial.backend.video import CaptureDevice
+
+        with (
+            _patch_no_native(video_mod),
+            patch.object(video_mod, "cv2") as mock_cv2,
+            patch.object(video_mod, "sys") as mock_sys,
+        ):
+            mock_sys.platform = "linux"
+            mock_cam = MagicMock()
+            mock_cam.isOpened.return_value = True
+            frame = _make_frame(1280, 720)
+            mock_cam.read.return_value = (True, frame)
+            mock_cam.get.return_value = 30
+            mock_cv2.VideoCapture.return_value = mock_cam
+
+            cameras = CaptureDevice.getCameras()
+
+        assert len(cameras) > 0
+        assert cameras[0].width == 1280
+
+
+class TestGetCamerasFallback:
+    """Tests for getCameras() OpenCV fallback path (native enumeration returns empty)."""
 
     def test_calls_configure_dshow_on_windows(self):
         """DirectShow configuration should be called on Windows"""
@@ -224,6 +271,7 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
             patch.object(video_mod, "sys") as mock_sys,
@@ -249,6 +297,7 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
             patch.object(video_mod, "sys") as mock_sys,
@@ -273,6 +322,7 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "_configure_dshow_camera") as mock_configure,
             patch.object(video_mod, "sys") as mock_sys,
@@ -295,6 +345,7 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "sys") as mock_sys,
             patch.object(video_mod, "_measure_framerate", return_value=30) as mock_measure,
@@ -318,13 +369,13 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "sys") as mock_sys,
         ):
             mock_sys.platform = "linux"
             mock_cam = MagicMock()
             mock_cam.isOpened.return_value = True
-            # cam.get() would return 640x480, but frame is 1920x1080
             frame = _make_frame(1920, 1080)
             mock_cam.read.return_value = (True, frame)
             mock_cam.get.return_value = 30
@@ -341,6 +392,7 @@ class TestGetCamerasWindows:
         from kvm_serial.backend.video import CaptureDevice
 
         with (
+            _patch_no_native(video_mod),
             patch.object(video_mod, "cv2") as mock_cv2,
             patch.object(video_mod, "sys") as mock_sys,
         ):

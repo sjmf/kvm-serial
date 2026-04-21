@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-from typing import List
+from typing import List, Optional, Tuple
 import sys
 import cv2
 import numpy
@@ -69,14 +69,23 @@ def _measure_framerate(cam: cv2.VideoCapture):
 
 class CameraProperties:
     """
-    Describe a reference to a camera attached to the system
+    Describe a video capture device and its capabilities.
+
+    Constructed either from native DeviceInfo (via from_device_info) or from an
+    OpenCV probe frame (via the positional constructor, used only by the fallback
+    path).  The native path is preferred: it avoids opening any device and
+    provides name, resolutions, and default_resolution from the OS.
     """
 
     index: int
+    name: str
+    unique_id: str
     width: int
     height: int
     fps: int
     format: int
+    resolutions: List[Tuple[int, int]]
+    default_resolution: Tuple[int, int]
 
     FORMAT_STRINGS = ["CV_8U", "CV_8S", "CV_16U", "CV_16S", "CV_32S", "CV_32F", "CV_64F", "Unknown"]
     DTYPE_TO_DEPTH = {
@@ -98,18 +107,52 @@ class CameraProperties:
         channels = frame.shape[2] if frame.ndim == 3 else 1
         return depth + (channels - 1) * 8
 
-    def __init__(self, index, width, height, fps, format):
+    @classmethod
+    def from_device_info(cls, info) -> "CameraProperties":
+        """Construct from a native DeviceInfo (no device opened)."""
+        w, h = info.default_resolution
+        return cls(
+            index=info.index,
+            width=w,
+            height=h,
+            fps=info.fps,
+            format=0,
+            name=info.name,
+            unique_id=info.unique_id,
+            resolutions=list(info.resolutions),
+            default_resolution=info.default_resolution,
+        )
+
+    def __init__(
+        self,
+        index: int,
+        width: int,
+        height: int,
+        fps: int,
+        format: int,
+        *,
+        name: Optional[str] = None,
+        unique_id: Optional[str] = None,
+        resolutions: Optional[List[Tuple[int, int]]] = None,
+        default_resolution: Optional[Tuple[int, int]] = None,
+    ):
         self.index = index
         self.width = width
         self.height = height
         self.fps = fps
         self.format = format
+        self.name = name if name is not None else str(index)
+        self.unique_id = unique_id if unique_id is not None else str(index)
+        self.default_resolution = (
+            default_resolution if default_resolution is not None else (width, height)
+        )
+        self.resolutions = resolutions if resolutions is not None else [self.default_resolution]
 
     def __getitem__(self, key):
         return getattr(self, key)
 
     def __str__(self):
-        return f"{self.index}: {self.width}x{self.height}@{self.fps}fps ({self.FORMAT_STRINGS[self.format % 8]}/{self.format})"
+        return f"{self.name} ({self.width}x{self.height}@{self.fps}fps)"
 
 
 class CaptureDevice(InputHandler):
@@ -143,28 +186,54 @@ class CaptureDevice(InputHandler):
 
     @staticmethod
     def getCameras() -> List[CameraProperties]:
+        """
+        Return a CameraProperties list for all attached video capture devices.
+
+        Delegates to the native platform enumerator (enumerate_devices in
+        resolution_probe) so that no device is opened and device order is
+        aligned with OpenCV indices.  Falls back to the legacy OpenCV probe
+        loop only when the native enumerator returns nothing (e.g. missing
+        optional deps).
+        """
+        from kvm_serial.utils.resolution_probe import enumerate_devices
+
+        device_infos = enumerate_devices()
+        if device_infos:
+            cameras = [CameraProperties.from_device_info(d) for d in device_infos]
+            logger.info(f"Found {len(cameras)} cameras via native enumeration.")
+            logger.debug(cameras)
+            return cameras
+
+        logger.info("Native enumeration returned nothing; falling back to OpenCV probe.")
+        return CaptureDevice._fallback_enumerate_opencv()
+
+    @staticmethod
+    def _fallback_enumerate_opencv() -> List[CameraProperties]:
+        """
+        Legacy OpenCV probe loop used when native enumeration is unavailable.
+
+        Opens each index 0..CAMERAS_TO_CHECK-1 with cv2.VideoCapture and reads
+        a frame to derive dimensions and fps.  Slow (400-800ms per device) and
+        not positionally-aligned on macOS when multiple cameras are present,
+        but better than nothing when pyobjc/comtypes are absent.
+        """
         cameras: List[CameraProperties] = []
         failures = 0
 
-        # Suppress OpenCV logging (available in OpenCV 4.5.5+)
         try:
             cv2.setLogLevel(-1)
         except AttributeError:
             logging.warning("setLogLevel not available in this OpenCV version")
 
-        # check for cameras
-        logger.info(f"Enumerating cameras (checking indices 0-{CAMERAS_TO_CHECK-1})...")
+        logger.info(f"Probing camera indices 0-{CAMERAS_TO_CHECK - 1} via OpenCV...")
         for index in range(0, CAMERAS_TO_CHECK):
             logger.debug(f"Probing camera index {index}...")
             cam = cv2.VideoCapture(index, CAMERA_BACKEND)
 
             if cam.isOpened():
-                # On Windows, DirectShow defaults to 640x480 YUY2 and needs
-                # explicit configuration (see issue #19)
                 if sys.platform == "win32":
                     _configure_dshow_camera(cam)
 
-                # Read a frame to verify the camera works and get actual dimensions
                 ret, frame = cam.read()
                 if ret and type(frame) is numpy.ndarray:
                     height, width = frame.shape[:2]
@@ -172,7 +241,6 @@ class CaptureDevice(InputHandler):
                     if fmt == -1:
                         fmt = int(cam.get(cv2.CAP_PROP_FORMAT))
 
-                    # Use reported FPS if available, otherwise measure it
                     fps = int(cam.get(cv2.CAP_PROP_FPS))
                     if fps <= 0:
                         fps = _measure_framerate(cam)
@@ -199,7 +267,6 @@ class CaptureDevice(InputHandler):
 
         logger.info(f"Found {len(cameras)} cameras.")
         logger.debug(cameras)
-
         return cameras
 
     def openWindow(self, windowTitle="kvm"):
