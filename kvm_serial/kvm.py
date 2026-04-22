@@ -276,6 +276,9 @@ class KVMQtGui(QMainWindow):
 
     window_var: bool = False
     show_status_var: bool = True
+    # Video scale: "fit" (fill view, preserve aspect) or a numeric string parsed as a
+    # fixed pixel scale factor (e.g. "0.25", "0.5", "1", "2")
+    scale_mode_var: str = "fit"
     status_var: str
     verbose_var: bool = False
     hide_mouse_var: bool = False
@@ -448,6 +451,28 @@ class KVMQtGui(QMainWindow):
 
         status_action.triggered.connect(_toggle_status)
         view_menu.addAction(status_action)
+
+        # Scale Video submenu
+        self.scale_menu = cast(QMenu, view_menu.addMenu("Scale Video"))
+        self._scale_actions: dict[str, QAction] = {}
+        for label, mode in [
+            ("Fit Video to Window", "fit"),
+            ("1:4 ratio", "0.25"),
+            ("1:2 ratio", "0.5"),
+            ("1:1 ratio", "1"),
+            ("2:1 ratio", "2"),
+        ]:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(mode == self.scale_mode_var)
+            action.triggered.connect(lambda _checked, m=mode: self._on_scale_mode_selected(m))
+            self.scale_menu.addAction(action)
+            self._scale_actions[mode] = action
+            if mode == "fit":
+                resize_action = QAction("Resize Window to Video", self)
+                resize_action.triggered.connect(self._on_resize_window_to_resolution)
+                self.scale_menu.addAction(resize_action)
+                self.scale_menu.addSeparator()
 
         # Fullscreen toggle (macOS provides its own native fullscreen via the green
         # traffic light button and "Enter Full Screen" menu item automatically)
@@ -1215,12 +1240,6 @@ class KVMQtGui(QMainWindow):
             )
             self.resolution_menu.addAction(action)
 
-        self.resolution_menu.addSeparator()
-
-        resize_action = QAction("Resize window", self)
-        resize_action.triggered.connect(self._on_resize_window_to_resolution)
-        self.resolution_menu.addAction(resize_action)
-
         # Apply any resolution loaded from settings to the video worker now that the
         # menu exists and the video worker is ready. (Covers the common case where
         # _load_settings runs before camera enumeration completes.)
@@ -1284,19 +1303,59 @@ class KVMQtGui(QMainWindow):
         self.video_worker.set_camera_index(self._camera_index(), width=width, height=height)
         logging.info(f"Selected resolution: {label}")
 
+    def _on_scale_mode_selected(self, mode: str):
+        """
+        Switch video scaling mode. "fit" scales the pixmap to fill the view while preserving
+        aspect ratio (current default); "1"/"2"/"4" lock the view to an integer pixel ratio
+        and show scrollbars/black borders as needed.
+        """
+        self.scale_mode_var = mode
+        for m, action in self._scale_actions.items():
+            action.setChecked(m == mode)
+
+        if mode == "fit":
+            policy = Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        else:
+            policy = Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        self.video_view.setHorizontalScrollBarPolicy(policy)
+        self.video_view.setVerticalScrollBarPolicy(policy)
+
+        self._apply_scale_mode()
+        logging.info(f"Video scale mode set to: {mode}")
+
+    def _apply_scale_mode(self):
+        """Apply the currently selected scale mode to the video view's transform."""
+        if self.scale_mode_var == "fit":
+            self.video_view.fitInView(
+                self.video_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
+            )
+        else:
+            factor = float(self.scale_mode_var)
+            self.video_view.resetTransform()
+            self.video_view.scale(factor, factor)
+
     def _on_resize_window_to_resolution(self):
         """
-        Resize the main window so the video view matches the current camera resolution exactly.
+        Resize the main window so the video view matches the camera resolution scaled
+        by the current scale factor. "fit" mode resizes to native (1:1) resolution;
+        fixed-ratio modes multiply by their factor (e.g. 2:1 doubles, 1:2 halves).
         """
         camera_width = self.video_worker.camera_width
         camera_height = self.video_worker.camera_height
+
+        factor = 1.0 if self.scale_mode_var == "fit" else float(self.scale_mode_var)
+        target_w = int(round(camera_width * factor))
+        target_h = int(round(camera_height * factor))
 
         # Measure the chrome overhead (menubar + statusbar + any margins)
         chrome_w = self.width() - self.video_view.width()
         chrome_h = self.height() - self.video_view.height()
 
-        self.resize(camera_width + chrome_w, camera_height + chrome_h)
-        logging.info(f"Window resized to {camera_width}x{camera_height} (native resolution)")
+        self.resize(target_w + chrome_w, target_h + chrome_h)
+        logging.info(
+            f"Window resized to {target_w}x{target_h} "
+            f"(camera {camera_width}x{camera_height} @ {factor}x)"
+        )
 
     def _request_video_frame(self):
         """
@@ -1362,10 +1421,8 @@ class KVMQtGui(QMainWindow):
 
             # Update scene rect to match pixmap size
             self.video_scene.setSceneRect(self.video_pixmap_item.boundingRect())
-            # Scale view to fit scene while preserving aspect ratio
-            self.video_view.fitInView(
-                self.video_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
-            )
+            # Apply current scaling mode (fit-to-window or fixed NxN pixel ratio)
+            self._apply_scale_mode()
 
             # Update FPS calculation (rolling average over multiple frames)
             current_time = time.time()
