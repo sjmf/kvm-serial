@@ -362,63 +362,89 @@ def _enumerate_devices_directshow() -> List[DeviceInfo]:
 
     Requires comtypes. Uses the same ICreateDevEnum path as _directshow_resolutions
     so indices are positionally aligned with OpenCV's CAP_DSHOW backend. Device
-    name comes from IBaseFilter.QueryFilterInfo().achName (the filter's friendly
-    name).  Returns an empty list if comtypes is unavailable or enumeration fails.
+    name comes from IPropertyBag.Read("FriendlyName") on each moniker's storage,
+    the canonical DirectShow pattern. Returns an empty list if comtypes is
+    unavailable or enumeration fails.
     """
+    logger.info("DirectShow: starting device enumeration")
     try:
-        import comtypes
-        import comtypes.client
+        import comtypes  # noqa: F401
+        import comtypes.client  # noqa: F401
     except ImportError:
-        logger.debug("comtypes not available")
+        logger.warning(
+            "DirectShow: comtypes not installed — device enumeration unavailable. "
+            "Run: pip install comtypes"
+        )
         return []
 
     try:
-        return _directshow_devices()
+        devices = _directshow_devices()
+        logger.info("DirectShow: enumeration complete — %d device(s)", len(devices))
+        return devices
     except Exception:
-        logger.debug("DirectShow device enumeration failed", exc_info=True)
+        logger.warning("DirectShow: device enumeration failed", exc_info=True)
         return []
 
 
 def _directshow_devices() -> List[DeviceInfo]:
-    """Walk DirectShow monikers and build DeviceInfo for each capture device."""
-    import comtypes
-    import comtypes.client
+    """
+    Walk DirectShow monikers and build DeviceInfo for each capture device.
 
-    comtypes.client.GetModule("quartz.dll")
-    from comtypes.gen import DirectShowLib as ds  # type: ignore
+    For each moniker we call IMoniker::BindToStorage to obtain an IPropertyBag,
+    then Read("FriendlyName") — the documented way to retrieve a capture
+    device's display name without instantiating its filter. DevicePath is read
+    when available to form a stable unique_id.
 
-    dev_enum = comtypes.client.CreateObject(ds.CLSID_SystemDeviceEnum, interface=ds.ICreateDevEnum)
-    enum_moniker = dev_enum.CreateClassEnumerator(ds.CLSID_VideoInputDeviceCategory, 0)
-    if enum_moniker is None:
-        return []
+    References:
+        Enumerating Devices and Filters:
+            https://learn.microsoft.com/en-us/windows/win32/directshow/enumerating-devices-and-filters
+    """
+    from comtypes.automation import VARIANT
+    from comtypes.persist import IPropertyBag
 
-    monikers = []
-    while True:
-        try:
-            moniker, fetched = enum_moniker.Next(1)
-            if fetched == 0:
-                break
-            monikers.append(moniker)
-        except comtypes.COMError:
-            break
-
+    monikers = _ds_enum_monikers()
+    logger.info("DirectShow: %d moniker(s) to inspect", len(monikers))
     result: List[DeviceInfo] = []
     for index, moniker in enumerate(monikers):
+        logger.debug("DirectShow: reading property bag for moniker %d", index)
         name = f"Camera {index}"
         unique_id = f"dshow:{index}"
 
         try:
-            filter_ = moniker.BindToObject(None, None, ds.IID_IBaseFilter)
-            filter_info = filter_.QueryFilterInfo()
-            if filter_info.achName:
-                name = str(filter_info.achName)
+            prop_bag = moniker.BindToStorage(None, None, IPropertyBag._iid_)
+            var = VARIANT()
+            prop_bag.Read("FriendlyName", var, None)
+            if var.value:
+                name = str(var.value)
                 unique_id = name
+                logger.debug("DirectShow: moniker %d FriendlyName='%s'", index, name)
+            else:
+                logger.debug("DirectShow: moniker %d has empty FriendlyName", index)
+            try:
+                dev_path = VARIANT()
+                prop_bag.Read("DevicePath", dev_path, None)
+                if dev_path.value:
+                    unique_id = str(dev_path.value)
+                    logger.debug("DirectShow: moniker %d DevicePath='%s'", index, unique_id)
+            except Exception:
+                # DevicePath is absent for some virtual drivers — not fatal.
+                logger.debug("DirectShow: moniker %d has no DevicePath", index)
         except Exception:
-            logger.debug("DirectShow: failed to get filter name for device %d", index)
+            logger.warning(
+                "DirectShow: failed to read property bag for device %d", index, exc_info=True
+            )
 
+        logger.debug("DirectShow: walking media types for device %d ('%s')", index, name)
         resolutions = _directshow_resolutions(index)
         default_res = resolutions[-1] if resolutions else (1920, 1080)
-        logger.info("DirectShow: device %d '%s': %d resolution(s)", index, name, len(resolutions))
+        logger.info(
+            "DirectShow: device %d '%s': %d resolution(s), default %dx%d",
+            index,
+            name,
+            len(resolutions),
+            default_res[0],
+            default_res[1],
+        )
         result.append(
             DeviceInfo(
                 index=index,
@@ -554,8 +580,448 @@ def _enumerate_avfoundation(device_index: int) -> List[Resolution]:
 
 
 # ---------------------------------------------------------------------------
-# Windows — DirectShow via comtypes
+# Windows — DirectShow via comtypes (interface definitions, no typelib needed)
 # ---------------------------------------------------------------------------
+
+# These are module-level so they're defined once and reused across calls.
+# Defined inside a function-like block guarded by TYPE_CHECKING would hide
+# them from the interpreter; we use a lazy sentinel instead.
+_DS_INTERFACES_DEFINED = False
+
+
+def _define_directshow_interfaces():
+    """
+    Define the minimal set of DirectShow COM interfaces needed for device
+    enumeration and resolution discovery, using comtypes without any typelib.
+
+    quartz.dll's typelib (QuartzTypeLib) exposes rendering interfaces only —
+    ICreateDevEnum, IEnumMoniker, IBaseFilter, etc. are not in it. Defining
+    them directly here avoids the GetModule("quartz.dll") / DirectShowLib
+    import pattern that silently fails on systems where the generated module
+    name doesn't match.
+
+    References:
+        ICreateDevEnum / IEnumMoniker / IMoniker:
+            https://learn.microsoft.com/en-us/windows/win32/api/strmif/nn-strmif-icreatedevenum
+        IBaseFilter / IEnumPins / IPin / IEnumMediaTypes:
+            https://learn.microsoft.com/en-us/windows/win32/api/strmif/
+        AM_MEDIA_TYPE / VIDEOINFOHEADER:
+            https://learn.microsoft.com/en-us/previous-versions/windows/desktop/api/amvideo/ns-amvideo-videoinfoheader
+        IPropertyBag (in comtypes.persist):
+            https://learn.microsoft.com/en-us/windows/win32/api/oaidl/nn-oaidl-ipropertybag
+    """
+    global _DS_INTERFACES_DEFINED
+    if _DS_INTERFACES_DEFINED:
+        return
+    _DS_INTERFACES_DEFINED = True
+    logger.debug("DirectShow: defining COM interfaces (first call)")
+
+    import ctypes
+    import comtypes
+
+    # -- Structures ----------------------------------------------------------
+
+    class RECT(ctypes.Structure):
+        _fields_ = [
+            ("left", ctypes.c_long),
+            ("top", ctypes.c_long),
+            ("right", ctypes.c_long),
+            ("bottom", ctypes.c_long),
+        ]
+
+    class BITMAPINFOHEADER(ctypes.Structure):
+        _fields_ = [
+            ("biSize", ctypes.c_ulong),
+            ("biWidth", ctypes.c_long),
+            ("biHeight", ctypes.c_long),
+            ("biPlanes", ctypes.c_ushort),
+            ("biBitCount", ctypes.c_ushort),
+            ("biCompression", ctypes.c_ulong),
+            ("biSizeImage", ctypes.c_ulong),
+            ("biXPelsPerMeter", ctypes.c_long),
+            ("biYPelsPerMeter", ctypes.c_long),
+            ("biClrUsed", ctypes.c_ulong),
+            ("biClrImportant", ctypes.c_ulong),
+        ]
+
+    class VIDEOINFOHEADER(ctypes.Structure):
+        _fields_ = [
+            ("rcSource", RECT),
+            ("rcTarget", RECT),
+            ("dwBitRate", ctypes.c_ulong),
+            ("dwBitErrorRate", ctypes.c_ulong),
+            ("AvgTimePerFrame", ctypes.c_longlong),
+            ("bmiHeader", BITMAPINFOHEADER),
+        ]
+
+    class AM_MEDIA_TYPE(ctypes.Structure):
+        _fields_ = [
+            ("majortype", comtypes.GUID),
+            ("subtype", comtypes.GUID),
+            ("bFixedSizeSamples", ctypes.c_int),
+            ("bTemporalCompression", ctypes.c_int),
+            ("lSampleSize", ctypes.c_ulong),
+            ("formattype", comtypes.GUID),
+            ("pUnk", ctypes.c_void_p),
+            ("cbFormat", ctypes.c_ulong),
+            ("pbFormat", ctypes.c_void_p),
+        ]
+
+    # -- Interface definitions -----------------------------------------------
+
+    # IPropertyBag lives in comtypes.persist; we need it inline so BindToStorage's
+    # out-pointer can be typed correctly (saves a ctypes.cast on every call).
+    from comtypes.persist import IPropertyBag
+
+    class IEnumMoniker(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{00000102-0000-0000-C000-000000000046}")
+        _methods_ = [
+            # Next's rgelt is typed as POINTER(POINTER(IUnknown)) rather than a raw
+            # void_p so comtypes wraps the returned pointer into an IUnknown proxy
+            # — callers then QueryInterface(IMoniker) to access IMoniker methods.
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Next",
+                (["in"], ctypes.c_ulong, "celt"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(comtypes.IUnknown)), "rgelt"),
+                (["out"], ctypes.POINTER(ctypes.c_ulong), "pceltFetched"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Skip",
+                (["in"], ctypes.c_ulong, "celt"),
+            ),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Reset"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Clone",
+                (["out"], ctypes.POINTER(ctypes.c_void_p), "ppenum"),
+            ),
+        ]
+
+    class ICreateDevEnum(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{29840822-5B84-11D0-BD3B-00A0C911CE86}")
+        _methods_ = [
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "CreateClassEnumerator",
+                (["in"], ctypes.POINTER(comtypes.GUID), "clsidDeviceClass"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(IEnumMoniker)), "ppEnumMoniker"),
+                (["in"], ctypes.c_ulong, "dwFlags"),
+            ),
+        ]
+
+    class IEnumMediaTypes(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{89C31040-846B-11CE-97D3-00AA0055595A}")
+        _methods_ = [
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Next",
+                (["in"], ctypes.c_ulong, "celt"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(AM_MEDIA_TYPE)), "rgelt"),
+                (["out"], ctypes.POINTER(ctypes.c_ulong), "pceltFetched"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Skip",
+                (["in"], ctypes.c_ulong, "celt"),
+            ),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Reset"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Clone",
+                (["out"], ctypes.POINTER(ctypes.c_void_p), "ppenum"),
+            ),
+        ]
+
+    class IPin(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{56A86891-0AD4-11CE-B03A-0020AF0BA770}")
+        # Vtable order is load-bearing: only QueryDirection (slot 7) and
+        # EnumMediaTypes (slot 10) are called, but the earlier slots must be
+        # present so those offsets are correct. IPin self-references in
+        # Connect / ReceiveConnection / ConnectedTo are replaced with c_void_p
+        # because IPin isn't yet defined at class-body evaluation time.
+        _methods_ = [
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Connect",
+                (["in"], ctypes.c_void_p, "pReceivePin"),
+                (["in"], ctypes.POINTER(AM_MEDIA_TYPE), "pmt"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "ReceiveConnection",
+                (["in"], ctypes.c_void_p, "pConnector"),
+                (["in"], ctypes.POINTER(AM_MEDIA_TYPE), "pmt"),
+            ),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Disconnect"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "ConnectedTo",
+                (["out"], ctypes.POINTER(ctypes.c_void_p), "pPin"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "ConnectionMediaType",
+                (["out"], ctypes.POINTER(AM_MEDIA_TYPE), "pmt"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryPinInfo",
+                (["out"], ctypes.c_void_p, "pInfo"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryDirection",
+                (["out"], ctypes.POINTER(ctypes.c_int), "pPinDir"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryId",
+                (["out"], ctypes.POINTER(ctypes.c_wchar_p), "Id"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryAccept",
+                (["in"], ctypes.POINTER(AM_MEDIA_TYPE), "pmt"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "EnumMediaTypes",
+                (["out"], ctypes.POINTER(ctypes.POINTER(IEnumMediaTypes)), "ppEnum"),
+            ),
+        ]
+
+    class IEnumPins(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{56A86892-0AD4-11CE-B03A-0020AF0BA770}")
+        _methods_ = [
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Next",
+                (["in"], ctypes.c_ulong, "celt"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(IPin)), "rgelt"),
+                (["out"], ctypes.POINTER(ctypes.c_ulong), "pceltFetched"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Skip",
+                (["in"], ctypes.c_ulong, "celt"),
+            ),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Reset"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Clone",
+                (["out"], ctypes.POINTER(ctypes.c_void_p), "ppenum"),
+            ),
+        ]
+
+    class IBaseFilter(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{56A86895-0AD4-11CE-B03A-0020AF0BA770}")
+        _methods_ = [
+            # IMediaFilter methods (inherited, must appear in vtable order)
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "GetClassID",
+                (["out"], ctypes.POINTER(comtypes.GUID), "pClassID"),
+            ),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Stop"),
+            comtypes.COMMETHOD([], comtypes.HRESULT, "Pause"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Run",
+                (["in"], ctypes.c_longlong, "tStart"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "GetState",
+                (["in"], ctypes.c_ulong, "dwMilliSecsTimeout"),
+                (["out"], ctypes.POINTER(ctypes.c_int), "State"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "SetSyncSource",
+                (["in"], ctypes.c_void_p, "pClock"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "GetSyncSource",
+                (["out"], ctypes.POINTER(ctypes.c_void_p), "pClock"),
+            ),
+            # IBaseFilter methods
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "EnumPins",
+                (["out"], ctypes.POINTER(ctypes.POINTER(IEnumPins)), "ppEnum"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "FindPin",
+                (["in"], ctypes.c_wchar_p, "Id"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(IPin)), "ppPin"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryFilterInfo",
+                (["out"], ctypes.c_void_p, "pInfo"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "JoinFilterGraph",
+                (["in"], ctypes.c_void_p, "pGraph"),
+                (["in"], ctypes.c_wchar_p, "pName"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "QueryVendorInfo",
+                (["out"], ctypes.POINTER(ctypes.c_wchar_p), "pVendorInfo"),
+            ),
+        ]
+
+    class IMoniker(comtypes.IUnknown):
+        _iid_ = comtypes.GUID("{0000000F-0000-0000-C000-000000000046}")
+        _methods_ = [
+            # IPersist
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "GetClassID",
+                (["out"], ctypes.POINTER(comtypes.GUID), "pClassID"),
+            ),
+            # IPersistStream
+            comtypes.COMMETHOD([], comtypes.HRESULT, "IsDirty"),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Load",
+                (["in"], ctypes.c_void_p, "pStm"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "Save",
+                (["in"], ctypes.c_void_p, "pStm"),
+                (["in"], ctypes.c_int, "fClearDirty"),
+            ),
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "GetSizeMax",
+                (["out"], ctypes.POINTER(ctypes.c_ulonglong), "pcbSize"),
+            ),
+            # IMoniker
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "BindToObject",
+                (["in"], ctypes.c_void_p, "pbc"),
+                (["in"], ctypes.c_void_p, "pmkToLeft"),
+                (["in"], ctypes.POINTER(comtypes.GUID), "riidResult"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(IBaseFilter)), "ppvResult"),
+            ),
+            # Typed to return POINTER(IPropertyBag) so callers get a usable
+            # property-bag proxy directly — used for reading FriendlyName /
+            # DevicePath off a device moniker.
+            comtypes.COMMETHOD(
+                [],
+                comtypes.HRESULT,
+                "BindToStorage",
+                (["in"], ctypes.c_void_p, "pbc"),
+                (["in"], ctypes.c_void_p, "pmkToLeft"),
+                (["in"], ctypes.POINTER(comtypes.GUID), "riid"),
+                (["out"], ctypes.POINTER(ctypes.POINTER(IPropertyBag)), "ppvObj"),
+            ),
+        ]
+
+    # Store on module globals so callers can access them
+    global _DS_ICreateDevEnum, _DS_IMoniker, _DS_IBaseFilter
+    global _DS_IEnumPins, _DS_IPin, _DS_IEnumMediaTypes
+    global _DS_AM_MEDIA_TYPE, _DS_VIDEOINFOHEADER
+    global _DS_CLSID_SystemDeviceEnum, _DS_CLSID_VideoInputDeviceCategory
+    global _DS_FORMAT_VideoInfo, _DS_IID_IBaseFilter, _DS_IID_IPropertyBag
+
+    _DS_ICreateDevEnum = ICreateDevEnum
+    _DS_IMoniker = IMoniker
+    _DS_IBaseFilter = IBaseFilter
+    _DS_IEnumPins = IEnumPins
+    _DS_IPin = IPin
+    _DS_IEnumMediaTypes = IEnumMediaTypes
+    _DS_AM_MEDIA_TYPE = AM_MEDIA_TYPE
+    _DS_VIDEOINFOHEADER = VIDEOINFOHEADER
+
+    _DS_CLSID_SystemDeviceEnum = comtypes.GUID("{62BE5D10-60EB-11D0-BD3B-00A0C911CE86}")
+    _DS_CLSID_VideoInputDeviceCategory = comtypes.GUID("{860BB310-5D01-11D0-BD3B-00A0C911CE86}")
+    _DS_FORMAT_VideoInfo = comtypes.GUID("{05589F80-C356-11CE-BF01-00AA0055595A}")
+    _DS_IID_IBaseFilter = comtypes.GUID("{56A86895-0AD4-11CE-B03A-0020AF0BA770}")
+    _DS_IID_IPropertyBag = comtypes.GUID("{55272A00-42CB-11CE-8135-00AA004BB851}")
+
+
+def _ds_enum_monikers():
+    """Return list of IMoniker for all DirectShow video capture devices.
+
+    IEnumMoniker::Next hands back IUnknown-typed pointers (see IEnumMoniker
+    definition above for the rationale); we QueryInterface each one to IMoniker
+    so that BindToObject / BindToStorage are callable on the returned proxies.
+    CreateClassEnumerator returns None when the category is empty (S_FALSE).
+    """
+    import comtypes
+    import comtypes.client
+
+    _define_directshow_interfaces()
+
+    logger.debug("DirectShow: creating SystemDeviceEnum")
+    dev_enum = comtypes.client.CreateObject(
+        _DS_CLSID_SystemDeviceEnum,
+        interface=_DS_ICreateDevEnum,
+    )
+    logger.debug("DirectShow: creating class enumerator for VideoInputDeviceCategory")
+    enum_moniker = dev_enum.CreateClassEnumerator(_DS_CLSID_VideoInputDeviceCategory, 0)
+    if enum_moniker is None:
+        logger.info("DirectShow: VideoInputDeviceCategory is empty (no capture devices)")
+        return []
+
+    monikers = []
+    while True:
+        try:
+            punk, fetched = enum_moniker.Next(1)
+            if fetched == 0:
+                break
+            moniker = punk.QueryInterface(_DS_IMoniker)
+            logger.debug("DirectShow: moniker %d: QI to IMoniker ok", len(monikers))
+            monikers.append(moniker)
+        except comtypes.COMError:
+            logger.debug("DirectShow: IEnumMoniker::Next raised COMError, stopping", exc_info=True)
+            break
+    logger.info("DirectShow: IEnumMoniker walk yielded %d moniker(s)", len(monikers))
+    return monikers
 
 
 def _enumerate_directshow(device_index: int) -> List[Resolution]:
@@ -568,10 +1034,12 @@ def _enumerate_directshow(device_index: int) -> List[Resolution]:
     environment degrades gracefully.
     """
     try:
-        import comtypes
-        import comtypes.client
+        import comtypes  # noqa: F401
     except ImportError:
-        logger.debug("comtypes not available")
+        logger.warning(
+            "comtypes not installed — DirectShow resolution enumeration unavailable. "
+            "Run: pip install comtypes"
+        )
         return []
 
     try:
@@ -608,87 +1076,74 @@ def _directshow_resolutions(device_index: int) -> List[Resolution]:
     """
     import ctypes
     import comtypes
-    import comtypes.client
 
-    # Load DirectShow / quartz
-    comtypes.client.GetModule("quartz.dll")
-    from comtypes.gen import DirectShowLib as ds  # type: ignore
-
-    # Create the system device enumerator
-    dev_enum = comtypes.client.CreateObject(
-        ds.CLSID_SystemDeviceEnum,
-        interface=ds.ICreateDevEnum,
-    )
-
-    video_cap_guid = ds.CLSID_VideoInputDeviceCategory
-    enum_moniker = dev_enum.CreateClassEnumerator(video_cap_guid, 0)
-    if enum_moniker is None:
-        return []
-
-    monikers = []
-    while True:
-        # Loop termination: IEnumMoniker::Next returns fetched == 0 (COM S_FALSE) when the
-        # device list is exhausted. COMError provides a secondary exit for broken enumerators.
-        try:
-            moniker, fetched = enum_moniker.Next(1)
-            if fetched == 0:
-                break
-            monikers.append(moniker)
-        except comtypes.COMError:
-            break
-
+    monikers = _ds_enum_monikers()
     logger.debug("DirectShow: %d video capture device(s) found", len(monikers))
     if device_index >= len(monikers):
         logger.debug("DirectShow: no device at index %d", device_index)
         return []
 
-    logger.debug("DirectShow: enumerating device at index %d", device_index)
-    filter_ = monikers[device_index].BindToObject(None, None, ds.IID_IBaseFilter)
+    logger.debug("DirectShow: binding filter for device %d", device_index)
+    filter_ = monikers[device_index].BindToObject(None, None, _DS_IID_IBaseFilter)
+    logger.debug("DirectShow: enumerating pins for device %d", device_index)
     enum_pins = filter_.EnumPins()
 
     resolutions: List[Resolution] = []
     seen: set = set()
+    pin_idx = 0
 
     while True:
-        # Loop termination: IEnumPins::Next returns fetched == 0 when all pins have been
-        # visited. The two continue paths both return to the top of this loop, so Next is
-        # always called to advance the enumerator before any per-pin processing is skipped.
+        # Loop termination: IEnumPins::Next returns fetched == 0 when all pins have been visited.
         try:
             pin, fetched = enum_pins.Next(1)
             if fetched == 0:
                 break
         except comtypes.COMError:
+            logger.debug("DirectShow: IEnumPins::Next raised COMError", exc_info=True)
             break
 
-        pin_info = pin.QueryPinInfo()
-        if pin_info.dir != 0:  # PINDIR_OUTPUT = 0
+        dir_val = ctypes.c_int(0)
+        try:
+            pin.QueryDirection(ctypes.byref(dir_val))
+        except comtypes.COMError:
+            logger.debug("DirectShow: pin %d QueryDirection failed", pin_idx, exc_info=True)
+            pin_idx += 1
+            continue
+        if dir_val.value != 0:  # PINDIR_OUTPUT = 0
+            logger.debug("DirectShow: pin %d is input (dir=%d), skipping", pin_idx, dir_val.value)
+            pin_idx += 1
             continue
 
+        logger.debug("DirectShow: pin %d is output, walking media types", pin_idx)
         try:
             enum_mt = pin.EnumMediaTypes()
         except comtypes.COMError:
+            logger.debug("DirectShow: pin %d EnumMediaTypes failed", pin_idx, exc_info=True)
+            pin_idx += 1
             continue
 
         while True:
-            # Loop termination: IEnumMediaTypes::Next returns fetched == 0 when all
-            # media types for this pin have been examined.
+            # Loop termination: IEnumMediaTypes::Next returns fetched == 0 when exhausted.
             try:
-                mt, fetched = enum_mt.Next(1)
+                mt_ptr, fetched = enum_mt.Next(1)
                 if fetched == 0:
                     break
             except comtypes.COMError:
                 break
 
             try:
-                if mt.formattype == ds.FORMAT_VideoInfo:
-                    vi = ctypes.cast(mt.pbFormat, ctypes.POINTER(ds.VIDEOINFOHEADER)).contents
+                mt = mt_ptr.contents
+                if mt.formattype == _DS_FORMAT_VideoInfo and mt.pbFormat:
+                    vi = ctypes.cast(mt.pbFormat, ctypes.POINTER(_DS_VIDEOINFOHEADER)).contents
                     w, h = vi.bmiHeader.biWidth, abs(vi.bmiHeader.biHeight)
                     if w > 0 and h > 0 and (w, h) not in seen:
                         seen.add((w, h))
                         resolutions.append((w, h))
-                        logger.debug("DirectShow: found %dx%d", w, h)
+                        logger.debug("DirectShow: pin %d found %dx%d", pin_idx, w, h)
             except Exception:
-                pass
+                logger.debug("DirectShow: media-type parse failed", exc_info=True)
+
+        pin_idx += 1
 
     resolutions.sort()
     logger.info(
