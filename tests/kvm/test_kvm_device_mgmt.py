@@ -407,17 +407,11 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         labels = [a.text() for a in app.resolution_menu.actions()]
         self.assertIn("Use Default", labels)
 
-    def test_populate_resolution_menu_contains_resize_window(self):
-        app = self.create_kvm_app()
-        self._populate(app)
-        labels = [a.text() for a in app.resolution_menu.actions()]
-        self.assertIn("Resize window", labels)
-
-    def test_populate_resolution_menu_has_two_separators(self):
+    def test_populate_resolution_menu_has_one_separator(self):
         app = self.create_kvm_app()
         self._populate(app)
         separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
-        self.assertEqual(len(separators), 2)
+        self.assertEqual(len(separators), 1)
 
     def test_use_default_checked_when_resolution_var_empty(self):
         app = self.create_kvm_app()
@@ -514,6 +508,26 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
             app._on_resize_window_to_resolution()
 
         mock_resize.assert_called_once_with(1960, 1120)  # 1920+40, 1080+40
+
+    def test_resize_window_to_resolution_respects_scale_factor(self):
+        app = self.create_kvm_app()
+        app.scale_mode_var = "0.5"
+        app.video_worker = MagicMock()
+        app.video_worker.camera_width = 1920
+        app.video_worker.camera_height = 1080
+        app.video_view = MagicMock()
+        app.video_view.width.return_value = 800
+        app.video_view.height.return_value = 600
+
+        with (
+            patch.object(app, "width", return_value=840),
+            patch.object(app, "height", return_value=640),
+            patch.object(app, "resize") as mock_resize,
+        ):
+            app._on_resize_window_to_resolution()
+
+        # 1920*0.5=960 + chrome 40, 1080*0.5=540 + chrome 40
+        mock_resize.assert_called_once_with(1000, 580)
 
 
 if __name__ == "__main__":
