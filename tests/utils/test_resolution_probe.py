@@ -386,13 +386,26 @@ class TestEnumerateDirectShow:
         assert result == []
 
 
+_COMTYPES_PERSIST_AVAILABLE = False
+try:
+    import comtypes.persist  # noqa: F401
+
+    _COMTYPES_PERSIST_AVAILABLE = True
+except Exception:
+    pass
+
+
+@pytest.mark.skipif(
+    not _COMTYPES_PERSIST_AVAILABLE,
+    reason="DirectShow COM-stack tests require comtypes.persist (Windows-only).",
+)
 class TestDirectShowResolutions:
     """Tests _directshow_resolutions with a fully mocked COM stack.
 
-    Key wiring: `import comtypes.client` inside the function causes Python to set
-    sys.modules['comtypes'].client = sys.modules['comtypes.client'], so we explicitly
-    pre-set mock_comtypes.client = mock_client to be safe. `from comtypes.gen import
-    DirectShowLib as ds` resolves to mock_gen.DirectShowLib.
+    Pre-refactor this mocked comtypes.gen.DirectShowLib; the module now defines
+    its own interfaces via comtypes.IUnknown subclasses, which can't be faked
+    with MagicMock. Tests here are skipped on platforms without comtypes (macOS
+    CI); real Windows validation is via scripts/ not pytest.
     """
 
     def _build_stack(self, resolutions=None):
@@ -714,11 +727,39 @@ class TestEnumerateDevicesDirectShow:
         assert result == []
 
     def test_returns_one_deviceinfo_per_moniker(self):
-        from tests.utils.test_resolution_probe import TestDirectShowResolutions
+        # Patch the native layer directly — mocking the whole comtypes stack
+        # below _directshow_devices isn't viable because we now subclass real
+        # comtypes.IUnknown inside _define_directshow_interfaces.
+        mock_comtypes = MagicMock()
+        mock_client = MagicMock()
+        mock_automation = MagicMock()
+        mock_persist = MagicMock()
+        # VARIANT() must yield an object whose `.value` can be set by fake_read.
+        mock_automation.VARIANT.side_effect = lambda: MagicMock(value=None)
 
-        s = TestDirectShowResolutions()._build_stack(resolutions=[(1920, 1080), (1280, 720)])
+        moniker = MagicMock(name="moniker")
+        prop_bag = MagicMock(name="IPropertyBag")
+
+        def fake_read(name, var, err):
+            var.value = "USB Capture" if name == "FriendlyName" else "\\\\?\\usb#1234"
+
+        prop_bag.Read.side_effect = fake_read
+        moniker.BindToStorage.return_value = prop_bag
+
         with (
-            patch.dict("sys.modules", s["modules"]),
+            patch.dict(
+                "sys.modules",
+                {
+                    "comtypes": mock_comtypes,
+                    "comtypes.client": mock_client,
+                    "comtypes.automation": mock_automation,
+                    "comtypes.persist": mock_persist,
+                },
+            ),
+            patch(
+                "kvm_serial.utils.resolution_probe._ds_enum_monikers",
+                return_value=[moniker],
+            ),
             patch(
                 "kvm_serial.utils.resolution_probe._directshow_resolutions",
                 return_value=[(1280, 720), (1920, 1080)],
@@ -730,6 +771,7 @@ class TestEnumerateDevicesDirectShow:
         info = result[0]
         assert isinstance(info, DeviceInfo)
         assert info.index == 0
+        assert info.name == "USB Capture"
         assert info.resolutions == [(1280, 720), (1920, 1080)]
         assert info.default_resolution == (1920, 1080)
 
