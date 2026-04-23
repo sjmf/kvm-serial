@@ -126,8 +126,8 @@ class TestKVMSettingsPersistence(
     def test_load_settings_video_device_boundary_cases(self):
         """Test video device loading with boundary cases."""
         app = self.create_kvm_app()
-        app.video_devices = self.create_mock_cameras(3)  # Indices 0, 1, 2
-        app.video_worker = MagicMock()
+        cameras = self.create_mock_cameras(3)  # Indices 0, 1, 2
+        app.video_devices = cameras
         self._setup_mock_menus(app)
 
         # Test valid boundary cases
@@ -143,11 +143,12 @@ class TestKVMSettingsPersistence(
                 with (
                     patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
                     self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+                    patch.object(app, "_set_camera") as mock_set_camera,
                 ):
                     app._load_settings("test_config.ini")
 
                     self.assertEqual(app.video_var, expected_index)
-                    app.video_worker.set_camera_index.assert_called_with(expected_index)
+                    mock_set_camera.assert_called_with(cameras[expected_index])
 
     def test_save_settings_success(self):
         """Test successful settings saving."""
@@ -400,8 +401,8 @@ class TestKVMSettingsPersistence(
     def test_default_video_device_fallback(self):
         """Test fallback to first video device when setting is None."""
         app = self.create_kvm_app()
-        app.video_devices = self.create_mock_cameras(2)
-        app.video_worker = MagicMock()
+        cameras = self.create_mock_cameras(2)
+        app.video_devices = cameras
         self._setup_mock_menus(app)
 
         # Settings with video_device as None (not present)
@@ -411,11 +412,12 @@ class TestKVMSettingsPersistence(
         with (
             patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
             self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+            patch.object(app, "_set_camera") as mock_set_camera,
         ):
             app._load_settings("test_config.ini")
 
-            # Should default to first device (index 0)
-            app.video_worker.set_camera_index.assert_called_with(0)
+            # Should default to first device
+            mock_set_camera.assert_called_with(cameras[0])
 
     # Helper method to set up mock menus
     def _setup_mock_menus(self, app):
@@ -661,8 +663,8 @@ class TestKVMSettingsPersistence(
 
         self.assertEqual(app.resolution_var, "")  # unchanged from default
 
-    def test_populate_resolution_menu_applies_stored_resolution_to_video_worker(self):
-        """After menu is populated, stored resolution_var is applied to video worker.
+    def test_populate_resolution_menu_applies_stored_resolution(self):
+        """After menu is populated, stored resolution_var is applied via _set_camera.
 
         This is the normal path: _load_settings stores resolution_var, then
         _populate_resolution_menu is called once cameras are found.
@@ -670,7 +672,6 @@ class TestKVMSettingsPersistence(
         app = self.create_kvm_app()
         app.video_var = 0
         app.resolution_var = "1920x1080"
-        app.video_worker = MagicMock()
 
         actions = []
         menu = MagicMock()
@@ -699,10 +700,13 @@ class TestKVMSettingsPersistence(
         cameras[0].resolutions = [(1920, 1080)]
         app.video_devices = cameras
 
-        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+        with (
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
             app._populate_resolution_menu(0)
 
-        app.video_worker.set_camera_index.assert_called_with(0, width=1920, height=1080)
+        mock_set_camera.assert_called_with(cameras[0], width=1920, height=1080)
 
 
 if __name__ == "__main__":

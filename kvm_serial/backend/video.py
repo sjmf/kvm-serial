@@ -1,80 +1,50 @@
 #!/usr/bin/env python
+"""Qt-based video capture for KVM Serial.
+
+Replaces the previous OpenCV implementation. Enumeration and capture both go
+through QtMultimedia (QCamera / QCameraInfo), which wraps AVFoundation on
+macOS, DirectShow on Windows, and V4L2 on Linux. Because the same Qt object
+both enumerates and opens a device, the platform-specific introspection layer
+that previously lived in utils/resolution_probe.py is no longer needed.
+"""
+
+from dataclasses import dataclass
 from typing import List, Optional, Tuple
-import sys
-import cv2
-import numpy
-import threading
 import logging
-import time
-from kvm_serial.backend.inputhandler import InputHandler
 
 logger = logging.getLogger(__name__)
 
-CAMERAS_TO_CHECK = 5  # Reduced from 10 - most users have 0-2 cameras
-MAX_CAM_FAILURES = 2
+try:
+    from PyQt5.QtCore import QEventLoop, QTimer
+    from PyQt5.QtMultimedia import QCamera, QCameraInfo
+except ImportError as e:  # pragma: no cover - environment-specific
+    raise ImportError(
+        "PyQt5 QtMultimedia is required for video capture. "
+        "On Debian/Ubuntu, install with: "
+        "apt install python3-pyqt5.qtmultimedia libqt5multimedia5-plugins"
+    ) from e
 
-# Platform-specific camera backend for better performance and reliability
-# Using CAP_ANY lets OpenCV try all backends, which causes 15+ second delays on Windows
-if sys.platform == "win32":
-    CAMERA_BACKEND = cv2.CAP_DSHOW  # DirectShow on Windows
-elif sys.platform == "darwin":
-    CAMERA_BACKEND = cv2.CAP_AVFOUNDATION  # AVFoundation on macOS
-else:
-    CAMERA_BACKEND = cv2.CAP_V4L2  # Video4Linux2 on Linux
+
+# Maximum time to wait for QCamera.load() to populate supported settings.
+# load() is documented as asynchronous; in practice AVFoundation/DirectShow
+# return synchronously, but V4L2 may take a moment on first access.
+PROBE_TIMEOUT_MS = 2000
 
 
 class CaptureDeviceException(Exception):
     pass
 
 
-def _configure_dshow_camera(cam: cv2.VideoCapture, width=1920, height=1080):
-    """
-    Configure DirectShow camera properties in the correct order.
-
-    On Windows, DirectShow defaults to 640x480 YUY2 and requires explicit
-    configuration. Property order matters: dimensions must be set before FOURCC,
-    because setting FOURCC auto-populates dimensions from the current device
-    state and triggers reconfiguration (see cap_dshow.cpp L3472-L3475).
-
-    Returns True if MJPG was successfully set, False if it fell back to default codec.
-    """
-    logger.debug(f"Configuring DirectShow: requesting {width}x{height} MJPG")
-    cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-    cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-    mjpg_ok = cam.set(cv2.CAP_PROP_FOURCC, cv2.VideoWriter.fourcc("M", "J", "P", "G"))
-    if not mjpg_ok:
-        logger.warning("MJPG not supported by device, using default codec")
-
-    return mjpg_ok
-
-
-def _measure_framerate(cam: cv2.VideoCapture):
-    """
-    Helper method to retrive a semi-accurate framerate as a fallback
-    if the backend does not report CAP_PROP_FPS.
-
-    :param cam: OpenCV VideoCapture device to profile
-    :type cam: cv2.VideoCapture
-    :param index: index of the device (system offset)
-    """
-    FPS_SAMPLE_FRAMES = 5
-    t0 = time.perf_counter()
-    for _ in range(FPS_SAMPLE_FRAMES):
-        cam.read()
-    elapsed = time.perf_counter() - t0
-    fps = int(FPS_SAMPLE_FRAMES // elapsed) if elapsed > 0 else 0
-    return fps
-
-
+@dataclass
 class CameraProperties:
-    """
-    Describe a video capture device and its capabilities.
+    """Capabilities of a camera device.
 
-    Constructed either from native DeviceInfo (via from_device_info) or from an
-    OpenCV probe frame (via the positional constructor, used only by the fallback
-    path).  The native path is preferred: it avoids opening any device and
-    provides name, resolutions, and default_resolution from the OS.
+    Derived from QCameraInfo + QCamera.supportedViewfinderSettings(). The live
+    QCameraInfo is retained so the GUI can pass it to QCamera() when opening.
+
+    `index` is the position in the enumerated list; it has no relationship to
+    any platform-native device index (that abstraction is a thing of the past
+    now that Qt is both enumerator and opener).
     """
 
     index: int
@@ -83,288 +53,120 @@ class CameraProperties:
     width: int
     height: int
     fps: int
-    format: int
     resolutions: List[Tuple[int, int]]
     default_resolution: Tuple[int, int]
-
-    FORMAT_STRINGS = ["CV_8U", "CV_8S", "CV_16U", "CV_16S", "CV_32S", "CV_32F", "CV_64F", "Unknown"]
-    DTYPE_TO_DEPTH = {
-        "uint8": 0,
-        "int8": 1,
-        "uint16": 2,
-        "int16": 3,
-        "int32": 4,
-        "float32": 5,
-        "float64": 6,
-    }
-
-    @staticmethod
-    def format_from_frame(frame) -> int:
-        """Derive OpenCV format (e.g. CV_8UC3=16) from a numpy frame."""
-        depth = CameraProperties.DTYPE_TO_DEPTH.get(frame.dtype.name, -1)
-        if depth == -1:
-            return -1
-        channels = frame.shape[2] if frame.ndim == 3 else 1
-        return depth + (channels - 1) * 8
-
-    @classmethod
-    def from_device_info(cls, info) -> "CameraProperties":
-        """Construct from a native DeviceInfo (no device opened)."""
-        w, h = info.default_resolution
-        return cls(
-            index=info.index,
-            width=w,
-            height=h,
-            fps=info.fps,
-            format=0,
-            name=info.name,
-            unique_id=info.unique_id,
-            resolutions=list(info.resolutions),
-            default_resolution=info.default_resolution,
-        )
-
-    def __init__(
-        self,
-        index: int,
-        width: int,
-        height: int,
-        fps: int,
-        format: int,
-        *,
-        name: Optional[str] = None,
-        unique_id: Optional[str] = None,
-        resolutions: Optional[List[Tuple[int, int]]] = None,
-        default_resolution: Optional[Tuple[int, int]] = None,
-    ):
-        self.index = index
-        self.width = width
-        self.height = height
-        self.fps = fps
-        self.format = format
-        self.name = name if name is not None else str(index)
-        self.unique_id = unique_id if unique_id is not None else str(index)
-        self.default_resolution = (
-            default_resolution if default_resolution is not None else (width, height)
-        )
-        self.resolutions = resolutions if resolutions is not None else [self.default_resolution]
+    info: Optional[QCameraInfo] = None
 
     def __getitem__(self, key):
         return getattr(self, key)
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f"{self.name} ({self.width}x{self.height}@{self.fps}fps)"
 
 
-class CaptureDevice(InputHandler):
-    def __init__(self, cam: cv2.VideoCapture = None, fullscreen=False, threaded=False):
-        self.cam = cam
-        self.fullscreen = fullscreen
-        self.running = False
-        if threaded:
-            self.thread = threading.Thread(target=self.capture)
-        else:
-            self.thread = None
+def _wait_for_loaded(cam: QCamera, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
+    """Spin a local event loop until the camera reaches LoadedStatus or times out."""
+    if cam.status() == QCamera.LoadedStatus:
+        return True
 
-    def run(self):
-        if not isinstance(self.thread, threading.Thread):
-            raise CaptureDeviceException("Capture device not running in thread")
+    loop = QEventLoop()
+    timer = QTimer()
+    timer.setSingleShot(True)
+    timer.timeout.connect(loop.quit)
 
-        self.thread.start()
-        self.thread.join()
+    def _on_status(status):
+        if status == QCamera.LoadedStatus:
+            loop.quit()
 
-    def start(self):
-        if not isinstance(self.thread, threading.Thread):
-            raise CaptureDeviceException("Capture device not running in thread")
+    cam.statusChanged.connect(_on_status)
+    timer.start(timeout_ms)
+    loop.exec_()
+    cam.statusChanged.disconnect(_on_status)
+    return cam.status() == QCamera.LoadedStatus
 
-        self.thread.start()
 
-    def stop(self):
-        self.running = False
+def _probe_camera(info: QCameraInfo, index: int) -> CameraProperties:
+    """Load a camera in viewfinder-only mode to read its capabilities."""
+    cam = QCamera(info)
+    cam.load()
+    if not _wait_for_loaded(cam):
+        logger.warning(
+            "Camera %d (%s) did not reach LoadedStatus within %dms; "
+            "capabilities may be incomplete",
+            index,
+            info.description(),
+            PROBE_TIMEOUT_MS,
+        )
 
-        if isinstance(self.thread, threading.Thread):
-            self.thread.join()
+    settings_list = cam.supportedViewfinderSettings()
+    seen: set = set()
+    resolutions: List[Tuple[int, int]] = []
+    max_fps = 0
+    for s in settings_list:
+        size = s.resolution()
+        wh = (size.width(), size.height())
+        if wh[0] > 0 and wh[1] > 0 and wh not in seen:
+            seen.add(wh)
+            resolutions.append(wh)
+        fps = int(s.maximumFrameRate())
+        if fps > max_fps:
+            max_fps = fps
+
+    # Sort by pixel count so the menu shows largest-first below "Use Default".
+    resolutions.sort(key=lambda wh: (wh[0] * wh[1], wh[0]), reverse=True)
+
+    current = cam.viewfinderSettings()
+    current_size = current.resolution()
+    if current_size.isValid() and current_size.width() > 0:
+        default_res = (current_size.width(), current_size.height())
+    elif resolutions:
+        default_res = resolutions[0]
+    else:
+        default_res = (0, 0)
+
+    cam.unload()
+
+    return CameraProperties(
+        index=index,
+        name=info.description() or info.deviceName() or f"Camera {index}",
+        unique_id=info.deviceName() or str(index),
+        width=default_res[0],
+        height=default_res[1],
+        fps=max_fps,
+        resolutions=resolutions or [default_res],
+        default_resolution=default_res,
+        info=info,
+    )
+
+
+def enumerate_cameras() -> List[CameraProperties]:
+    """Return a CameraProperties list for every camera QtMultimedia can see.
+
+    Requires a running QCoreApplication (or QApplication). Safe to call from
+    the main GUI thread; QCamera signals will be delivered via the local event
+    loop spun by _wait_for_loaded.
+    """
+    infos = QCameraInfo.availableCameras()
+    cameras: List[CameraProperties] = []
+    for i, info in enumerate(infos):
+        try:
+            cameras.append(_probe_camera(info, i))
+        except Exception as e:  # pragma: no cover - defensive
+            logger.warning("Failed to probe camera %d (%s): %s", i, info.description(), e)
+    logger.info("Found %d cameras via QtMultimedia.", len(cameras))
+    logger.debug(cameras)
+    return cameras
+
+
+class CaptureDevice:
+    """Backwards-compatible namespace exposing the enumeration entrypoint.
+
+    The previous class wrapped cv2.VideoCapture and ran a frame-capture loop in
+    a worker thread. Under Qt, the camera is a QObject owned by the GUI thread
+    that streams directly into a QGraphicsVideoItem, so there is no per-instance
+    state to hold here.
+    """
 
     @staticmethod
     def getCameras() -> List[CameraProperties]:
-        """
-        Return a CameraProperties list for all attached video capture devices.
-
-        Delegates to the native platform enumerator (enumerate_devices in
-        resolution_probe) so that no device is opened and device order is
-        aligned with OpenCV indices.  Falls back to the legacy OpenCV probe
-        loop only when the native enumerator returns nothing (e.g. missing
-        optional deps).
-        """
-        from kvm_serial.utils.resolution_probe import enumerate_devices
-
-        device_infos = enumerate_devices()
-        if device_infos:
-            cameras = [CameraProperties.from_device_info(d) for d in device_infos]
-            logger.info(f"Found {len(cameras)} cameras via native enumeration.")
-            logger.debug(cameras)
-            return cameras
-
-        logger.info("Native enumeration returned nothing; falling back to OpenCV probe.")
-        return CaptureDevice._fallback_enumerate_opencv()
-
-    @staticmethod
-    def _fallback_enumerate_opencv() -> List[CameraProperties]:
-        """
-        Legacy OpenCV probe loop used when native enumeration is unavailable.
-
-        Opens each index 0..CAMERAS_TO_CHECK-1 with cv2.VideoCapture and reads
-        a frame to derive dimensions and fps.  Slow (400-800ms per device) and
-        not positionally-aligned on macOS when multiple cameras are present,
-        but better than nothing when pyobjc/comtypes are absent.
-        """
-        cameras: List[CameraProperties] = []
-        failures = 0
-
-        try:
-            cv2.setLogLevel(-1)
-        except AttributeError:
-            logging.warning("setLogLevel not available in this OpenCV version")
-
-        logger.info(f"Probing camera indices 0-{CAMERAS_TO_CHECK - 1} via OpenCV...")
-        for index in range(0, CAMERAS_TO_CHECK):
-            logger.debug(f"Probing camera index {index}...")
-            cam = cv2.VideoCapture(index, CAMERA_BACKEND)
-
-            if cam.isOpened():
-                if sys.platform == "win32":
-                    _configure_dshow_camera(cam)
-
-                ret, frame = cam.read()
-                if ret and type(frame) is numpy.ndarray:
-                    height, width = frame.shape[:2]
-                    fmt = CameraProperties.format_from_frame(frame)
-                    if fmt == -1:
-                        fmt = int(cam.get(cv2.CAP_PROP_FORMAT))
-
-                    fps = int(cam.get(cv2.CAP_PROP_FPS))
-                    if fps <= 0:
-                        fps = _measure_framerate(cam)
-                        logger.debug(f"Camera {index} measured FPS: {fps}")
-
-                    cameras.append(
-                        CameraProperties(
-                            index=index,
-                            width=width,
-                            height=height,
-                            fps=fps,
-                            format=fmt,
-                        )
-                    )
-                else:
-                    logger.warning(f"Camera {index} opened but failed to read frame")
-
-                cam.release()
-            else:
-                failures += 1
-
-            if failures >= MAX_CAM_FAILURES:
-                break
-
-        logger.info(f"Found {len(cameras)} cameras.")
-        logger.debug(cameras)
-        return cameras
-
-    def openWindow(self, windowTitle="kvm"):
-        windowstring = "fullscreen" if self.fullscreen else "window"
-        logger.info(f"Starting video in {windowstring} for window '{windowTitle}'...")
-
-        cv2.namedWindow(windowTitle, cv2.WINDOW_NORMAL)
-        if self.fullscreen:
-            cv2.setWindowProperty(windowTitle, cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
-
-    def capture(self, exitKey=27, windowTitle="kvm"):
-        # Autonomous capture method can be called to do everything in one
-        if not self.cam:
-            self.autoSelectCamera()
-        self.openWindow()
-        self.frameLoop(exitKey=exitKey, windowTitle=windowTitle)
-
-    def autoSelectCamera(self, camIndex=0):
-        # Open the default camera
-        cameras = CaptureDevice.getCameras()
-        self.setCamera(camIndex=cameras[camIndex].index)
-
-    def setCamera(self, camIndex=0, width=None, height=None):
-        self.cam = cv2.VideoCapture(camIndex, CAMERA_BACKEND)
-
-        if not self.cam.isOpened():
-            raise CaptureDeviceException(f"Camera {camIndex} failed to open")
-
-        if sys.platform == "win32":
-            # On Windows, DirectShow defaults to 640x480 YUY2 and requires explicit
-            # configuration. Use requested dimensions if provided (see issue #19).
-            req_w = width if width is not None else 1920
-            req_h = height if height is not None else 1080
-            _configure_dshow_camera(self.cam, width=req_w, height=req_h)
-        elif width is not None and height is not None:
-            # Request the user-selected resolution from the backend before the first read.
-            # The backend may not honour it exactly; frame.shape below captures what was
-            # actually negotiated and becomes the authoritative coordinate space.
-            self.cam.set(cv2.CAP_PROP_FRAME_WIDTH, width)
-            self.cam.set(cv2.CAP_PROP_FRAME_HEIGHT, height)
-
-        # Verify the camera can actually capture frames
-        ret, frame = self.cam.read()
-        if not ret or type(frame) is not numpy.ndarray:
-            logger.warning(f"Camera {camIndex} opened but failed to read frame")
-            raise CaptureDeviceException(f"Camera {camIndex} cannot capture frames")
-
-        # Derive actual dimensions from the frame (cam.get() is unreliable on DirectShow)
-        self.camera_height, self.camera_width = frame.shape[:2]
-        logger.info(f"Camera {camIndex} verified: {self.camera_width}x{self.camera_height}")
-
-    def frameLoop(self, exitKey=27, windowTitle="kvm"):
-        try:
-            self.running = True
-            while self.cam.isOpened():
-                # Display the captured frame
-                frame = self.getFrame()
-                cv2.imshow(windowTitle, frame)
-
-                # Default is 'ESC' to exit the loop
-                # 50 = 20fps?
-                if cv2.waitKey(50) == exitKey or not self.running:
-                    self.cam.release()
-        except cv2.error as e:
-            logger.error(e)
-        finally:
-            self.running = False
-
-            # Release the capture and writer objects
-            logger.info(f"Camera released. Destroying video window '{windowTitle}'...")
-            cv2.destroyWindow(windowTitle)
-
-    def getFrame(self, resize: tuple | None = None, convert_color_space: bool = False):
-        if not self.cam:
-            raise CaptureDeviceException("No camera configured. Call setCamera(index).")
-        _, frame = self.cam.read()
-        try:
-            if resize:
-                frame = cv2.resize(frame, resize)
-            if convert_color_space:
-                frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            return frame
-        except cv2.error as e:
-            logging.error(e)
-            raise e
-
-
-if __name__ == "__main__":
-    cap = CaptureDevice()
-    cap.setCamera(1)
-    out = cap.getFrame()
-
-    # Test capture device as a script: render as ascii art in terminal
-    import sys
-    import numpy as np
-
-    term_width = int(sys.argv[1]) if len(sys.argv) > 1 else 200
-    out = np.array([[[y[1]] for y in x] for x in out])  # Drop colour channels
-    out = cv2.adaptiveThreshold(out, 255, cv2.ADAPTIVE_THRESH_MEAN_C, cv2.THRESH_BINARY, 11, 2)
-    out = cv2.resize(out, (term_width, int(out.shape[0] * (term_width / out.shape[1] / 2))))
-    print("\n".join(["".join(["@%#*+=-:. "[pixel // 32] for pixel in row]) for row in out]))
+        return enumerate_cameras()

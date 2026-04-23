@@ -21,8 +21,7 @@ class TestKVMScreenshot(KVMTestBase):
         # Simulate no pixmap set (pixmap() returns a null QPixmap)
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = True
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning:
             app._take_screenshot()
@@ -35,8 +34,7 @@ class TestKVMScreenshot(KVMTestBase):
         """Test screenshot handles pixmap() returning None."""
         app = self.create_kvm_app()
 
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = None
+        app._grab_video_frame = MagicMock(return_value=None)
 
         with patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning:
             app._take_screenshot()
@@ -49,8 +47,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
 
@@ -76,8 +73,7 @@ class TestKVMScreenshot(KVMTestBase):
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
         mock_pixmap.save.return_value = True
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
         save_path = "/tmp/test_screenshot.png"
@@ -108,8 +104,7 @@ class TestKVMScreenshot(KVMTestBase):
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
         mock_pixmap.save.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
         save_path = "/invalid/path/screenshot.png"
@@ -138,8 +133,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
 
@@ -171,8 +165,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with (
             patch("kvm_serial.kvm.QApplication.clipboard", return_value=MagicMock()),
@@ -202,8 +195,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with (
             patch("kvm_serial.kvm.QApplication.clipboard", return_value=None),

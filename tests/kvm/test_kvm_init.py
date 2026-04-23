@@ -93,7 +93,6 @@ class TestKVMInitialization(
         self.assertTrue(app.show_status_var)
         self.assertFalse(app.verbose_var)
         self.assertFalse(app.hide_mouse_var)
-        self.assertEqual(app.target_fps, 30)
 
         # Test keyboard layout default
         self.assertEqual(app.keyboard_layout_var, "en_GB")
@@ -113,27 +112,19 @@ class TestKVMInitialization(
         self.assertIn("LEFT", app.BUTTON_MAP.values())
         self.assertIn("RIGHT", app.BUTTON_MAP.values())
 
-    def test_video_worker_initialization(self):
-        """Test that video capture worker is initialized properly."""
+    def test_video_pipeline_initialization(self):
+        """Test that the QtMultimedia video pipeline attributes are present."""
         from kvm_serial.kvm import KVMQtGui
 
-        with (
-            patch("kvm_serial.kvm.VideoCaptureWorker") as mock_worker_class,
-            patch.object(KVMQtGui, "_KVMQtGui__init_video") as mock_init_video,
-        ):
-            mock_worker_instance = MagicMock()
-            mock_worker_class.return_value = mock_worker_instance
-
+        with patch.object(KVMQtGui, "_KVMQtGui__init_video") as mock_init_video:
             app = KVMQtGui()
-
-            # Verify that __init_video was called during initialization
             mock_init_video.assert_called_once()
 
-        # Test actual video worker creation by calling the real initialization
+        # Real initialisation creates the QGraphicsVideoItem; QCamera is None
+        # until enumeration completes and a device is selected.
         app = self.create_kvm_app()
-
-        # Check that the video_worker attribute exists
-        self.assertTrue(hasattr(app, "video_worker"), "App should have video_worker attribute")
+        self.assertTrue(hasattr(app, "video_item"))
+        self.assertIsNone(app.qcamera)
 
     def test_initialization_handles_port_discovery_failure(self):
         """Test graceful handling of serial port discovery failure."""
@@ -151,7 +142,7 @@ class TestKVMInitialization(
         from kvm_serial.kvm import KVMQtGui
 
         with patch(
-            "kvm_serial.kvm.CaptureDevice.getCameras",
+            "kvm_serial.kvm.enumerate_cameras",
             side_effect=Exception("Camera discovery failed"),
         ):
             # Should not raise exception despite camera discovery failure
@@ -178,14 +169,6 @@ class TestKVMInitialization(
         self.assertEqual(app.pos_x, 0)
         self.assertEqual(app.pos_y, 0)
 
-    def test_fps_and_frame_timing_initialization(self):
-        """Test that FPS and frame timing variables are initialized."""
-        app = self.create_kvm_app()
-
-        self.assertEqual(app.target_fps, 30)
-        self.assertEqual(app.frame_drop_threshold, 0.05)
-        self.assertEqual(app.last_capture_request, 0.0)
-
     def test_initialization_state_variables(self):
         """Test that all state variables are properly initialized."""
         app = self.create_kvm_app()
@@ -201,10 +184,6 @@ class TestKVMInitialization(
         self.assertTrue(app.show_status_var)
         self.assertFalse(app.verbose_var)
         self.assertFalse(app.hide_mouse_var)
-
-        # Device initialization state
-        self.assertFalse(app.camera_initialised)
-        self.assertEqual(app.video_device_idx, 0)
 
     def test_io_objects_initial_state(self):
         """Test that IO objects start as None."""
@@ -226,15 +205,10 @@ class TestKVMInitialization(
         self.assertIsInstance(app.baud_rates, list)
         self.assertGreater(len(app.baud_rates), 0)
 
-    def test_timer_and_worker_attributes_exist(self):
-        """Test that timer and worker attributes are created."""
+    def test_timer_attributes_exist(self):
+        """Test that timer attributes are created (status timer only — video uses Qt's pipeline)."""
         app = self.create_kvm_app()
-
-        # These attributes should exist after initialization
-        timer_attributes = ["video_update_timer", "status_timer", "video_worker"]
-
-        for attr in timer_attributes:
-            self.assertTrue(hasattr(app, attr), f"Missing attribute: {attr}")
+        self.assertTrue(hasattr(app, "status_timer"), "Missing attribute: status_timer")
 
     def test_gui_component_attributes_exist(self):
         """Test that GUI component attributes are created."""
@@ -244,7 +218,7 @@ class TestKVMInitialization(
         gui_attributes = [
             "video_view",
             "video_scene",
-            "video_pixmap_item",
+            "video_item",
             "status_bar",
             "status_serial_label",
             "status_keyboard_label",
