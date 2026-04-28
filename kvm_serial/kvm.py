@@ -253,20 +253,15 @@ class KVMQtGui(QMainWindow):
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
-        # Screenshot
-        screenshot_action = QAction("Take Screenshot", self)
-        screenshot_action.triggered.connect(self._take_screenshot)
-        file_menu.addAction(screenshot_action)
+        # About
+        about_action = QAction("About Serial KVM", self)
+        about_action.triggered.connect(self._show_about)
+        file_menu.addAction(about_action)
 
         # Quit
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._on_quit)
         file_menu.addAction(quit_action)
-
-        # About
-        about_action = QAction("About Serial KVM", self)
-        about_action.triggered.connect(self._show_about)
-        file_menu.addAction(about_action)
 
         # Edit Menu
         edit_menu = menubar.addMenu("Edit")
@@ -274,6 +269,16 @@ class KVMQtGui(QMainWindow):
         self.paste_action = QAction("Paste", self)
         self.paste_action.triggered.connect(self._on_paste)
         edit_menu.addAction(self.paste_action)
+
+        # Screenshot
+        screenshot_action = QAction("Take Screenshot", self)
+        screenshot_action.triggered.connect(self._take_screenshot)
+        edit_menu.addAction(screenshot_action)
+
+        # Add CTRL+ALT+DEL action
+        ctrl_alt_del_action = QAction("Send CTRL+ALT+DEL", self)
+        ctrl_alt_del_action.triggered.connect(self._send_ctrl_alt_del)
+        edit_menu.addAction(ctrl_alt_del_action)
 
         # Options Menu
         options_menu = menubar.addMenu("Options")
@@ -286,23 +291,12 @@ class KVMQtGui(QMainWindow):
         self.resolution_menu = options_menu.addMenu("Resolution")
         self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
-        # Hide Mouse Pointer option
-        self.mouse_action = QAction("Hide Mouse Pointer", self)
-        self.mouse_action.setCheckable(True)
-        self.mouse_action.triggered.connect(self._toggle_mouse)
-        options_menu.addAction(self.mouse_action)
-
         # Verbose Logging option
         self.verbose_action = QAction("Verbose Logging", self)
         self.verbose_action.setCheckable(True)
         self.verbose_action.setChecked(self.verbose_var)
         self.verbose_action.triggered.connect(self._toggle_verbose)
         options_menu.addAction(self.verbose_action)
-
-        # Add CTRL+ALT+DEL action
-        ctrl_alt_del_action = QAction("Send CTRL+ALT+DEL", self)
-        ctrl_alt_del_action.triggered.connect(self._send_ctrl_alt_del)
-        options_menu.addAction(ctrl_alt_del_action)
 
         # View menu
         view_menu = menubar.addMenu("View")
@@ -318,6 +312,12 @@ class KVMQtGui(QMainWindow):
 
         status_action.triggered.connect(_toggle_status)
         view_menu.addAction(status_action)
+
+        # Hide Mouse Pointer option
+        self.mouse_action = QAction("Hide Mouse Pointer", self)
+        self.mouse_action.setCheckable(True)
+        self.mouse_action.triggered.connect(self._toggle_mouse)
+        view_menu.addAction(self.mouse_action)
 
         # Scale Video submenu
         self.scale_menu = cast(QMenu, view_menu.addMenu("Scale Video"))
