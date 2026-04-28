@@ -3,6 +3,7 @@ import os
 import sys
 import logging
 import time
+import math
 from typing import cast, Optional
 from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QSizeF, QEvent, QLocale, pyqtSignal
@@ -291,6 +292,8 @@ class KVMQtGui(QMainWindow):
         self.resolution_menu = options_menu.addMenu("Resolution")
         self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
+        options_menu.addSeparator()
+
         # Verbose Logging option
         self.verbose_action = QAction("Verbose Logging", self)
         self.verbose_action.setCheckable(True)
@@ -335,11 +338,11 @@ class KVMQtGui(QMainWindow):
             action.triggered.connect(lambda _checked, m=mode: self._on_scale_mode_selected(m))
             self.scale_menu.addAction(action)
             self._scale_actions[mode] = action
-            if mode == "fit":
-                resize_action = QAction("Resize Window to Video", self)
-                resize_action.triggered.connect(self._on_resize_window_to_resolution)
-                self.scale_menu.addAction(resize_action)
-                self.scale_menu.addSeparator()
+
+        resize_action = QAction("Resize Window to Video", self)
+        resize_action.triggered.connect(self._on_resize_window_to_resolution)
+        view_menu.addAction(resize_action)
+        view_menu.addSeparator()
 
         # Fullscreen toggle (macOS provides its own native fullscreen via the green
         # traffic light button and "Enter Full Screen" menu item automatically)
@@ -1145,6 +1148,7 @@ class KVMQtGui(QMainWindow):
     def _apply_scale_mode(self):
         """Apply the currently selected scale mode to the video view's transform."""
         if self.scale_mode_var == "fit":
+            self.video_view.resetTransform()
             self.video_view.fitInView(
                 self.video_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
@@ -1159,21 +1163,47 @@ class KVMQtGui(QMainWindow):
         by the current scale factor. "fit" mode resizes to native (1:1) resolution;
         fixed-ratio modes multiply by their factor (e.g. 2:1 doubles, 1:2 halves).
         """
-        camera_width, camera_height = self._camera_resolution()
+        if self._is_window_expanded():
+            self.showNormal()
+            QTimer.singleShot(0, self._resize_window_to_scaled_video)
+            return
 
+        self._resize_window_to_scaled_video()
+
+    def _scaled_video_size(self) -> tuple[int, int]:
+        """Return the scaled scene size that should fit inside the viewport."""
+        camera_width, camera_height = self._camera_resolution()
         factor = 1.0 if self.scale_mode_var == "fit" else float(self.scale_mode_var)
-        target_w = int(round(camera_width * factor))
-        target_h = int(round(camera_height * factor))
+        return (
+            int(math.ceil(camera_width * factor)),
+            int(math.ceil(camera_height * factor)),
+        )
+
+    def _resize_window_to_scaled_video(self):
+        """Resize the window so the viewport matches the scaled video size."""
+        target_w, target_h = self._scaled_video_size()
+
+        viewport = self.video_view.viewport()
+        viewport_w = viewport.width() if viewport is not None else self.video_view.width()
+        viewport_h = viewport.height() if viewport is not None else self.video_view.height()
 
         # Measure the chrome overhead (menubar + statusbar + any margins)
-        chrome_w = self.width() - self.video_view.width()
-        chrome_h = self.height() - self.video_view.height()
+        chrome_w = self.width() - viewport_w
+        chrome_h = self.height() - viewport_h
 
         self.resize(target_w + chrome_w, target_h + chrome_h)
+        factor = 1.0 if self.scale_mode_var == "fit" else float(self.scale_mode_var)
         logging.info(
             f"Window resized to {target_w}x{target_h} "
-            f"(camera {camera_width}x{camera_height} @ {factor}x)"
+            f"(camera scaled by {factor}x into viewport)"
         )
+
+    def _is_window_expanded(self) -> bool:
+        """Return whether the window is fullscreen or maximized."""
+        try:
+            return self.isFullScreen() or self.isMaximized()
+        except RuntimeError:
+            return False
 
     def _on_video_native_size_changed(self, size: QSizeF):
         """

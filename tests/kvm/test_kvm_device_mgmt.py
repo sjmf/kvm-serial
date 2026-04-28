@@ -583,8 +583,8 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         app = self.create_kvm_app()
         app._camera_resolution = MagicMock(return_value=(1920, 1080))
         app.video_view = MagicMock()
-        app.video_view.width.return_value = 800
-        app.video_view.height.return_value = 600
+        app.video_view.viewport.return_value = MagicMock(width=MagicMock(return_value=800))
+        app.video_view.viewport.return_value.height.return_value = 600
 
         with (
             patch.object(app, "width", return_value=840),
@@ -600,8 +600,8 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         app.scale_mode_var = "0.5"
         app._camera_resolution = MagicMock(return_value=(1920, 1080))
         app.video_view = MagicMock()
-        app.video_view.width.return_value = 800
-        app.video_view.height.return_value = 600
+        app.video_view.viewport.return_value = MagicMock(width=MagicMock(return_value=800))
+        app.video_view.viewport.return_value.height.return_value = 600
 
         with (
             patch.object(app, "width", return_value=840),
@@ -612,6 +612,34 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
 
         # 1920*0.5=960 + chrome 40, 1080*0.5=540 + chrome 40
         mock_resize.assert_called_once_with(1000, 580)
+
+    def test_resize_window_to_resolution_restores_normal_from_maximized(self):
+        app = self.create_kvm_app()
+
+        with (
+            patch.object(app, "isFullScreen", return_value=False),
+            patch.object(app, "isMaximized", return_value=True),
+            patch.object(app, "showNormal") as mock_show_normal,
+            patch("kvm_serial.kvm.QTimer.singleShot") as mock_single_shot,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_show_normal.assert_called_once_with()
+        mock_single_shot.assert_called_once_with(0, app._resize_window_to_scaled_video)
+
+    def test_resize_window_to_resolution_restores_normal_from_fullscreen(self):
+        app = self.create_kvm_app()
+
+        with (
+            patch.object(app, "isFullScreen", return_value=True),
+            patch.object(app, "isMaximized", return_value=False),
+            patch.object(app, "showNormal") as mock_show_normal,
+            patch("kvm_serial.kvm.QTimer.singleShot") as mock_single_shot,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_show_normal.assert_called_once_with()
+        mock_single_shot.assert_called_once_with(0, app._resize_window_to_scaled_video)
 
 
 if __name__ == "__main__":
