@@ -938,14 +938,17 @@ class KVMQtGui(QMainWindow):
 
         self.video_devices = cameras
         logging.info(f"Found video devices: {[str(v) for v in cameras]}")
-        self._populate_video_device_menu()
 
         if cameras:
+            # Set the active selection BEFORE populating the menu so the menu
+            # builder can render the checkmark on the correct entry.
             self.video_device_var = str(cameras[0])
             self.video_var = 0
+            self._populate_video_device_menu()
             self._set_camera(cameras[0])
             self._populate_resolution_menu(0)
         else:
+            self._populate_video_device_menu()
             self.video_device_var = "None found"
             message = (
                 "No video devices found.\n\n"
