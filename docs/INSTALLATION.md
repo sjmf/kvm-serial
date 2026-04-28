@@ -144,6 +144,7 @@ Install required system libraries for PyQt5 and OpenCV:
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
+    libqt5multimedia5-plugins \
     libxcb-xinerama0 \
     libxcb-icccm4 \
     libxcb-image0 \
@@ -161,6 +162,7 @@ sudo apt-get install -y \
 
 ```bash
 sudo dnf install -y \
+    qt5-qtmultimedia \
     libxcb \
     xcb-util-wm \
     xcb-util-image \
