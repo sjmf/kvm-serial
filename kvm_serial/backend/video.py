@@ -61,7 +61,7 @@ class CameraProperties:
         return getattr(self, key)
 
     def __str__(self) -> str:
-        return f"{self.name} ({self.width}x{self.height}@{self.fps}fps)"
+        return self.name  # f"{self.name} ({self.width}x{self.height}@{self.fps}fps)"
 
 
 def _wait_for_loaded(cam: QCamera, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
