@@ -119,6 +119,30 @@ class TestKVMDeviceManagement(
             self.assertEqual(app.video_device_var, str(test_cameras[0]))
             self.assertEqual(app.video_var, 0)
 
+    def test_populate_video_devices_sets_video_var_before_menu_build(self):
+        """Regression: _populate_video_device_menu reads video_var to mark the
+        active entry's checkmark. video_var must be set BEFORE the menu is built,
+        otherwise no checkmark appears on first launch when no settings file
+        carries an explicit video_device entry to re-apply later. Surfaced this
+        Windows-only checkmark bug during the QtMultimedia migration.
+        """
+        test_cameras = self.create_mock_cameras(2)
+        app = self.create_kvm_app()
+        observed_video_var = []
+
+        def record_video_var():
+            observed_video_var.append(app.video_var)
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=test_cameras),
+            patch.object(app, "_populate_video_device_menu", side_effect=record_video_var),
+            self.patch_kvm_method(app, "_set_camera"),
+            self.patch_kvm_method(app, "_populate_resolution_menu"),
+        ):
+            app._populate_video_devices()
+
+        self.assertEqual(observed_video_var, [0])
+
     def test_populate_video_devices_empty_list(self):
         """Test handling when no video devices are found."""
         app = self.create_kvm_app()
