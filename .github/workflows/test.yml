@@ -29,7 +29,6 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libpulse-mainloop-glib0 \
             libqt5multimedia5-plugins
 
       - name: Install test dependencies
