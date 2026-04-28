@@ -28,10 +28,9 @@ jobs:
       - name: Install runtime dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
+          sudo apt-get install -y --no-install-recommends \
             libpulse-mainloop-glib0 \
-            libqt5multimedia5-plugins \
-            python3-pyqt5.qtmultimedia
+            libqt5multimedia5-plugins
 
       - name: Install test dependencies
         run: pip install pytest pytest-cov pytest-timeout
