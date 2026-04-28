@@ -32,6 +32,26 @@ class TestKVMDeviceManagement(
             self.assertEqual(app.serial_ports, test_ports)
             self.assertEqual(app.serial_port_var, test_ports[-1])
 
+    def test_populate_serial_ports_sets_var_before_menu_build(self):
+        """Regression: _populate_serial_port_menu reads serial_port_var to mark
+        the active entry's checkmark. serial_port_var must be set BEFORE the
+        menu is built — same class of bug as the video device checkmark.
+        """
+        test_ports = self.create_mock_serial_ports()
+        app = self.create_kvm_app()
+        observed = []
+
+        def record():
+            observed.append(app.serial_port_var)
+
+        with (
+            patch("kvm_serial.kvm.list_serial_ports", return_value=test_ports),
+            patch.object(app, "_populate_serial_port_menu", side_effect=record),
+        ):
+            app._populate_serial_ports()
+
+        self.assertEqual(observed, [test_ports[-1]])
+
     def test_populate_serial_ports_empty_list(self):
         """Test handling when no serial ports are found."""
         app = self.create_kvm_app()

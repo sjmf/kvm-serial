@@ -686,9 +686,10 @@ class KVMQtGui(QMainWindow):
         try:
             self.serial_ports = list_serial_ports()
             logging.info(f"Found serial ports: {self.serial_ports}")
-            self._populate_serial_port_menu()
 
             if len(self.serial_ports) == 0:
+                self.serial_port_var = "None found"
+                self._populate_serial_port_menu()
                 QMessageBox.warning(
                     self,
                     "Start-up Warning",
@@ -696,10 +697,11 @@ class KVMQtGui(QMainWindow):
                     "Please ensure your USB serial device is connected and drivers are installed.\n"
                     "See documentation for driver installation and troubleshooting instructions.",
                 )
-                self.serial_port_var = "None found"
             else:
-                # Default to the last port found
+                # Default to the last port found. Set BEFORE menu build so the
+                # checkmark loop in _populate_serial_port_menu sees it.
                 self.serial_port_var = self.serial_ports[-1]
+                self._populate_serial_port_menu()
 
         except Exception as e:
             logging.error(f"Error discovering serial ports: {e}")
