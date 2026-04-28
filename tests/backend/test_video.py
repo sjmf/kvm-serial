@@ -5,6 +5,8 @@ at the module level so they don't require a real camera or display server.
 """
 
 from unittest.mock import patch, MagicMock
+import importlib
+import sys
 import pytest
 
 
@@ -50,6 +52,45 @@ def fake_camera_factory(fake_settings):
         return cam
 
     return make
+
+
+@pytest.fixture(autouse=True)
+def ensure_video_importable():
+    """Fallback-mock QtMultimedia/Core only for backend video tests when unavailable."""
+    original_qtcore = sys.modules.get("PyQt5.QtCore")
+    original_qtmultimedia = sys.modules.get("PyQt5.QtMultimedia")
+    mocked = False
+
+    try:
+        importlib.import_module("kvm_serial.backend.video")
+    except ImportError:
+        mock_qcore = MagicMock()
+        mock_qcore.QEventLoop = MagicMock()
+        mock_qcore.QTimer = MagicMock()
+
+        mock_qmultimedia = MagicMock()
+        mock_qmultimedia.QCamera = MagicMock()
+        mock_qmultimedia.QCameraInfo = MagicMock()
+
+        sys.modules["PyQt5.QtCore"] = mock_qcore
+        sys.modules["PyQt5.QtMultimedia"] = mock_qmultimedia
+        sys.modules.pop("kvm_serial.backend.video", None)
+        importlib.import_module("kvm_serial.backend.video")
+        mocked = True
+
+    yield
+
+    if mocked:
+        sys.modules.pop("kvm_serial.backend.video", None)
+        if original_qtcore is None:
+            sys.modules.pop("PyQt5.QtCore", None)
+        else:
+            sys.modules["PyQt5.QtCore"] = original_qtcore
+
+        if original_qtmultimedia is None:
+            sys.modules.pop("PyQt5.QtMultimedia", None)
+        else:
+            sys.modules["PyQt5.QtMultimedia"] = original_qtmultimedia
 
 
 @pytest.fixture(autouse=True)
