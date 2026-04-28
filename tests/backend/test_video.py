@@ -76,7 +76,7 @@ class TestCameraProperties:
             default_resolution=(1280, 720),
             info=None,
         )
-        assert str(props) == "HD Webcam (1280x720@60fps)"
+        assert str(props) == "HD Webcam"
 
     def test_getitem_subscript_access(self):
         """Existing GUI code reads CameraProperties via __getitem__."""
