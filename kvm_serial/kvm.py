@@ -1064,16 +1064,28 @@ class KVMQtGui(QMainWindow):
             )
             self.resolution_menu.addAction(action)
 
-        # Apply any resolution loaded from settings now that the menu exists and the
-        # camera is ready. (Covers the case where _load_settings runs before camera
-        # enumeration completes.)
+        # Apply any resolution loaded from settings (or carried over from a prior
+        # device selection) now that the menu exists and the camera is ready.
+        # If the requested resolution is not supported by this device, fall back
+        # to the device default rather than handing QCamera a value it will reject
+        # with "Failed to configure preview format" — this happens when the user
+        # picks a custom resolution on one camera and then switches to a camera
+        # whose viewfinder settings don't include that resolution.
         if self.resolution_var and camera is not None:
-            parts = self.resolution_var.split("x")
             try:
-                w, h = int(parts[0]), int(parts[1])
-                self._set_camera(camera, width=w, height=h)
+                w, h = (int(x) for x in self.resolution_var.split("x"))
             except (ValueError, IndexError):
-                pass
+                return
+            if (w, h) in camera.resolutions:
+                self._set_camera(camera, width=w, height=h)
+            else:
+                logging.info(
+                    f"Resolution {self.resolution_var} not supported by {camera.name}; "
+                    "falling back to device default"
+                )
+                self.resolution_var = ""
+                for action in self.resolution_menu.actions():
+                    action.setChecked(action.text() == "Use Default")
 
     def _on_use_default_selected(self):
         """

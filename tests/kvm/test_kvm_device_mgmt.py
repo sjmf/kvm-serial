@@ -438,6 +438,59 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
             app._populate_resolution_menu(0)
 
+    def test_unsupported_resolution_falls_back_to_default(self):
+        """Regression: switching from a 1080p camera with resolution_var='1920x1080'
+        to a 720p-max camera must NOT pass 1920x1080 to _set_camera (QCamera would
+        reject with 'Failed to configure preview format'). Instead, drop the
+        unsupported resolution and let the camera use its default.
+        """
+        app = self.create_kvm_app()
+        # Simulate state after the user picked 1920x1080 on a previous camera.
+        app.resolution_var = "1920x1080"
+        app.video_var = 0
+        # New camera only supports 720p.
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1280, 720), (640, 480)]
+        app.video_devices = cameras
+        app.resolution_menu = self._make_tracking_menu()
+
+        with (
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
+            app._populate_resolution_menu(0)
+
+        # _set_camera should NOT have been invoked with the unsupported resolution.
+        for call in mock_set_camera.call_args_list:
+            assert (
+                call.kwargs.get("width") != 1920
+            ), f"_set_camera called with unsupported width=1920: {call}"
+        # resolution_var must be cleared and "Use Default" re-checked.
+        self.assertEqual(app.resolution_var, "")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_supported_resolution_carries_over_between_devices(self):
+        """Inverse: when the new camera DOES support the requested resolution,
+        keep it and apply it via _set_camera (e.g. switching between two 1080p
+        capture cards should preserve the user's selection)."""
+        app = self.create_kvm_app()
+        app.resolution_var = "1920x1080"
+        app.video_var = 0
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1920, 1080), (1280, 720)]
+        app.video_devices = cameras
+        app.resolution_menu = self._make_tracking_menu()
+
+        with (
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
+            app._populate_resolution_menu(0)
+
+        mock_set_camera.assert_called_with(cameras[0], width=1920, height=1080)
+        self.assertEqual(app.resolution_var, "1920x1080")
+
     def test_populate_resolution_menu_contains_use_default(self):
         app = self.create_kvm_app()
         self._populate(app)
