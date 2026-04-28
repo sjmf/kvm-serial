@@ -67,14 +67,6 @@ jobs:
       #     pytest tests/test_control.py --cov --cov-append --cov-branch \
       #       --cov-report=xml --junitxml=./junit.xml
 
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() && !inputs.skip-coverage }}
-        uses: codecov/test-results-action@v1
-        with:
-          files: ./junit.xml,!./cache
-          flags: python3.10
-          token: ${{ secrets.CODECOV_TOKEN }}
-
       - name: Upload results to Codecov
         if: ${{ !cancelled() && !inputs.skip-coverage }}
         uses: codecov/codecov-action@v5
