@@ -29,7 +29,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            libqt5multimedia5-plugins
+            libqt5multimedia5-plugins \
+            libpulse-mainloop-glib0
 
       - name: Install test dependencies
         run: pip install pytest pytest-cov pytest-timeout
