@@ -448,8 +448,10 @@ class KVMQtGui(QMainWindow):
     def __init_timers(self):
         # QtMultimedia owns the frame pipeline; no per-frame Python timer is needed.
         # Defer device enumeration and settings load past the event-loop start.
+        # Both run in the same deferred callback so _load_settings always sees a
+        # fully-populated video_devices list — a fixed 10ms timer would race with
+        # _wait_for_loaded()'s inner QEventLoop during camera probing.
         QTimer.singleShot(0, self.__init_devices)
-        QTimer.singleShot(10, lambda: self._load_settings(self.CONFIG_FILE))
 
         # Status bar timer
         self.status_timer = QTimer()
@@ -458,12 +460,16 @@ class KVMQtGui(QMainWindow):
 
     def __init_devices(self):
         """
-        Initialise and populate device lists (serial ports, video devices, keyboard layouts)
+        Initialise and populate device lists (serial ports, video devices, keyboard layouts),
+        then load saved settings. Settings load is intentionally last so it always sees
+        complete device lists; calling it from a separate timer would race with the inner
+        QEventLoop spun by _wait_for_loaded() during camera probing.
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
         self._populate_video_devices()
         self._populate_keyboard_layouts()
+        self._load_settings(self.CONFIG_FILE)
 
     def _update_status_bar(self):
         """
