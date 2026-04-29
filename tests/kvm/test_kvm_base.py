@@ -148,6 +148,11 @@ class KVMTestBase(unittest.TestCase):
             # Video enumeration mocking — no cameras by default; tests opt in.
             patch.object(video_mod, "enumerate_cameras", return_value=[]),
             patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
+            # _wait_for_loaded spins a real QEventLoop until QCamera reaches
+            # LoadedStatus, which would hang indefinitely against a MagicMock.
+            # Bypass it in the GUI test path the same way tests/backend/test_video.py
+            # does for the enumeration path.
+            patch("kvm_serial.kvm._wait_for_loaded", return_value=True),
             # Serial communication mocking
             patch("kvm_serial.utils.communication.list_serial_ports"),
             patch("kvm_serial.kvm.list_serial_ports"),

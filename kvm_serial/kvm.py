@@ -38,7 +38,7 @@ try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
-    from kvm_serial.backend.video import CameraProperties, enumerate_cameras
+    from kvm_serial.backend.video import CameraProperties, enumerate_cameras, _wait_for_loaded
     from kvm_serial.backend.implementations.qtop import QtOp
     from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
 
@@ -48,7 +48,7 @@ except ModuleNotFoundError:
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
     from utils import scancode_to_ascii, string_to_scancodes
-    from backend.video import CameraProperties, enumerate_cameras
+    from backend.video import CameraProperties, enumerate_cameras, _wait_for_loaded
     from backend.implementations.qtop import QtOp
     from backend.implementations.mouseop import MouseOp, MouseButton
 
@@ -1391,11 +1391,22 @@ class KVMQtGui(QMainWindow):
             lambda _err, c=self.qcamera: self._on_camera_initialization_error(c.errorString())
         )
 
-        # load() must be called before start() so Qt can negotiate a pixel format
-        # compatible with the QGraphicsVideoItem surface.  Without it, the camera
-        # starts on its native format (often UYVY for HDMI capture cards) which
-        # QGraphicsVideoItem may not support, producing "Failed to start viewfinder".
+        # load() is asynchronous: it returns immediately and the camera transitions
+        # to LoadedStatus some time later. Calling start() (or even reading
+        # supportedViewfinderSettings) before LoadedStatus produces a viewfinder
+        # that silently fails to render — the camera "opens" but never delivers
+        # frames, and nativeSizeChanged never fires. This is the root cause of the
+        # cold-start blackscreen: at __init_devices time the device hasn't yet
+        # transitioned to Loaded, so we'd race start() ahead of it. _wait_for_loaded
+        # spins a local QEventLoop until LoadedStatus or PROBE_TIMEOUT_MS, which is
+        # the same primitive _probe_camera in backend/video.py uses for its own
+        # supportedViewfinderSettings() reads.
         self.qcamera.load()
+        if not _wait_for_loaded(self.qcamera):
+            logging.warning(
+                f"Camera {camera.name} did not reach LoadedStatus before timeout; "
+                "viewfinder may not render."
+            )
 
         # Apply viewfinder settings (resolution + pixel format). Must be set
         # before start(). _pick_viewfinder_settings searches the supported list

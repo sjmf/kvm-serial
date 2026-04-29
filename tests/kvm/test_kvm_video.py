@@ -70,6 +70,64 @@ class TestKVMVideoPipeline(KVMTestBase):
             previous.stop.assert_called_once()
             previous.unload.assert_called_once()
 
+    def test_set_camera_waits_for_loaded_before_starting(self):
+        """Regression: cold-start blackscreen on Windows.
+
+        QCamera.load() is asynchronous — calling start() (or even reading
+        supportedViewfinderSettings via _pick_viewfinder_settings) before the
+        camera reaches LoadedStatus produces a viewfinder that silently never
+        renders. The first _set_camera call at __init_devices time hits this
+        race; subsequent manual reselections work because the device is warm.
+
+        Verify _set_camera calls _wait_for_loaded between load() and start(),
+        passing the new QCamera instance.
+        """
+        app = self.create_kvm_app()
+
+        info = MagicMock()
+        camera = MagicMock(
+            unique_id="uid",
+            width=1280,
+            height=720,
+            default_resolution=(1280, 720),
+            info=info,
+        )
+        camera.name = "Cam"
+
+        with (
+            patch("kvm_serial.kvm.QCamera") as MockQCamera,
+            patch("kvm_serial.kvm._wait_for_loaded", return_value=True) as mock_wait,
+        ):
+            mock_cam = MockQCamera.return_value
+            app._set_camera(camera)
+
+            mock_wait.assert_called_once_with(mock_cam)
+            # load must precede the wait, and start must follow it.
+            mock_cam.load.assert_called_once()
+            mock_cam.start.assert_called_once()
+
+    def test_set_camera_logs_warning_on_load_timeout(self):
+        """If _wait_for_loaded returns False (timeout), _set_camera must log a
+        warning so the user has something to grep for when the feed is black."""
+        app = self.create_kvm_app()
+
+        info = MagicMock()
+        camera = MagicMock(default_resolution=(1280, 720), info=info)
+        camera.name = "Slow Cam"
+
+        with (
+            patch("kvm_serial.kvm.QCamera"),
+            patch("kvm_serial.kvm._wait_for_loaded", return_value=False),
+            patch("kvm_serial.kvm.logging.warning") as mock_warning,
+        ):
+            app._set_camera(camera)
+
+            messages = [c.args[0] for c in mock_warning.call_args_list]
+            self.assertTrue(
+                any("LoadedStatus" in m for m in messages),
+                f"Expected LoadedStatus warning, got: {messages}",
+            )
+
     def test_set_camera_skips_when_info_missing(self):
         """A CameraProperties with no QCameraInfo cannot be opened — skip silently."""
         app = self.create_kvm_app()
