@@ -1297,15 +1297,23 @@ class KVMQtGui(QMainWindow):
             QVideoFrame.Format_BGRA32,  # 8  — universally supported
             QVideoFrame.Format_NV12,  # 22 — hardware path, not reliable on all platforms
         )
-        # Formats QGraphicsVideoItem's QPainterVideoSurface cannot render. UYVY/YUYV
-        # produce "Failed to start viewfinder" on macOS; Format_Jpeg (=30, what
-        # DirectShow exposes for MJPG capture cards at high resolutions) produces a
-        # silent black screen on Windows because the surface has no JPEG decoder.
-        _unsupported = {
-            QVideoFrame.Format_UYVY,
-            QVideoFrame.Format_YUYV,
-            QVideoFrame.Format_Jpeg,
-        }
+        # Formats QGraphicsVideoItem's QPainterVideoSurface cannot render are
+        # backend-specific (each platform uses a different Qt backend), so the
+        # rejection set is platform-gated. All entries below have a confirmed
+        # failure mode on real hardware:
+        #   macOS (AVFoundation): UYVY (20) and YUYV (21) both yield "Failed to
+        #     start viewfinder" / black screen (Razer capture card).
+        #   Windows (DirectShow): Jpeg (30) is a silent black screen on MJPG
+        #     capture cards; the surface has no JPEG decoder. YUYV (21) renders
+        #     fine here, so it is *not* rejected — letting it through is the
+        #     difference between a working 1080p feed and falling back to MJPG.
+        #   Linux (V4L2): no failures observed yet — empty set.
+        if sys.platform == "darwin":
+            _unsupported = {QVideoFrame.Format_UYVY, QVideoFrame.Format_YUYV}
+        elif sys.platform == "win32":
+            _unsupported = {QVideoFrame.Format_Jpeg}
+        else:
+            _unsupported = set()
 
         all_settings = self.qcamera.supportedViewfinderSettings()
         available_fmts = {
