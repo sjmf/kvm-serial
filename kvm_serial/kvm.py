@@ -1276,8 +1276,10 @@ class KVMQtGui(QMainWindow):
         self.qcamera.setViewfinder(self.video_item)
 
         # Surface camera errors to the user via the existing error path.
+        # Bind the camera into the closure so a deferred error from a previously
+        # active QCamera can't read errorString() off whatever's in self.qcamera now.
         self.qcamera.error.connect(
-            lambda: self._on_camera_initialization_error(self.qcamera.errorString())
+            lambda c=self.qcamera: self._on_camera_initialization_error(c.errorString())
         )
 
         # Apply viewfinder settings (resolution). Must be set before start().
