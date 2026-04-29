@@ -449,7 +449,7 @@ class KVMQtGui(QMainWindow):
         # QtMultimedia owns the frame pipeline; no per-frame Python timer is needed.
         # Defer device enumeration and settings load past the event-loop start.
         QTimer.singleShot(0, self.__init_devices)
-        QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
+        QTimer.singleShot(10, lambda: self._load_settings(self.CONFIG_FILE))
 
         # Status bar timer
         self.status_timer = QTimer()
@@ -950,7 +950,11 @@ class KVMQtGui(QMainWindow):
             self.video_device_var = str(cameras[0])
             self.video_var = 0
             self._populate_video_device_menu()
-            self._set_camera(cameras[0])
+            # Don't open the camera here — _load_settings (deferred ~10ms after
+            # __init_devices) is the single source of truth for opening, so it
+            # can apply both the saved device index AND the saved resolution in
+            # one _set_camera call. Opening here would cause a visible flicker
+            # when the user has a non-default resolution persisted.
             self._populate_resolution_menu(0)
         else:
             self._populate_video_device_menu()
