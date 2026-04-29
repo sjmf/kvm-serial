@@ -534,15 +534,15 @@ class KVMQtGui(QMainWindow):
             for action in self.baud_rate_menu.actions():
                 action.setChecked(action.text() == str(self.baud_rate_var))
 
-        # Load video device setting
+        # Load video device setting: update video_var and menu checkmark.
+        # Camera opening is deferred until after resolution_var is known below
+        # so both can be applied in a single _set_camera call.
         if kvm.get("video_device") is not None:
             try:
                 idx = int(kvm.get("video_device", 0))
                 if 0 <= idx < len(self.video_devices):
                     self.video_var = idx
                     self.video_device_var = str(self.video_devices[idx])
-                    self._set_camera(self.video_devices[idx])
-                    # Update menu selection
                     for action in self.video_device_menu.actions():
                         action.setChecked(action.text() == self.video_device_var)
             except (ValueError, TypeError, IndexError):
@@ -550,25 +550,28 @@ class KVMQtGui(QMainWindow):
                     f"Invalid video device index in settings: {kvm.get('video_device')}"
                 )
         elif self.video_devices:
-            # Use default (first device)
-            self._set_camera(self.video_devices[0])
+            self.video_var = 0
 
-        # Load resolution setting — store for use when the resolution menu is populated.
-        # The menu may be empty here because camera enumeration is asynchronous;
-        # _populate_resolution_menu applies the stored value once cameras are found.
+        # Load resolution_var before opening the camera so _populate_resolution_menu
+        # (below) can apply it in a single _set_camera call rather than opening the
+        # camera twice — once without resolution and once with.
         saved_res = kvm.get("resolution", "")
         if saved_res:
             parts = saved_res.split("x")
             try:
                 w, h = int(parts[0]), int(parts[1])
                 self.resolution_var = saved_res
-                # If the menu is already populated (camera enum finished before settings
-                # load), apply immediately so the camera uses the right dimensions.
-                available = [a.text() for a in self.resolution_menu.actions()]
-                if saved_res in available:
-                    self._on_resolution_selected(w, h)
             except (ValueError, IndexError):
                 logging.warning(f"Invalid resolution in settings: {saved_res}")
+
+        # Open the camera. _populate_resolution_menu rebuilds the menu for the active
+        # device and applies resolution_var in a single _set_camera call when the
+        # resolution is supported. If resolution_var is empty or unsupported it clears
+        # it without opening the camera, so we fall back to the device default.
+        if self.video_devices:
+            self._populate_resolution_menu(self.video_var)
+            if not self.resolution_var:
+                self._set_camera(self.video_devices[self.video_var])
 
         # Load other boolean settings
         self.window_var = kvm.get("windowed", "False") == "True"

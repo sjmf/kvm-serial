@@ -593,56 +593,75 @@ class TestKVMSettingsPersistence(
             mock_detect.assert_not_called()
             self.assertEqual(app.keyboard_layout_var, "en_US")
 
-    def test_resolution_stored_in_var_when_menu_empty(self):
-        """Saved resolution is stored in resolution_var even when menu is unpopulated.
-
-        This is the common case: settings load fires at t=100ms but camera
-        enumeration hasn't finished yet, so the resolution menu has no actions.
-        """
+    def test_resolution_applied_when_supported_by_device(self):
+        """Saved resolution is applied via _set_camera when the device supports it."""
         app = self.create_kvm_app()
-        app.video_devices = self.create_mock_cameras(1)
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1920, 1080), (1280, 720)]
+        app.video_devices = cameras
         app.baud_rates = self.get_default_baud_rates()
         self._setup_mock_menus(app)
-        app.resolution_menu = MagicMock()
-        app.resolution_menu.actions.return_value = []  # empty menu
 
         settings = self.create_test_settings({"resolution": "1920x1080"})
 
         with (
             patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
             self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
-            self.patch_kvm_method(app, "_on_resolution_selected") as mock_select,
+            patch.object(app, "_set_camera") as mock_set_camera,
         ):
             app._load_settings("test_config.ini")
 
         self.assertEqual(app.resolution_var, "1920x1080")
-        mock_select.assert_not_called()  # menu was empty, defer to populate
+        mock_set_camera.assert_called_once_with(cameras[0], width=1920, height=1080)
 
-    def test_resolution_applied_immediately_when_menu_already_populated(self):
-        """Saved resolution calls _on_resolution_selected when menu already has the item.
-
-        This handles the rare race where camera enumeration finishes before settings load.
-        """
+    def test_resolution_cleared_when_unsupported_by_device(self):
+        """Saved resolution that the device does not support is cleared; camera opens at default."""
         app = self.create_kvm_app()
-        app.video_devices = self.create_mock_cameras(1)
+        cameras = self.create_mock_cameras(1)
+        # cameras[0].resolutions = [(1280, 720)] by default — does not support 1920x1080
+        app.video_devices = cameras
         app.baud_rates = self.get_default_baud_rates()
         self._setup_mock_menus(app)
-
-        res_action = MagicMock()
-        res_action.text.return_value = "1920x1080"
-        app.resolution_menu = MagicMock()
-        app.resolution_menu.actions.return_value = [res_action]
 
         settings = self.create_test_settings({"resolution": "1920x1080"})
 
         with (
             patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
             self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
-            self.patch_kvm_method(app, "_on_resolution_selected") as mock_select,
+            patch.object(app, "_set_camera") as mock_set_camera,
         ):
             app._load_settings("test_config.ini")
 
-        mock_select.assert_called_once_with(1920, 1080)
+        self.assertEqual(app.resolution_var, "")
+        mock_set_camera.assert_called_once_with(cameras[0])
+
+    def test_resolution_menu_rebuilt_for_non_default_device(self):
+        """Resolution menu is repopulated for the saved device, not always device 0.
+
+        Regression test: when a non-zero video_device is loaded from settings alongside
+        a saved resolution, _load_settings must check the resolution against the selected
+        device's capabilities — not device 0's — and open the camera exactly once.
+        """
+        app = self.create_kvm_app()
+        cameras = self.create_mock_cameras(2)
+        cameras[0].resolutions = [(1280, 720)]  # does NOT support 1920x1080
+        cameras[1].resolutions = [(1920, 1080), (1280, 720)]
+        app.video_devices = cameras
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        settings = self.create_test_settings({"video_device": "1", "resolution": "1920x1080"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
+            app._load_settings("test_config.ini")
+
+        self.assertEqual(app.video_var, 1)
+        self.assertEqual(app.resolution_var, "1920x1080")
+        mock_set_camera.assert_called_once_with(cameras[1], width=1920, height=1080)
 
     def test_invalid_resolution_format_in_settings_is_ignored(self):
         """Malformed resolution string logs a warning and does not update resolution_var."""
