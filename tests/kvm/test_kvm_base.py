@@ -28,7 +28,6 @@ class KVMTestBase(unittest.TestCase):
         # Mock external dependencies - each returns a single patch object
         self.external_patches = [
             self._setup_serial_mock(),
-            self._setup_cv2_mock(),
             self._setup_settings_mock(),
         ]
 
@@ -101,7 +100,6 @@ class KVMTestBase(unittest.TestCase):
             "QFileDialog",
             "QGraphicsView",
             "QGraphicsScene",
-            "QGraphicsPixmapItem",
             "QVBoxLayout",
             "QWidget",
             "QSizePolicy",
@@ -111,7 +109,7 @@ class KVMTestBase(unittest.TestCase):
             patches.append(patch(f"PyQt5.QtWidgets.{widget}"))
 
         # Mock Qt Core components
-        qt_core = ["QTimer", "QThread", "QMutex", "QMutexLocker"]
+        qt_core = ["QTimer"]
         for core_item in qt_core:
             patches.append(patch(f"PyQt5.QtCore.{core_item}"))
 
@@ -119,19 +117,20 @@ class KVMTestBase(unittest.TestCase):
         patches.append(patch("PyQt5.QtWidgets.QApplication.processEvents"))
 
         # Mock Qt GUI components
-        qt_gui = ["QImage", "QPixmap", "QPainter"]
+        qt_gui = ["QPixmap", "QPainter"]
         for gui_item in qt_gui:
             patches.append(patch(f"PyQt5.QtGui.{gui_item}"))
+
+        # Mock QtMultimedia components used by kvm_serial.kvm and video module
+        patches.append(patch("PyQt5.QtMultimedia.QCamera"))
+        patches.append(patch("PyQt5.QtMultimedia.QCameraViewfinderSettings"))
+        patches.append(patch("PyQt5.QtMultimediaWidgets.QGraphicsVideoItem"))
 
         return patches
 
     def _setup_serial_mock(self):
         """Set up serial communication mocking."""
         return patch("serial.Serial")
-
-    def _setup_cv2_mock(self):
-        """Set up OpenCV mocking."""
-        return patch("cv2.cvtColor")
 
     def _setup_settings_mock(self):
         """Set up settings utility mocking."""
@@ -146,11 +145,9 @@ class KVMTestBase(unittest.TestCase):
 
         # Create individual patches for hardware components
         hardware_patches = [
-            # Video capture mocking
-            patch.object(video_mod, "CaptureDevice"),
-            patch.object(video_mod, "CameraProperties"),
-            patch("kvm_serial.kvm.CaptureDevice"),
-            patch("kvm_serial.kvm.VideoCaptureWorker"),
+            # Video enumeration mocking — no cameras by default; tests opt in.
+            patch.object(video_mod, "enumerate_cameras", return_value=[]),
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
             # Serial communication mocking
             patch("kvm_serial.utils.communication.list_serial_ports"),
             patch("kvm_serial.kvm.list_serial_ports"),
@@ -186,6 +183,8 @@ class KVMTestBase(unittest.TestCase):
             mock_camera.index = i
             mock_camera.width = 1280
             mock_camera.height = 720
+            mock_camera.default_resolution = (1280, 720)
+            mock_camera.resolutions = [(1280, 720)]
             cameras.append(mock_camera)
         return cameras
 

@@ -3,14 +3,8 @@ from unittest.mock import patch, MagicMock
 import signal
 import sys
 
-# Some modules must be patched before importing, e.g.:
-#   Pynput, which DOES NOT WORK headless, i.e. in Github Actions runner;
-#   Numpy, which must not be re-imported
-#   CV2, which complains of an "AttributeError: module 'cv2.dnn' has no attribute 'DictValue'"
+# Pynput does not work headless (e.g. in Github Actions runner); stub it before import.
 SYS_MODULES_PATCH = {
-    "cv2": MagicMock(),
-    "numpy": MagicMock(),
-    "tkinter": MagicMock(),
     "pynput.mouse": MagicMock(),
     "pynput.keyboard": MagicMock(),
     "pynput.mouse.Button": MagicMock(),
@@ -29,12 +23,10 @@ class TestControl:
         patch resolution failures when kvm_serial.backend is pre-loaded
         in sys.modules (cross-group test pollution)."""
         with patch.dict(sys.modules, SYS_MODULES_PATCH):
-            from kvm_serial.backend import video as video_mod
             from kvm_serial.backend import keyboard as kb_mod
             from kvm_serial.backend import mouse as mouse_mod
 
             with (
-                patch.object(video_mod, "CaptureDevice"),
                 patch.object(kb_mod, "KeyboardListener"),
                 patch.object(mouse_mod, "MouseListener"),
             ):

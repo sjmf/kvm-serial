@@ -137,13 +137,15 @@ If the driver isn't loaded, it should automatically load when you connect the de
 
 ### System Dependencies
 
-Install required system libraries for PyQt5 and OpenCV:
+Install required system libraries for PyQt5 and QtMultimedia:
 
 **Ubuntu/Debian**:
 
 ```bash
 sudo apt-get update
 sudo apt-get install -y \
+    libqt5multimedia5-plugins \
+    libpulse-mainloop-glib0 \
     libxcb-xinerama0 \
     libxcb-icccm4 \
     libxcb-image0 \
@@ -161,6 +163,7 @@ sudo apt-get install -y \
 
 ```bash
 sudo dnf install -y \
+    qt5-qtmultimedia \
     libxcb \
     xcb-util-wm \
     xcb-util-image \

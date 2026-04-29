@@ -3,13 +3,12 @@ import os
 import sys
 import logging
 import time
-import cv2
-from typing import cast
+import math
+from typing import cast, Optional
 from serial import Serial, SerialException
-from PyQt5.QtCore import Qt, QTimer, QThread, pyqtSignal, QMutex, QMutexLocker, QEvent, QLocale
+from PyQt5.QtCore import Qt, QTimer, QSizeF, QRectF, QEvent, QLocale, pyqtSignal
 from PyQt5.QtGui import (
     QIcon,
-    QImage,
     QMouseEvent,
     QPixmap,
     QKeyEvent,
@@ -17,6 +16,8 @@ from PyQt5.QtGui import (
     QWheelEvent,
     QPainter,
 )
+from PyQt5.QtMultimedia import QCamera, QCameraViewfinderSettings, QVideoFrame
+from PyQt5.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt5.QtWidgets import (
     QApplication,
     QMainWindow,
@@ -28,7 +29,6 @@ from PyQt5.QtWidgets import (
     QFileDialog,
     QGraphicsView,
     QGraphicsScene,
-    QGraphicsPixmapItem,
     QVBoxLayout,
     QWidget,
     QSizePolicy,
@@ -38,7 +38,7 @@ try:
     import kvm_serial.utils.settings as settings_util
     from kvm_serial.utils.communication import list_serial_ports
     from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
-    from kvm_serial.backend.video import CameraProperties, CaptureDevice
+    from kvm_serial.backend.video import CameraProperties, enumerate_cameras
     from kvm_serial.backend.implementations.qtop import QtOp
     from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
 
@@ -48,129 +48,9 @@ except ModuleNotFoundError:
     import utils.settings as settings_util
     from utils.communication import list_serial_ports
     from utils import scancode_to_ascii, string_to_scancodes
-    from backend.video import CameraProperties, CaptureDevice
+    from backend.video import CameraProperties, enumerate_cameras
     from backend.implementations.qtop import QtOp
     from backend.implementations.mouseop import MouseOp, MouseButton
-
-
-class CameraEnumerationThread(QThread):
-    """
-    Background thread for camera enumeration.
-    Prevents blocking the Qt event loop during macOS permission requests.
-    """
-
-    cameras_found = pyqtSignal(list)
-    enumeration_error = pyqtSignal(str)
-
-    def run(self):
-        """Enumerate cameras in a background thread."""
-        try:
-            cameras = CaptureDevice.getCameras()
-            self.cameras_found.emit(cameras)
-        except Exception as e:
-            self.enumeration_error.emit(str(e))
-
-
-class VideoCaptureWorker(QThread):
-    """
-    Background thread for video frame capture.
-    Captures frames on-demand rather than continuously looping.
-    """
-
-    # Initialise camera properties with defaults
-    camera_width: int = 1280
-    camera_height: int = 720
-
-    frame_ready = pyqtSignal(object)
-    capture_requested = pyqtSignal()
-    camera_error = pyqtSignal(str)  # Signal for camera initialization errors
-
-    def __init__(self, canvas_width, canvas_height, video_device_idx=0):
-        super().__init__()
-        self.video_device = CaptureDevice()
-        self.canvas_width = canvas_width
-        self.canvas_height = canvas_height
-        self.camera_initialised = False
-        self.video_device_idx = video_device_idx
-        self.mutex = QMutex()
-        self.should_capture = False
-
-        # Camera dimensions will be set when enumeration completes via set_camera_index()
-
-        # Connect internal signal to capture method
-        self.capture_requested.connect(self._capture_frame)
-
-    def set_camera_index(self, idx, width=None, height=None):
-        """
-        Set the camera index and optionally its dimensions.
-
-        Args:
-            idx: Camera index to use
-            width: Optional camera width (uses actual camera width if not provided)
-            height: Optional camera height (uses actual camera height if not provided)
-        """
-        with QMutexLocker(self.mutex):
-            self.video_device_idx = idx
-            self.camera_initialised = False
-            # Update camera properties if provided
-            if width is not None and height is not None:
-                self.camera_width = width
-                self.camera_height = height
-                logging.info(f"Camera {idx} dimensions set to {width}x{height}")
-            else:
-                # Fall back to defaults if dimensions not provided
-                self.camera_width = 1280
-                self.camera_height = 720
-                logging.warning(
-                    f"Camera {idx} using default dimensions {self.camera_width}x{self.camera_height}"
-                )
-
-    def set_canvas_size(self, width, height):
-        """Update the target size for video capture"""
-        with QMutexLocker(self.mutex):
-            self.canvas_width = max(width, 1)
-            self.canvas_height = max(height, 1)
-
-    def request_frame(self):
-        """Request a frame capture from the main thread"""
-        self.capture_requested.emit()
-
-    def _capture_frame(self):
-        """Internal method to capture a single frame"""
-        width = int(self.camera_width)
-        height = int(self.camera_height)
-
-        with QMutexLocker(self.mutex):
-            # Initialise camera if needed
-            if not self.camera_initialised:
-                try:
-                    self.video_device.setCamera(self.video_device_idx)
-                    self.camera_initialised = True
-                    # Update dimensions from actual camera output
-                    if hasattr(self.video_device, "camera_width"):
-                        self.camera_width = self.video_device.camera_width
-                        self.camera_height = self.video_device.camera_height
-                except Exception as e:
-                    error_msg = f"Failed to initialize camera {self.video_device_idx}: {e}"
-                    logging.error(error_msg)
-                    self.camera_error.emit(error_msg)
-                    return
-
-            # Capture frame - avoid color conversion if not necessary
-            try:
-                # Get frame without automatic color conversion for efficiency
-                frame = self.video_device.getFrame(
-                    resize=(width, height),
-                    convert_color_space=False,  # Handle color conversion in display thread if needed
-                )
-                if frame is not None:
-                    self.frame_ready.emit(frame)
-            except Exception as e:
-                logging.error(f"Error capturing frame: {e}")
-
-    def run(self):
-        """Run the event loop for this thread"""
-        self.exec_()
 
 
 # Subclass QGraphicsView so clicks inside the view can receive focus and
@@ -266,9 +146,13 @@ class KVMQtGui(QMainWindow):
     baud_rate_var: int = -1
     video_device_var: str = "Loading cameras..."
     keyboard_layout_var: str = "en_GB"
+    resolution_var: str = ""  # "WIDTHxHEIGHT", empty means auto (from camera enumeration)
 
     window_var: bool = False
     show_status_var: bool = True
+    # Video scale: "fit" (fill view, preserve aspect) or a numeric string parsed as a
+    # fixed pixel scale factor (e.g. "0.25", "0.5", "1", "2")
+    scale_mode_var: str = "fit"
     status_var: str
     verbose_var: bool = False
     hide_mouse_var: bool = False
@@ -291,16 +175,10 @@ class KVMQtGui(QMainWindow):
     status_bar_default_height: int = 24  # Typical status bar height in pixels
 
     # Video
-    camera_initialised: bool = False  # Camera state
-    video_device_idx: int = 0  # Loaded index
     video_view: QGraphicsView
     video_scene: QGraphicsScene
-    video_pixmap_item: QGraphicsPixmapItem
-    video_update_timer: QTimer
-    video_worker: VideoCaptureWorker
-    target_fps: int = 30
-    frame_drop_threshold: float = 0.05  # Drop frames if capture takes too long (50ms)
-    last_capture_request: float = 0.0  # Track when we last requested a frame
+    video_item: QGraphicsVideoItem
+    qcamera: Optional[QCamera] = None  # Active QCamera instance (None until enumeration completes)
 
     # Status bar labels
     status_bar: QStatusBar
@@ -376,20 +254,15 @@ class KVMQtGui(QMainWindow):
         save_action.triggered.connect(self._save_settings)
         file_menu.addAction(save_action)
 
-        # Screenshot
-        screenshot_action = QAction("Take Screenshot", self)
-        screenshot_action.triggered.connect(self._take_screenshot)
-        file_menu.addAction(screenshot_action)
+        # About
+        about_action = QAction("About Serial KVM", self)
+        about_action.triggered.connect(self._show_about)
+        file_menu.addAction(about_action)
 
         # Quit
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self._on_quit)
         file_menu.addAction(quit_action)
-
-        # About
-        about_action = QAction("About Serial KVM", self)
-        about_action.triggered.connect(self._show_about)
-        file_menu.addAction(about_action)
 
         # Edit Menu
         edit_menu = menubar.addMenu("Edit")
@@ -398,21 +271,28 @@ class KVMQtGui(QMainWindow):
         self.paste_action.triggered.connect(self._on_paste)
         edit_menu.addAction(self.paste_action)
 
+        # Screenshot
+        screenshot_action = QAction("Take Screenshot", self)
+        screenshot_action.triggered.connect(self._take_screenshot)
+        edit_menu.addAction(screenshot_action)
+
+        # Add CTRL+ALT+DEL action
+        ctrl_alt_del_action = QAction("Send CTRL+ALT+DEL", self)
+        ctrl_alt_del_action.triggered.connect(self._send_ctrl_alt_del)
+        edit_menu.addAction(ctrl_alt_del_action)
+
         # Options Menu
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
-        # Serial Port, Baud, Video, and Keyboard Layout submenus
+        # Serial Port, Baud, Video, Resolution, and Keyboard Layout submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
         self.video_device_menu = options_menu.addMenu("Video Device")
+        self.resolution_menu = options_menu.addMenu("Resolution")
         self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
 
-        # Hide Mouse Pointer option
-        self.mouse_action = QAction("Hide Mouse Pointer", self)
-        self.mouse_action.setCheckable(True)
-        self.mouse_action.triggered.connect(self._toggle_mouse)
-        options_menu.addAction(self.mouse_action)
+        options_menu.addSeparator()
 
         # Verbose Logging option
         self.verbose_action = QAction("Verbose Logging", self)
@@ -420,11 +300,6 @@ class KVMQtGui(QMainWindow):
         self.verbose_action.setChecked(self.verbose_var)
         self.verbose_action.triggered.connect(self._toggle_verbose)
         options_menu.addAction(self.verbose_action)
-
-        # Add CTRL+ALT+DEL action
-        ctrl_alt_del_action = QAction("Send CTRL+ALT+DEL", self)
-        ctrl_alt_del_action.triggered.connect(self._send_ctrl_alt_del)
-        options_menu.addAction(ctrl_alt_del_action)
 
         # View menu
         view_menu = menubar.addMenu("View")
@@ -440,6 +315,34 @@ class KVMQtGui(QMainWindow):
 
         status_action.triggered.connect(_toggle_status)
         view_menu.addAction(status_action)
+
+        # Hide Mouse Pointer option
+        self.mouse_action = QAction("Hide Mouse Pointer", self)
+        self.mouse_action.setCheckable(True)
+        self.mouse_action.triggered.connect(self._toggle_mouse)
+        view_menu.addAction(self.mouse_action)
+
+        # Scale Video submenu
+        self.scale_menu = cast(QMenu, view_menu.addMenu("Scale Video"))
+        self._scale_actions: dict[str, QAction] = {}
+        for label, mode in [
+            ("Dynamic (Fit to Window)", "fit"),
+            ("1:4 ratio", "0.25"),
+            ("1:2 ratio", "0.5"),
+            ("1:1 ratio", "1"),
+            ("2:1 ratio", "2"),
+        ]:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(mode == self.scale_mode_var)
+            action.triggered.connect(lambda _checked, m=mode: self._on_scale_mode_selected(m))
+            self.scale_menu.addAction(action)
+            self._scale_actions[mode] = action
+
+        resize_action = QAction("Resize Window to Video", self)
+        resize_action.triggered.connect(self._on_resize_window_to_resolution)
+        view_menu.addAction(resize_action)
+        view_menu.addSeparator()
 
         # Fullscreen toggle (macOS provides its own native fullscreen via the green
         # traffic light button and "Enter Full Screen" menu item automatically)
@@ -512,8 +415,15 @@ class KVMQtGui(QMainWindow):
         self.video_view.setRenderHint(QPainter.RenderHint.SmoothPixmapTransform)
         self.video_view.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
-        self.video_pixmap_item = QGraphicsPixmapItem()
-        self.video_scene.addItem(self.video_pixmap_item)
+        # QGraphicsVideoItem is QtMultimedia's video sink that renders directly into
+        # a QGraphicsScene. The QCamera (created later, once enumeration completes)
+        # streams frames into it via setViewfinder(self.video_item).
+        self.video_item = QGraphicsVideoItem()
+        self.video_item.setSize(QSizeF(self.window_default_width, self.window_default_height))
+        self.video_scene.addItem(self.video_item)
+        self.video_scene.setSceneRect(self.video_item.boundingRect())
+        # Native size is reported asynchronously after the camera starts streaming.
+        self.video_item.nativeSizeChanged.connect(self._on_video_native_size_changed)
 
         # Add video view to main layout
         self.main_layout.addWidget(self.video_view, 1)  # 1 = stretch factor
@@ -524,14 +434,6 @@ class KVMQtGui(QMainWindow):
         # Give the window a chance to show and lay out its widgets
         QApplication.processEvents()
 
-        # Initialise video capture worker thread with actual view size
-        self.video_worker = VideoCaptureWorker(
-            self.window_default_width, self.window_default_height, 0
-        )
-        self.video_worker.frame_ready.connect(self._on_frame_ready)
-        self.video_worker.camera_error.connect(self._on_camera_initialization_error)
-        self.video_worker.start()
-
         # Wire focus signals from the view back to the main window handlers.
         # Connect view-local focus signals to dedicated handlers so the
         # keyboard capture state is only affected by focusing inside the view.
@@ -540,26 +442,16 @@ class KVMQtGui(QMainWindow):
             self.video_view.mousePressed.connect(self._on_mouse_click)
             self.video_view.mouseReleased.connect(self._on_mouse_click)
             self.video_view.mouseMoved.connect(self._on_mouse_move)
-        except Exception:
-            pass
+        except (AttributeError, TypeError) as e:
+            logging.warning(f"Could not connect video view mouse signals: {e}")
 
     def __init_timers(self):
-        # Set up QTimer for frame updates (integrates with Qt event loop)
-        # Note: Frame timer is set up but not started here
-        #       - it will start after camera enumeration completes
-        self.video_update_timer = QTimer()
-        self.video_update_timer.timeout.connect(self._request_video_frame)
-
-        # Frame timing for performance monitoring
-        self.last_frame_time = time.time()
-        self.last_capture_request = 0.0
-        self.actual_fps = 0.0
-        self.frame_count = 0
-        self.fps_calculation_start = time.time()
-
-        # Defer initialisation tasks
+        # QtMultimedia owns the frame pipeline; no per-frame Python timer is needed.
+        # Defer device enumeration and settings load past the event-loop start.
+        # Both run in the same deferred callback so _load_settings always sees a
+        # fully-populated video_devices list — a fixed 10ms timer would race with
+        # _wait_for_loaded()'s inner QEventLoop during camera probing.
         QTimer.singleShot(0, self.__init_devices)
-        QTimer.singleShot(100, lambda: self._load_settings(self.CONFIG_FILE))
 
         # Status bar timer
         self.status_timer = QTimer()
@@ -568,12 +460,16 @@ class KVMQtGui(QMainWindow):
 
     def __init_devices(self):
         """
-        Initialise and populate device lists (serial ports, video devices, keyboard layouts)
+        Initialise and populate device lists (serial ports, video devices, keyboard layouts),
+        then load saved settings. Settings load is intentionally last so it always sees
+        complete device lists; calling it from a separate timer would race with the inner
+        QEventLoop spun by _wait_for_loaded() during camera probing.
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
         self._populate_video_devices()
         self._populate_keyboard_layouts()
+        QTimer.singleShot(10, lambda: self._load_settings(self.CONFIG_FILE))
 
     def _update_status_bar(self):
         """
@@ -590,17 +486,13 @@ class KVMQtGui(QMainWindow):
         captured = "Captured" if self.keyboard_var else "Idle"
         self.status_keyboard_label.setText(f"Keyboard: {captured} {self.keyboard_last}")
 
-        camera_width = self.video_worker.camera_width
-        camera_height = self.video_worker.camera_height
+        camera_width, camera_height = self._camera_resolution()
         report = f"Mouse: [x:{self.pos_x} y:{self.pos_y}] in [{camera_width}x{camera_height}]"
         self.status_mouse_label.setText(report)
         idx = self.video_var
 
         if idx >= 0 and idx < len(self.video_devices):
-            video_str = f"Video: {str(self.video_devices[idx])}"
-            if hasattr(self, "_actual_fps"):
-                video_str += f" [{self._actual_fps:.1f} fps]"
-            self.status_video_label.setText(video_str)
+            self.status_video_label.setText(f"Video: {str(self.video_devices[idx])}")
         else:
             # Show video_device_var status (e.g., "Initialising...", "None found", "Error")
             # instead of hardcoded "Idle" when no camera is selected
@@ -630,6 +522,7 @@ class KVMQtGui(QMainWindow):
             self.video_device_menu is None
             or self.baud_rate_menu is None
             or self.serial_port_menu is None
+            or self.resolution_menu is None
         ):
             raise TypeError("Initialise all menus before calling _load_settings")
 
@@ -647,25 +540,47 @@ class KVMQtGui(QMainWindow):
             for action in self.baud_rate_menu.actions():
                 action.setChecked(action.text() == str(self.baud_rate_var))
 
-        # Load video device setting
+        # Load video device setting: update video_var and menu checkmark.
+        # Camera opening is deferred until after resolution_var is known below
+        # so both can be applied in a single _set_camera call.
         if kvm.get("video_device") is not None:
             try:
                 idx = int(kvm.get("video_device", 0))
                 if 0 <= idx < len(self.video_devices):
                     self.video_var = idx
                     self.video_device_var = str(self.video_devices[idx])
-                    self.video_worker.set_camera_index(idx)
-                    # Update menu selection
                     for action in self.video_device_menu.actions():
                         action.setChecked(action.text() == self.video_device_var)
             except (ValueError, TypeError, IndexError):
                 logging.warning(
                     f"Invalid video device index in settings: {kvm.get('video_device')}"
                 )
-        else:
-            # Use default (first device)
-            self.video_device_idx = 0
-            self.video_worker.set_camera_index(0)
+        elif self.video_devices:
+            self.video_var = 0
+
+        # Load resolution_var before opening the camera so _populate_resolution_menu
+        # (below) can apply it in a single _set_camera call rather than opening the
+        # camera twice — once without resolution and once with.
+        saved_res = kvm.get("resolution", "")
+        if saved_res:
+            parts = saved_res.split("x")
+            try:
+                w, h = int(parts[0]), int(parts[1])
+                if w > 0 and h > 0:
+                    self.resolution_var = f"{w}x{h}"
+                else:
+                    logging.warning(f"Invalid resolution in settings (zero/negative): {saved_res}")
+            except (ValueError, IndexError):
+                logging.warning(f"Invalid resolution in settings: {saved_res}")
+
+        # Open the camera. _populate_resolution_menu rebuilds the menu for the active
+        # device and applies resolution_var in a single _set_camera call when the
+        # resolution is supported. If resolution_var is empty or unsupported it clears
+        # it without opening the camera, so we fall back to the device default.
+        if self.video_devices:
+            self._populate_resolution_menu(self.video_var)
+            if not self.resolution_var:
+                self._set_camera(self.video_devices[self.video_var])
 
         # Load other boolean settings
         self.window_var = kvm.get("windowed", "False") == "True"
@@ -712,7 +627,10 @@ class KVMQtGui(QMainWindow):
         saving to disk. If the user cancels the dialog, the frame is
         still available on the clipboard.
         """
-        pixmap = self.video_pixmap_item.pixmap()
+        # Grab whatever's currently rendered in the video view (post-scaling).
+        # Renders at the camera's native resolution when available, fitting the
+        # scene rect set by _on_video_native_size_changed.
+        pixmap = self._grab_video_frame()
         if pixmap is None or pixmap.isNull():
             QMessageBox.warning(self, "Screenshot", "No video frame available to capture.")
             return
@@ -765,6 +683,7 @@ class KVMQtGui(QMainWindow):
             "serial_port": self.serial_port_var,
             "video_device": str(self.video_var),
             "baud_rate": str(self.baud_rate_var),
+            "resolution": self.resolution_var,
             "windowed": str(self.window_var),
             "statusbar": str(self.show_status_var),
             "verbose": str(self.verbose_var),
@@ -782,9 +701,10 @@ class KVMQtGui(QMainWindow):
         try:
             self.serial_ports = list_serial_ports()
             logging.info(f"Found serial ports: {self.serial_ports}")
-            self._populate_serial_port_menu()
 
             if len(self.serial_ports) == 0:
+                self.serial_port_var = "None found"
+                self._populate_serial_port_menu()
                 QMessageBox.warning(
                     self,
                     "Start-up Warning",
@@ -792,10 +712,11 @@ class KVMQtGui(QMainWindow):
                     "Please ensure your USB serial device is connected and drivers are installed.\n"
                     "See documentation for driver installation and troubleshooting instructions.",
                 )
-                self.serial_port_var = "None found"
             else:
-                # Default to the last port found
+                # Default to the last port found. Set BEFORE menu build so the
+                # checkmark loop in _populate_serial_port_menu sees it.
                 self.serial_port_var = self.serial_ports[-1]
+                self._populate_serial_port_menu()
 
         except Exception as e:
             logging.error(f"Error discovering serial ports: {e}")
@@ -979,7 +900,7 @@ class KVMQtGui(QMainWindow):
                     f"System locale {system_locale.name()} is not English, defaulting to {default_layout}"
                 )
                 return default_layout
-        except Exception as e:
+        except (AttributeError, ValueError) as e:
             logging.warning(
                 f"Failed to auto-detect keyboard layout: {e}, defaulting to {default_layout}"
             )
@@ -1014,66 +935,53 @@ class KVMQtGui(QMainWindow):
 
     def _populate_video_devices(self):
         """
-        Populate the list of available video devices and update the menu.
-        Uses a background thread to avoid blocking the event loop during macOS permission requests.
+        Enumerate cameras via QtMultimedia and populate the device menu.
+
+        Enumeration is synchronous on the main thread. QCamera lifecycle
+        objects must be created in a thread with a running event loop, and Qt
+        spins one in the QApplication main thread, so we don't move this off-
+        thread (the legacy background enumerator existed for the pyobjc/comtypes
+        probe path that this commit removes).
         """
-        # Update status to show we're enumerating cameras
         self.video_device_var = "Initialising..."
+        try:
+            cameras = enumerate_cameras()
+        except Exception as e:
+            logging.error(f"Error discovering video devices: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to discover video devices: {e}")
+            self.video_devices = []
+            self.video_device_var = "Error"
+            return
 
-        # Start camera enumeration in background thread
-        self.camera_enum_thread = CameraEnumerationThread()
-        self.camera_enum_thread.cameras_found.connect(self._on_cameras_found)
-        self.camera_enum_thread.enumeration_error.connect(self._on_camera_enumeration_error)
-        self.camera_enum_thread.start()
-        logging.info("Starting camera enumeration in background thread...")
-
-    def _on_cameras_found(self, cameras):
-        """
-        Callback when camera enumeration completes successfully.
-        """
         self.video_devices = cameras
-        video_strings = [str(v) for v in self.video_devices]
-        logging.info(f"Found video devices: {video_strings}")
-        self._populate_video_device_menu()
+        logging.info(f"Found video devices: {[str(v) for v in cameras]}")
 
-        if len(self.video_devices) > 0:
-            self.video_device_var = str(self.video_devices[0])
-            self.video_var = 0  # Default to first device
-            # Set the worker to use the first camera with its actual dimensions
-            first_camera = self.video_devices[0]
-            self.video_worker.set_camera_index(
-                first_camera.index, width=first_camera.width, height=first_camera.height
-            )
-
-            # Start video frame timer now that camera enumeration is complete
-            if not self.video_update_timer.isActive():
-                self.video_update_timer.start(1000 // self.target_fps)
-                logging.info(f"Video frame timer started at {self.target_fps} FPS")
+        if cameras:
+            # Set the active selection BEFORE populating the menu so the menu
+            # builder can render the checkmark on the correct entry.
+            self.video_device_var = str(cameras[0])
+            self.video_var = 0
+            self._populate_video_device_menu()
+            # Don't open the camera here — _load_settings (deferred ~10ms after
+            # __init_devices) is the single source of truth for opening, so it
+            # can apply both the saved device index AND the saved resolution in
+            # one _set_camera call. Opening here would cause a visible flicker
+            # when the user has a non-default resolution persisted.
+            self._populate_resolution_menu(0)
         else:
+            self._populate_video_device_menu()
             self.video_device_var = "None found"
-
-            # Build the warning message
-            message = "No video devices found.\n\n"
-            message += "Ensure a video capture device is connected and recognised by the system."
-            message += (
-                "\n\nIf you have just granted camera permissions, "
-                "please restart the application for the changes to take effect."
+            message = (
+                "No video devices found.\n\n"
+                "Ensure a video capture device is connected and recognised by the system."
+                "\n\nIf you have just granted camera permissions, please restart the "
+                "application for the changes to take effect."
             )
-
             QMessageBox.warning(self, "Start-up Warning", message)
-
-    def _on_camera_enumeration_error(self, error_msg):
-        """
-        Callback when camera enumeration fails.
-        """
-        logging.error(f"Error discovering video devices: {error_msg}")
-        QMessageBox.critical(self, "Error", f"Failed to discover video devices: {error_msg}")
-        self.video_devices = []
-        self.video_device_var = "Error"
 
     def _on_camera_initialization_error(self, error_msg):
         """
-        Callback when camera initialization/verification fails.
+        Callback when camera load/start fails.
         Shows error to user and allows them to select a different camera.
         """
         logging.error(f"Camera initialization error: {error_msg}")
@@ -1123,127 +1031,417 @@ class KVMQtGui(QMainWindow):
         self.video_device_var = device_label
         self.video_var = device_idx
 
-        # Find the camera properties for the selected device and pass dimensions
-        selected_camera = None
-        for camera in self.video_devices:
-            if camera.index == device_idx:
-                selected_camera = camera
-                break
+        selected_camera = (
+            self.video_devices[device_idx] if 0 <= device_idx < len(self.video_devices) else None
+        )
 
         if selected_camera:
-            self.video_worker.set_camera_index(
-                device_idx, width=selected_camera.width, height=selected_camera.height
-            )
+            self._set_camera(selected_camera)
             logging.info(
-                f"Selected video device: {device_label} (index: {device_idx}, {selected_camera.width}x{selected_camera.height})"
+                f"Selected video device: {device_label} "
+                f"({selected_camera.width}x{selected_camera.height})"
             )
         else:
-            # Fallback if camera not found in enumerated list
-            self.video_worker.set_camera_index(device_idx)
-            logging.warning(
-                f"Selected video device: {device_label} (index: {device_idx}) - dimensions unknown"
+            logging.warning(f"Selected video device: {device_label} (no CameraProperties)")
+
+        self._populate_resolution_menu(device_idx)
+
+    def _populate_resolution_menu(self, position: int):
+        """
+        Populate the resolution menu from the cached CameraProperties at position.
+
+        Reads resolutions from self.video_devices[position].resolutions, populated
+        by Qt at enumeration time. The current resolution_var selection is preserved
+        when repopulating.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _populate_resolution_menu()")
+
+        camera = self.video_devices[position] if 0 <= position < len(self.video_devices) else None
+        resolutions = list(camera.resolutions) if camera and camera.resolutions else []
+        logging.info(
+            "Using %d cached resolutions for device at position %d", len(resolutions), position
+        )
+
+        self.resolution_menu.clear()
+
+        use_max_action = QAction("Use Default", self)
+        use_max_action.setCheckable(True)
+        use_max_action.setChecked(self.resolution_var == "")
+        use_max_action.triggered.connect(self._on_use_default_selected)
+        self.resolution_menu.addAction(use_max_action)
+
+        if resolutions:
+            self.resolution_menu.addSeparator()
+
+        for width, height in resolutions:
+            label = f"{width}x{height}"
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.setChecked(label == self.resolution_var)
+            action.triggered.connect(
+                lambda checked, w=width, h=height: self._on_resolution_selected(w, h)
             )
+            self.resolution_menu.addAction(action)
 
-    def _request_video_frame(self):
-        """
-        Request a new frame from the worker thread.
-        Called by QTimer at the target frame rate.
-        Implements frame dropping if capture is too slow.
-        """
-        current_time = time.time()
-
-        # Only request new frame if enough time has passed since last request
-        # This prevents queue buildup if capture is slower than display rate
-        if (current_time - self.last_capture_request) >= (
-            1.0 / self.target_fps - self.frame_drop_threshold
-        ):
-            self.last_capture_request = current_time
-            self.video_worker.request_frame()
-
-    def set_target_fps(self, fps):
-        """
-        Change the target frame rate and update timer accordingly.
-        """
-        self.target_fps = max(1, min(fps, 120))  # Clamp between 1-120 fps
-        timer_interval = 1000 // self.target_fps
-        self.video_update_timer.setInterval(timer_interval)
-
-    def _on_frame_ready(self, frame):
-        """
-        Handle new frame from worker thread.
-        Converts frame efficiently and updates display.
-        """
-        try:
-            if frame.ndim != 3:
-                logging.error("Frame was not of expected dimensions")
+        # Apply any resolution loaded from settings (or carried over from a prior
+        # device selection) now that the menu exists and the camera is ready.
+        # If the requested resolution is not supported by this device, fall back
+        # to the device default rather than handing QCamera a value it will reject
+        # with "Failed to configure preview format" — this happens when the user
+        # picks a custom resolution on one camera and then switches to a camera
+        # whose viewfinder settings don't include that resolution.
+        if self.resolution_var and camera is not None:
+            try:
+                w, h = (int(x) for x in self.resolution_var.split("x"))
+            except (ValueError, IndexError):
                 return
-
-            h, w, ch = frame.shape
-            bytes_per_line = ch * w
-
-            # Handle different color formats efficiently
-            if ch == 3:
-                # Assume BGR from OpenCV, convert to RGB for Qt only when necessary
-                if frame.dtype.name == "uint8":
-                    # Convert BGR to RGB only if needed
-                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                    qimg = QImage(rgb_frame.data, w, h, bytes_per_line, QImage.Format_RGB888)
-                else:
-                    logging.error(f"Unsupported frame data type: {frame.dtype}")
-                    return
-            elif ch == 4:
-                # RGBA format
-                qimg = QImage(frame.data, w, h, bytes_per_line, QImage.Format_RGBA8888)
+            if (w, h) in camera.resolutions:
+                self._set_camera(camera, width=w, height=h)
             else:
-                logging.error(f"Unsupported number of channels: {ch}")
-                return
+                logging.info(
+                    f"Resolution {self.resolution_var} not supported by {camera.name}; "
+                    "falling back to device default"
+                )
+                self.resolution_var = ""
+                for action in self.resolution_menu.actions():
+                    action.setChecked(action.text() == "Use Default")
 
-            if qimg.isNull():
-                logging.error("Failed to create QImage from frame data")
-                return
+    def _on_use_default_selected(self):
+        """
+        Clear any explicit resolution override, reverting to the device's default resolution.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _on_use_default_selected()")
 
-            # Convert to QPixmap and display
-            pixmap = QPixmap.fromImage(qimg)
-            self.video_pixmap_item.setPixmap(pixmap)
+        for action in self.resolution_menu.actions():
+            action.setChecked(action.text() == "Use Default")
 
-            # Update scene rect to match pixmap size
-            self.video_scene.setSceneRect(self.video_pixmap_item.boundingRect())
-            # Scale view to fit scene while preserving aspect ratio
+        self.resolution_var = ""
+
+        selected_camera = self._selected_camera()
+        if selected_camera:
+            self._set_camera(selected_camera)
+        logging.info("Resolution set to device default")
+
+    def _on_resolution_selected(self, width: int, height: int):
+        """
+        Handle selection of an explicit capture resolution.
+        """
+        if self.resolution_menu is None:
+            raise TypeError("Initialise resolution_menu before calling _on_resolution_selected()")
+
+        label = f"{width}x{height}"
+        for action in self.resolution_menu.actions():
+            action.setChecked(action.text() == label)
+
+        self.resolution_var = label
+        selected_camera = self._selected_camera()
+        if selected_camera:
+            self._set_camera(selected_camera, width=width, height=height)
+        logging.info(f"Selected resolution: {label}")
+
+    def _on_scale_mode_selected(self, mode: str):
+        """
+        Switch video scaling mode. "fit" scales the pixmap to fill the view while preserving
+        aspect ratio (current default); "1"/"2"/"4" lock the view to an integer pixel ratio
+        and show scrollbars/black borders as needed.
+        """
+        self.scale_mode_var = mode
+        for m, action in self._scale_actions.items():
+            action.setChecked(m == mode)
+
+        if mode == "fit":
+            policy = Qt.ScrollBarPolicy.ScrollBarAlwaysOff
+        else:
+            policy = Qt.ScrollBarPolicy.ScrollBarAsNeeded
+        self.video_view.setHorizontalScrollBarPolicy(policy)
+        self.video_view.setVerticalScrollBarPolicy(policy)
+
+        self._apply_scale_mode()
+        logging.info(f"Video scale mode set to: {mode}")
+
+    def _apply_scale_mode(self):
+        """Apply the currently selected scale mode to the video view's transform."""
+        if self.scale_mode_var == "fit":
+            self.video_view.resetTransform()
             self.video_view.fitInView(
                 self.video_scene.sceneRect(), Qt.AspectRatioMode.KeepAspectRatio
             )
+        else:
+            factor = float(self.scale_mode_var)
+            self.video_view.resetTransform()
+            self.video_view.scale(factor, factor)
 
-            # Update FPS calculation (rolling average over multiple frames)
-            current_time = time.time()
-            self.frame_count += 1
+    def _on_resize_window_to_resolution(self):
+        """
+        Resize the main window so the video view matches the camera resolution scaled
+        by the current scale factor. "fit" mode resizes to native (1:1) resolution;
+        fixed-ratio modes multiply by their factor (e.g. 2:1 doubles, 1:2 halves).
+        """
+        if self._is_window_expanded():
+            self.showNormal()
+            QTimer.singleShot(0, self._resize_window_to_scaled_video)
+            return
 
-            # Calculate FPS every second for more stable reading
-            time_elapsed = current_time - self.fps_calculation_start
-            if time_elapsed >= 1.0:
-                self.actual_fps = self.frame_count / time_elapsed
-                self.frame_count = 0
-                self.fps_calculation_start = current_time
+        self._resize_window_to_scaled_video()
 
-                # Update status bar with FPS info
-                self.video_device_var = f"Video FPS: {self.actual_fps:.1f}"
+    def _scaled_video_size(self) -> tuple[int, int]:
+        """Return the scaled scene size that should fit inside the viewport."""
+        camera_width, camera_height = self._camera_resolution()
+        factor = 1.0 if self.scale_mode_var == "fit" else float(self.scale_mode_var)
+        return (
+            int(math.ceil(camera_width * factor)),
+            int(math.ceil(camera_height * factor)),
+        )
 
-            self.last_frame_time = current_time
+    def _resize_window_to_scaled_video(self):
+        """Resize the window so the viewport matches the scaled video size."""
+        target_w, target_h = self._scaled_video_size()
 
-        except Exception as e:
-            logging.error(f"Error processing video frame: {e}")
+        viewport = self.video_view.viewport()
+        viewport_w = viewport.width() if viewport is not None else self.video_view.width()
+        viewport_h = viewport.height() if viewport is not None else self.video_view.height()
+
+        # Measure the chrome overhead (menubar + statusbar + any margins)
+        chrome_w = self.width() - viewport_w
+        chrome_h = self.height() - viewport_h
+
+        self.resize(target_w + chrome_w, target_h + chrome_h)
+        factor = 1.0 if self.scale_mode_var == "fit" else float(self.scale_mode_var)
+        logging.info(
+            f"Window resized to {target_w}x{target_h} "
+            f"(camera scaled by {factor}x into viewport)"
+        )
+
+    def _is_window_expanded(self) -> bool:
+        """Return whether the window is fullscreen or maximized."""
+        try:
+            return self.isFullScreen() or self.isMaximized()
+        except RuntimeError:
+            return False
+
+    def _on_video_native_size_changed(self, size: QSizeF):
+        """
+        Update the scene rect and video item size when the camera reports its
+        native frame size. QGraphicsVideoItem emits this once the first frame is
+        decoded, which is the authoritative resolution (the requested viewfinder
+        settings are not always honoured exactly).
+        """
+        if not size.isValid() or size.width() <= 0 or size.height() <= 0:
+            return
+        self.video_item.setSize(size)
+        self.video_scene.setSceneRect(self.video_item.boundingRect())
+        self._apply_scale_mode()
+        logging.debug(f"Video native size: {size.width()}x{size.height()}")
 
     def resizeEvent(self, event):
         """
-        Handle window resize events and update video capture size accordingly.
-        Args:
-            event: Qt event object containing new window dimensions.
+        Handle window resize events and re-apply the current scale mode so the
+        video item refits the new viewport.
         """
         super().resizeEvent(event)
+        if hasattr(self, "video_view"):
+            self._apply_scale_mode()
 
-        # Get new size from the video view's actual size
-        view_size = self.video_view.size()
-        if view_size.width() > 0 and view_size.height() > 0:
-            self.video_worker.set_canvas_size(view_size.width(), view_size.height())
+    def _selected_camera(self) -> Optional[CameraProperties]:
+        if 0 <= self.video_var < len(self.video_devices):
+            return self.video_devices[self.video_var]
+        return None
+
+    def _camera_resolution(self) -> tuple[int, int]:
+        """Native resolution of the running camera, or default from CameraProperties.
+
+        Prefers QGraphicsVideoItem.nativeSize() (what's actually streaming),
+        falls back to the CameraProperties default, and finally to the window
+        defaults if no camera is active yet.
+        """
+        if hasattr(self, "video_item"):
+            native = self.video_item.nativeSize()
+            if native.isValid() and native.width() > 0 and native.height() > 0:
+                return int(native.width()), int(native.height())
+        cam = self._selected_camera()
+        if cam is not None:
+            return cam.width, cam.height
+        return self.window_default_width, self.window_default_height
+
+    def _pick_viewfinder_settings(
+        self, width: int, height: int
+    ) -> Optional[QCameraViewfinderSettings]:
+        """Return QCameraViewfinderSettings for width×height with a surface-compatible format.
+
+        QPainterVideoSurface (the backing surface of QGraphicsVideoItem) does not
+        support packed YCbCr formats such as UYVY (20) or YUYV (21).  Qt picks the
+        first format in supportedViewfinderSettings() — which is almost always UYVY
+        for webcams and capture cards — causing "Failed to start viewfinder" and no
+        video output.
+
+        This was invisible under the old OpenCV pipeline (removed in d107c08) because
+        cv2.VideoCapture decoded every frame to BGR regardless of the camera's native
+        format.  The QtMultimedia pipeline streams frames natively between Qt objects,
+        so format negotiation between the camera and the surface now matters.
+
+        This method reads the supported format list, picks the highest-priority format
+        from _preferred that the camera actually offers at the requested resolution,
+        then constructs a fresh QCameraViewfinderSettings with that resolution + format
+        (no fps constraint, so Qt chooses the best rate).
+
+        Returns None when no supported settings exist for the given resolution.
+        """
+        # Formats compatible with QPainterVideoSurface / QGraphicsVideoItem, best first.
+        # ARGB32/BGRA32 are universally supported by the software surface.
+        # NV12 is listed last — it is hardware-accelerated where supported but
+        # QGraphicsVideoItem does not reliably handle it on all platforms.
+        _preferred = (
+            QVideoFrame.Format_ARGB32,  # 1  — universally supported
+            QVideoFrame.Format_BGRA32,  # 8  — universally supported
+            QVideoFrame.Format_NV12,  # 22 — hardware path, not reliable on all platforms
+        )
+        # Formats QGraphicsVideoItem's QPainterVideoSurface cannot render are
+        # backend-specific (each platform uses a different Qt backend), so the
+        # rejection set is platform-gated. All entries below have a confirmed
+        # failure mode on real hardware:
+        #   macOS (AVFoundation): UYVY (20) and YUYV (21) both yield "Failed to
+        #     start viewfinder" / black screen (Razer capture card).
+        #   Windows (DirectShow): Jpeg (30) is a silent black screen on MJPG
+        #     capture cards; the surface has no JPEG decoder. YUYV (21) renders
+        #     fine here, so it is *not* rejected — letting it through is the
+        #     difference between a working 1080p feed and falling back to MJPG.
+        #   Linux (V4L2): no failures observed yet — empty set.
+        if sys.platform == "darwin":
+            _unsupported = {QVideoFrame.Format_UYVY, QVideoFrame.Format_YUYV}
+        elif sys.platform == "win32":
+            _unsupported = {QVideoFrame.Format_Jpeg}
+        else:
+            _unsupported = set()
+
+        all_settings = self.qcamera.supportedViewfinderSettings()
+        available_fmts = {
+            s.pixelFormat()
+            for s in all_settings
+            if s.resolution().width() == width and s.resolution().height() == height
+        }
+        logging.debug(
+            f"Viewfinder formats available at {width}x{height}: "
+            f"{sorted(available_fmts)} (preferred: {list(_preferred)}, "
+            f"unsupported: {sorted(_unsupported)})"
+        )
+        if not available_fmts:
+            return None
+
+        for fmt in _preferred:
+            if fmt in available_fmts:
+                s = QCameraViewfinderSettings()
+                s.setResolution(width, height)
+                s.setPixelFormat(fmt)
+                logging.info(f"Picked preferred viewfinder format {fmt} at {width}x{height}")
+                return s
+
+        # No preferred format. Skip known-unrenderable formats; if all that remain
+        # are unsupported, fall through to one anyway so the camera still opens —
+        # the user sees a black feed plus a clear warning rather than a missing menu.
+        fallback = next((f for f in available_fmts if f not in _unsupported), None)
+        if fallback is None:
+            fallback = next(iter(available_fmts))
+            logging.warning(
+                f"Camera offers only unrenderable formats {sorted(available_fmts)} at "
+                f"{width}x{height}; viewfinder will likely show a black screen. Try a "
+                f"different resolution from the Resolution menu."
+            )
+        else:
+            logging.info(
+                f"No preferred format at {width}x{height}; using fallback {fallback} "
+                f"(available: {sorted(available_fmts)})"
+            )
+        s = QCameraViewfinderSettings()
+        s.setResolution(width, height)
+        s.setPixelFormat(fallback)
+        return s
+
+    def _set_camera(
+        self,
+        camera: CameraProperties,
+        width: Optional[int] = None,
+        height: Optional[int] = None,
+    ) -> None:
+        """Open `camera` (a CameraProperties) via QCamera and stream into video_item.
+
+        Stops any previously-active QCamera. If width/height are provided, sets
+        viewfinder settings to that resolution; otherwise uses the camera default.
+        """
+        if camera.info is None:
+            logging.warning(f"Camera {camera.name} has no QCameraInfo; cannot open")
+            return
+
+        # Tear down any previous camera
+        if self.qcamera is not None:
+            try:
+                self.qcamera.stop()
+                self.qcamera.unload()
+            except Exception as e:
+                logging.debug(f"Error stopping previous QCamera: {e}")
+
+        self.qcamera = QCamera(camera.info)
+        self.qcamera.setViewfinder(self.video_item)
+
+        # Surface camera errors to the user via the existing error path.
+        # Bind the camera into the closure so a deferred error from a previously
+        # active QCamera can't read errorString() off whatever's in self.qcamera now.
+        self.qcamera.error.connect(
+            lambda _err, c=self.qcamera: self._on_camera_initialization_error(c.errorString())
+        )
+
+        # load() must be called before start() so Qt can negotiate a pixel format
+        # compatible with the QGraphicsVideoItem surface.  Without it, the camera
+        # starts on its native format (often UYVY for HDMI capture cards) which
+        # QGraphicsVideoItem may not support, producing "Failed to start viewfinder".
+        self.qcamera.load()
+
+        # Apply viewfinder settings (resolution + pixel format). Must be set
+        # before start(). _pick_viewfinder_settings searches the supported list
+        # and avoids UYVY when an alternative is available.
+        target_w = width if width is not None else camera.default_resolution[0]
+        target_h = height if height is not None else camera.default_resolution[1]
+        if target_w > 0 and target_h > 0:
+            settings = self._pick_viewfinder_settings(target_w, target_h)
+            if settings is not None:
+                self.qcamera.setViewfinderSettings(settings)
+                fmt = settings.pixelFormat()
+                logging.info(
+                    f"Camera {camera.name} viewfinder set to {target_w}x{target_h} ({fmt})"
+                )
+            else:
+                logging.warning(
+                    f"Camera {camera.name}: no supported viewfinder settings for "
+                    f"{target_w}x{target_h}; letting Qt choose"
+                )
+
+        self.qcamera.start()
+
+    def _grab_video_frame(self) -> Optional[QPixmap]:
+        """Render the current video item to a QPixmap at native resolution.
+
+        Used by the screenshot path. Falls back to grabbing the view widget if
+        the video item has no native size yet (camera hasn't streamed a frame).
+        """
+        if not hasattr(self, "video_item"):
+            return None
+        native = self.video_item.nativeSize()
+        if native.isValid() and native.width() > 0:
+            pixmap = QPixmap(int(native.width()), int(native.height()))
+            pixmap.fill(Qt.GlobalColor.black)
+            painter = QPainter(pixmap)
+            try:
+                self.video_scene.render(
+                    painter,
+                    target=QRectF(pixmap.rect()),
+                    source=self.video_item.boundingRect(),
+                )
+            finally:
+                painter.end()
+            return pixmap
+        # No native size yet — grab whatever the view is showing.
+        return self.video_view.grab()
 
     def _on_mouse_click(self, x, y, button, down=True):
         """
@@ -1263,9 +1461,8 @@ class KVMQtGui(QMainWindow):
         self.pos_y = int(y)
         self.mouse_var = True
 
-        # Get the native camera resolution from video worker
-        camera_width = self.video_worker.camera_width
-        camera_height = self.video_worker.camera_height
+        # Get the native camera resolution
+        camera_width, camera_height = self._camera_resolution()
 
         if 0 > self.pos_x or self.pos_x >= camera_width:
             logging.debug(f"X coordinate out of bounds: 0 <= {x} >= {camera_width}")
@@ -1364,7 +1561,7 @@ class KVMQtGui(QMainWindow):
             with open(pyproject_path, "r") as f:
                 data = toml.load(f)
             return data["project"]["version"]
-        except Exception as e:
+        except (FileNotFoundError, KeyError, AttributeError, ValueError) as e:
             logging.warning(f"Could not read version from pyproject.toml: {e}")
             return "?"
 
@@ -1463,10 +1660,15 @@ class KVMQtGui(QMainWindow):
 
     def closeEvent(self, event):
         """Clean up resources when closing the application"""
-        # Stop video components
-        self.video_update_timer.stop()
-        self.video_worker.quit()
-        self.video_worker.wait()
+        # Stop and tear down the active QCamera (QtMultimedia owns the threading
+        # internally, so no manual quit/wait is needed)
+        if self.qcamera is not None:
+            try:
+                self.qcamera.stop()
+                self.qcamera.unload()
+            except Exception as e:
+                logging.debug(f"Error stopping QCamera on close: {e}")
+            self.qcamera = None
 
         # Close serial port if open
         self._close_serial_port()

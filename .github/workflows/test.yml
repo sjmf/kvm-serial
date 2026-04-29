@@ -25,39 +25,47 @@ jobs:
           python-version: '3.10'  # Specify your Python version
           cache: 'pip'  # Enable pip caching
 
+      - name: Install runtime dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libqt5multimedia5-plugins \
+            libpulse-mainloop-glib0
+
       - name: Install test dependencies
         run: pip install pytest pytest-cov pytest-timeout
 
       - name: Install project dependencies
         run: pip install -r requirements.txt
 
-      - name: Run backend tests
+      - name: Run unit tests
         run: >
-          pytest tests/backend/ --cov --cov-append --cov-branch \
+          pytest tests/ --cov --cov-append --cov-branch \
             --cov-report=xml --junitxml=./junit.xml
 
-      - name: Run utils tests
-        run: >
-          pytest tests/utils/ --cov --cov-append --cov-branch \
-            --cov-report=xml --junitxml=./junit.xml
+      # Removed: previous approach was to run tests in isolated groups,
+      #   however, we've now fixed the test interference problems with
+      #   a better mocking approach (docs/TESTING.md), but leaving this
+      #   commented out for posterity.
+      # - name: Run backend tests
+      #   run: >
+      #     pytest tests/backend/ --cov --cov-append --cov-branch \
+      #       --cov-report=xml --junitxml=./junit.xml
 
-      - name: Run frontend GUI tests
-        run: >
-          pytest tests/kvm/ --cov --cov-append --cov-branch \
-            --cov-report=xml --junitxml=./junit.xml
+      # - name: Run utils tests
+      #   run: >
+      #     pytest tests/utils/ --cov --cov-append --cov-branch \
+      #       --cov-report=xml --junitxml=./junit.xml
 
-      - name: Run control test
-        run: >
-          pytest tests/test_control.py --cov --cov-append --cov-branch \
-            --cov-report=xml --junitxml=./junit.xml
+      # - name: Run frontend GUI tests
+      #   run: >
+      #     pytest tests/kvm/ --cov --cov-append --cov-branch \
+      #       --cov-report=xml --junitxml=./junit.xml
 
-      - name: Upload test results to Codecov
-        if: ${{ !cancelled() && !inputs.skip-coverage }}
-        uses: codecov/test-results-action@v1
-        with:
-          files: ./junit.xml,!./cache
-          flags: python3.10
-          token: ${{ secrets.CODECOV_TOKEN }}
+      # - name: Run control test
+      #   run: >
+      #     pytest tests/test_control.py --cov --cov-append --cov-branch \
+      #       --cov-report=xml --junitxml=./junit.xml
 
       - name: Upload results to Codecov
         if: ${{ !cancelled() && !inputs.skip-coverage }}

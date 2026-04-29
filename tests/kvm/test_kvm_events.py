@@ -31,8 +31,7 @@ class TestKVMEventHandling(
         app.mouse_op = mock_mouse_op
 
         # Set camera dimensions for coordinate system
-        app.video_worker.camera_width = 1280
-        app.video_worker.camera_height = 720
+        app._camera_resolution = MagicMock(return_value=(1280, 720))
 
         # Test left mouse button press
         app._on_mouse_click(100.5, 200.7, Qt.MouseButton.LeftButton, True)
@@ -80,8 +79,7 @@ class TestKVMEventHandling(
         app.mouse_op = mock_mouse_op
 
         # Set camera dimensions
-        app.video_worker.camera_width = 1280
-        app.video_worker.camera_height = 720
+        app._camera_resolution = MagicMock(return_value=(1280, 720))
 
         # Test valid coordinates
         result = app._on_mouse_move(640.3, 360.7)
@@ -104,8 +102,7 @@ class TestKVMEventHandling(
         app.mouse_op = mock_mouse_op
 
         # Set camera dimensions
-        app.video_worker.camera_width = 1280
-        app.video_worker.camera_height = 720
+        app._camera_resolution = MagicMock(return_value=(1280, 720))
 
         # Test coordinates outside bounds
         out_of_bounds_tests = [
@@ -136,8 +133,7 @@ class TestKVMEventHandling(
         app.mouse_op = mock_mouse_op
 
         # Set camera dimensions
-        app.video_worker.camera_width = 1280
-        app.video_worker.camera_height = 720
+        app._camera_resolution = MagicMock(return_value=(1280, 720))
 
         # Should handle exception gracefully
         app._on_mouse_move(100, 100)
@@ -312,82 +308,39 @@ class TestKVMEventHandling(
             # Window focus doesn't change keyboard state - that's handled by video view
             self.assertEqual(app.keyboard_var, initial_keyboard_state)
 
-    def test_window_resize_event_updates_video_worker(self):
-        """Test window resize events update video worker canvas size."""
+    def test_window_resize_reapplies_scale_mode(self):
+        """Window resize should re-apply the current scale mode (fit-to-window)."""
         app = self.create_kvm_app()
 
-        # Mock the video worker's set_canvas_size method
         with (
-            patch.object(app.video_worker, "set_canvas_size") as mock_set_canvas,
-            patch.object(app.video_view, "size") as mock_size,
+            patch.object(app, "_apply_scale_mode") as mock_apply,
             patch("kvm_serial.kvm.QMainWindow.resizeEvent"),
         ):
-            mock_size_obj = MagicMock()
-            mock_size_obj.width.return_value = 800
-            mock_size_obj.height.return_value = 600
-            mock_size.return_value = mock_size_obj
-
-            # Create mock resize event
-            mock_event = MagicMock()
-
-            # Call resize event
-            app.resizeEvent(mock_event)
-
-            # Verify video worker canvas size was updated
-            mock_set_canvas.assert_called_with(800, 600)
-
-    def test_window_resize_with_invalid_size(self):
-        """Test window resize handling with invalid view dimensions."""
-        app = self.create_kvm_app()
-
-        # Mock the video worker's set_canvas_size method and video view size
-        with (
-            patch.object(app.video_worker, "set_canvas_size") as mock_set_canvas,
-            patch.object(app.video_view, "size") as mock_size,
-            patch("kvm_serial.kvm.QMainWindow.resizeEvent"),
-        ):
-            mock_size_obj = MagicMock()
-            mock_size_obj.width.return_value = 0
-            mock_size_obj.height.return_value = 0
-            mock_size.return_value = mock_size_obj
-
-            mock_event = MagicMock()
-
-            # Should not call set_canvas_size with invalid dimensions
-            app.resizeEvent(mock_event)
-
-            # Video worker should not be called with invalid size
-            mock_set_canvas.assert_not_called()
+            app.resizeEvent(MagicMock())
+            mock_apply.assert_called_once()
 
     def test_close_event_cleanup(self):
         """Test proper cleanup during close event."""
         app = self.create_kvm_app()
 
-        # Set up some state to clean up
         mock_serial_port = MagicMock()
         app.serial_port = mock_serial_port
+        mock_camera = MagicMock()
+        app.qcamera = mock_camera
 
-        # Mock the timer and worker methods that need to be called
-        with (
-            patch.object(app.video_update_timer, "stop") as mock_timer_stop,
-            patch.object(app.video_worker, "quit") as mock_worker_quit,
-            patch.object(app.video_worker, "wait") as mock_worker_wait,
-        ):
-            # Create mock close event
-            mock_event = MagicMock()
-            mock_event.accept = MagicMock()
+        mock_event = MagicMock()
+        mock_event.accept = MagicMock()
 
-            app.closeEvent(mock_event)
+        app.closeEvent(mock_event)
 
-            # Verify cleanup actions
-            mock_timer_stop.assert_called_once()
-            mock_worker_quit.assert_called_once()
-            mock_worker_wait.assert_called_once()
-            mock_serial_port.close.assert_called_once()
-            mock_event.accept.assert_called_once()
+        # QCamera should be stopped and unloaded; reference cleared.
+        mock_camera.stop.assert_called_once()
+        mock_camera.unload.assert_called_once()
+        self.assertIsNone(app.qcamera)
 
-            # Serial port should be cleared
-            self.assertIsNone(app.serial_port)
+        mock_serial_port.close.assert_called_once()
+        mock_event.accept.assert_called_once()
+        self.assertIsNone(app.serial_port)
 
     def test_quit_action_sets_flag_and_closes(self):
         """Test quit action sets quitting flag and closes window."""
@@ -423,8 +376,7 @@ class TestKVMEventHandling(
         app.mouse_op = mock_mouse_op
 
         # Set specific camera dimensions
-        app.video_worker.camera_width = 640
-        app.video_worker.camera_height = 480
+        app._camera_resolution = MagicMock(return_value=(640, 480))
 
         # Test coordinates at exact boundaries
         boundary_tests = [

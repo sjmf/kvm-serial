@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 # Globally visible listener objects for thread stop
 ml = None
-cap = None
 keeb = None
 
 
@@ -34,7 +33,7 @@ def start_threads(args, serial_port):
         args: Parsed command line arguments.
         serial_port: Serial port object for communication.
     """
-    global ml, cap, keeb
+    global ml, keeb
 
     # Start mouse listner on --mouse (-e)
     if args.mouse:
@@ -50,54 +49,25 @@ def start_threads(args, serial_port):
         keeb = KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout)
         keeb.start()
 
-    # Display video window if --video (-x)
-    if args.video:
-        from kvm_serial.backend.video import CaptureDevice
-
-        cap = CaptureDevice(fullscreen=(not args.windowed))
-        if args.camindex:
-            cap.setCamera(args.camindex)
-
 
 def join_threads(args):
-    global ml, cap, keeb
+    global ml, keeb
 
-    # Wait for threads to finish.
-    # The main thread is different depending on the options provided.
-    if (args.mode == "none" or args.no_keyboard) and not args.video:
-        # Wait on mouse if no keyboard capture, unless video
-        # If only mouse is captured, Ctrl+C will raise a keyboard interrupt,
-        # which allows us to exit the program
+    # Wait for threads to finish. The main thread depends on which inputs are active.
+    if (args.mode == "none" or args.no_keyboard) and ml is not None:
+        # Mouse-only: Ctrl+C raises KeyboardInterrupt and exits.
         logging.info("Waiting for mouse listener...")
-        ml.thread.join()  # type: ignore (static analysis doesn't know about MouseListener)
-
-    elif not args.no_keyboard and not args.video:
-        # If not running video, wait on KeyboardListener to exit
-        # (unless no keyboard capture)
-        # Exit is handled by the listener implementation (e.g. Ctrl+ESC)
+        ml.thread.join()
+    elif not args.no_keyboard and keeb is not None:
+        # Keyboard listener owns the exit key (e.g. Ctrl+ESC).
         logging.info("Waiting for keyboard listener...")
-        keeb.thread.join()  # type: ignore
-
-    else:
-        # Video only
-        # Exit handled by closing the video window or ESC
-        logging.info("Waiting for video capture...")
-        cap.capture()  # type: ignore
-        # Video window does not work in a thread on OSX. :/
-        # I bet CV2 is using Tk internally.
-        # Perform capture() in our main thread for now.
-        # If we're using pynput, can disable ESC key: it's Ctrl+ESC only (prevent crash)
-        # exitKey=(0 if args.mode == "pynput" and args.mouse else 27)
-        # nope, this will only work if video runs in a thread.
+        keeb.thread.join()
 
 
 def stop_threads():
-    global ml, cap, keeb
+    global ml, keeb
     if ml is not None and ml.thread.is_alive():
         ml.stop()
-
-    if cap is not None and cap.thread is not None and cap.thread.is_alive():
-        cap.stop()
 
     if keeb is not None and keeb.thread.is_alive():
         keeb.stop()
@@ -159,28 +129,13 @@ def parse_args():
         action="store_true",
     )
     vids_group = parser.add_argument_group(
-        "Video Options",
-        description="Define video options",
+        "Video Options (removed)",
+        description="Headless video display has been removed. Switches accepted "
+        "for backwards compatibility but error out if used. Use `kvm-gui` instead.",
     )
-    vids_group.add_argument(
-        "--video",
-        "-x",
-        help="Display video",
-        action="store_true",
-    )
-    vids_group.add_argument(
-        "--windowed",
-        "-w",
-        help="Display video in window",
-        action="store_true",
-    )
-    vids_group.add_argument(
-        "--camindex",
-        "-c",
-        help="Use video device at specific offset",
-        action="store",
-        type=int,
-    )
+    vids_group.add_argument("--video", "-x", action="store_true", help=argparse.SUPPRESS)
+    vids_group.add_argument("--windowed", "-w", action="store_true", help=argparse.SUPPRESS)
+    vids_group.add_argument("--camindex", "-c", action="store", type=int, help=argparse.SUPPRESS)
 
     return parser.parse_args()
 
@@ -193,10 +148,6 @@ def log_warnings(args):
         logging.warning("Consider using --mode='pynput' with --sigint=ignore")
     if args.mode != "pynput" and args.mouse:
         logging.warning("Consider using --mode='pynput' with --mouse (-e)")
-    if args.windowed and not args.video:
-        logging.warning("--windowed (-w) arg will not work without --video (-x)")
-    if args.camindex and not args.video:
-        logging.warning("--camindex (-c) arg will not work without --video (-x)")
 
 
 def set_signalhandlers(args):
@@ -213,6 +164,16 @@ def main():
     # Set log level
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(level=log_level, format="%(message)s")
+
+    if args.video or args.windowed or args.camindex is not None:
+        logging.error(
+            "The --video / --windowed / --camindex switches have been removed.\n"
+            "Headless OpenCV-window video display is no longer supported.\n"
+            "See https://github.com/sjmf/kvm-serial/issues/32 for more detail.\n"
+            "Use the GUI (`kvm-gui`) for live video, or install the last working "
+            "version with: pip install 'kvm-serial==1.5.4'"
+        )
+        sys.exit(2)
 
     set_signalhandlers(args)
     log_warnings(args)

@@ -21,8 +21,7 @@ class TestKVMScreenshot(KVMTestBase):
         # Simulate no pixmap set (pixmap() returns a null QPixmap)
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = True
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning:
             app._take_screenshot()
@@ -35,8 +34,7 @@ class TestKVMScreenshot(KVMTestBase):
         """Test screenshot handles pixmap() returning None."""
         app = self.create_kvm_app()
 
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = None
+        app._grab_video_frame = MagicMock(return_value=None)
 
         with patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning:
             app._take_screenshot()
@@ -49,8 +47,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
 
@@ -76,8 +73,7 @@ class TestKVMScreenshot(KVMTestBase):
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
         mock_pixmap.save.return_value = True
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
         save_path = "/tmp/test_screenshot.png"
@@ -108,8 +104,7 @@ class TestKVMScreenshot(KVMTestBase):
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
         mock_pixmap.save.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
         save_path = "/invalid/path/screenshot.png"
@@ -138,8 +133,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         mock_clipboard = MagicMock()
 
@@ -171,8 +165,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with (
             patch("kvm_serial.kvm.QApplication.clipboard", return_value=MagicMock()),
@@ -202,8 +195,7 @@ class TestKVMScreenshot(KVMTestBase):
 
         mock_pixmap = MagicMock()
         mock_pixmap.isNull.return_value = False
-        app.video_pixmap_item = MagicMock()
-        app.video_pixmap_item.pixmap.return_value = mock_pixmap
+        app._grab_video_frame = MagicMock(return_value=mock_pixmap)
 
         with (
             patch("kvm_serial.kvm.QApplication.clipboard", return_value=None),
@@ -215,6 +207,47 @@ class TestKVMScreenshot(KVMTestBase):
         ):
             # Should not raise exception even with None clipboard
             app._take_screenshot()
+
+
+class TestGrabVideoFrame(KVMTestBase):
+    """Tests for _grab_video_frame, the screenshot capture path."""
+
+    def test_renders_scene_with_qrectf_target(self):
+        """Regression: QGraphicsScene.render() requires QRectF for target/source.
+        Passing QPixmap.rect() (a QRect) raises TypeError on PyQt5.
+        """
+        from PyQt5.QtCore import QRectF
+
+        app = self.create_kvm_app()
+
+        native = MagicMock()
+        native.isValid.return_value = True
+        native.width.return_value = 1920
+        native.height.return_value = 1080
+        app.video_item = MagicMock()
+        app.video_item.nativeSize.return_value = native
+        app.video_item.boundingRect.return_value = QRectF(0, 0, 1920, 1080)
+        app.video_scene = MagicMock()
+
+        with (
+            patch("kvm_serial.kvm.QPixmap") as MockPixmap,
+            patch("kvm_serial.kvm.QPainter"),
+        ):
+            mock_pixmap = MockPixmap.return_value
+            # Real QRect — what QPixmap.rect() returns in production.
+            from PyQt5.QtCore import QRect
+
+            mock_pixmap.rect.return_value = QRect(0, 0, 1920, 1080)
+
+            app._grab_video_frame()
+
+            app.video_scene.render.assert_called_once()
+            kwargs = app.video_scene.render.call_args.kwargs
+            self.assertIsInstance(
+                kwargs["target"],
+                QRectF,
+                "target must be QRectF; QGraphicsScene.render rejects QRect",
+            )
 
 
 if __name__ == "__main__":

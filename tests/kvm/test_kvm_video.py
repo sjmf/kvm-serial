@@ -1,476 +1,362 @@
 #!/usr/bin/env python
-"""
-Test suite for KVM video processing functionality.
-Uses KVMTestBase for common mocking infrastructure.
+"""Tests for the Qt-based video pipeline in kvm_serial.kvm.
+
+The previous file tested a custom QThread frame-capture worker and a per-frame
+QTimer; that architecture is gone. Frames are now delivered by QtMultimedia
+into QGraphicsVideoItem, so most of the surface area moves into Qt and
+tests collapse to verifying the small Python glue layer.
 """
 
 import unittest
-import numpy as np
 from unittest.mock import patch, MagicMock
-from PyQt5.QtCore import Qt
 
-# Import the base test class
 from test_kvm_base import KVMTestBase
 
 
-class TestKVMVideoProcessing(KVMTestBase):
-    """Test class for KVM video processing functionality."""
+class TestKVMVideoPipeline(KVMTestBase):
+    def test_video_item_attribute_exists(self):
+        """KVMQtGui owns a QGraphicsVideoItem (the QtMultimedia video sink)."""
+        app = self.create_kvm_app()
+        self.assertTrue(hasattr(app, "video_item"))
 
-    def test_video_worker_initialization(self):
-        """Test video capture worker initialization with correct parameters."""
+    def test_qcamera_initially_none(self):
+        """No QCamera is constructed until enumeration completes and a device is selected."""
+        app = self.create_kvm_app()
+        self.assertIsNone(app.qcamera)
+
+    def test_set_camera_assigns_viewfinder_and_starts(self):
+        """_set_camera should construct a QCamera, attach the video item, and start streaming."""
         app = self.create_kvm_app()
 
-        # Check that video worker exists and is properly mocked
-        self.assertTrue(hasattr(app, "video_worker"))
-        self.assertIsNotNone(app.video_worker)
+        info = MagicMock()
+        camera = MagicMock(
+            name="Camera0",
+            unique_id="uid",
+            width=1280,
+            height=720,
+            fps=30,
+            resolutions=[(1280, 720)],
+            default_resolution=(1280, 720),
+            info=info,
+        )
+        camera.name = "Camera0"
 
-        # Since video worker is mocked, just verify it's callable
-        self.assertTrue(hasattr(app.video_worker, "frame_ready"))
-        self.assertTrue(hasattr(app.video_worker, "start"))
+        with patch("kvm_serial.kvm.QCamera") as MockQCamera:
+            mock_cam = MockQCamera.return_value
+            app._set_camera(camera)
+            MockQCamera.assert_called_once_with(info)
+            mock_cam.setViewfinder.assert_called_once_with(app.video_item)
+            mock_cam.start.assert_called_once()
 
-    def test_video_timer_initialization(self):
-        """Test that video update timer is initialized with correct intervals."""
+    def test_set_camera_stops_previous_instance(self):
+        """Switching cameras must tear down the previous QCamera before opening the next."""
         app = self.create_kvm_app()
 
-        self.assertTrue(hasattr(app, "video_update_timer"))
-        self.assertIsNotNone(app.video_update_timer)
+        previous = MagicMock()
+        app.qcamera = previous
 
-        # Timer is mocked, so just verify it has expected methods
-        self.assertTrue(hasattr(app.video_update_timer, "timeout"))
-        self.assertTrue(hasattr(app.video_update_timer, "start"))
+        info = MagicMock()
+        camera = MagicMock(
+            unique_id="uid",
+            width=640,
+            height=480,
+            default_resolution=(640, 480),
+            info=info,
+        )
+        camera.name = "Cam"
 
-    def test_frame_request_logic(self):
-        """Test frame request logic and timing controls."""
+        with patch("kvm_serial.kvm.QCamera"):
+            app._set_camera(camera)
+            previous.stop.assert_called_once()
+            previous.unload.assert_called_once()
+
+    def test_set_camera_skips_when_info_missing(self):
+        """A CameraProperties with no QCameraInfo cannot be opened — skip silently."""
         app = self.create_kvm_app()
+        camera = MagicMock(info=None)
+        camera.name = "no-info"
 
-        # Mock the video worker's request_frame method
-        with patch.object(app.video_worker, "request_frame") as mock_request:
-            # Reset timing to ensure first request goes through
-            app.last_capture_request = 0.0
-            current_time = 1000.0
+        with patch("kvm_serial.kvm.QCamera") as MockQCamera:
+            app._set_camera(camera)
+            MockQCamera.assert_not_called()
 
-            with patch("time.time", return_value=current_time):
-                # First call should request frame
-                app._request_video_frame()
-                mock_request.assert_called_once()
-
-                # Set recent request time to test frame dropping
-                # Make the time difference smaller than the threshold to prevent request
-                time_threshold = (1.0 / app.target_fps) - app.frame_drop_threshold
-                app.last_capture_request = current_time - (
-                    time_threshold - 0.001
-                )  # Just under threshold
-
-                # Immediate second call should not request frame (too soon)
-                mock_request.reset_mock()
-                app._request_video_frame()
-                mock_request.assert_not_called()
-
-    def test_frame_drop_threshold_behavior(self):
-        """Test frame dropping when capture is too slow."""
+    def test_camera_resolution_falls_back_to_window_defaults(self):
+        """With no camera selected and no native size, default resolution returns the window defaults."""
         app = self.create_kvm_app()
+        # video_item is mocked; force nativeSize() invalid so fallbacks engage.
+        invalid_size = MagicMock()
+        invalid_size.isValid.return_value = False
+        invalid_size.width.return_value = 0
+        invalid_size.height.return_value = 0
+        app.video_item.nativeSize.return_value = invalid_size
+        app.video_var = -1
 
-        with patch.object(app.video_worker, "request_frame") as mock_request:
-            # Set last request time to simulate slow capture
-            current_time = 1000.0
+        w, h = app._camera_resolution()
+        self.assertEqual((w, h), (app.window_default_width, app.window_default_height))
 
-            # Calculate the exact threshold for frame dropping
-            time_threshold = (1.0 / app.target_fps) - app.frame_drop_threshold
-            app.last_capture_request = current_time - (
-                time_threshold - 0.001
-            )  # Just under threshold
-
-            with patch("time.time", return_value=current_time):
-                # Should not request new frame due to frame drop threshold
-                app._request_video_frame()
-                mock_request.assert_not_called()
-
-                # After threshold time has passed, should request frame
-                mock_request.reset_mock()
-                app.last_capture_request = current_time - (
-                    time_threshold + 0.001
-                )  # Just over threshold
-                app._request_video_frame()
-                mock_request.assert_called_once()
-
-    def test_target_fps_modification(self):
-        """Test changing target FPS and timer interval updates."""
+    def test_camera_resolution_uses_native_size_when_available(self):
         app = self.create_kvm_app()
-        initial_fps = app.target_fps
+        size = MagicMock()
+        size.isValid.return_value = True
+        size.width.return_value = 1920
+        size.height.return_value = 1080
+        app.video_item.nativeSize.return_value = size
 
-        # Test increasing FPS
-        new_fps = 60
-        with patch.object(app.video_update_timer, "setInterval") as mock_set_interval:
-            app.set_target_fps(new_fps)
-            self.assertEqual(app.target_fps, new_fps)
-            expected_interval = 1000 // new_fps
-            mock_set_interval.assert_called_with(expected_interval)
+        self.assertEqual(app._camera_resolution(), (1920, 1080))
 
-        # Test decreasing FPS
-        new_fps = 15
-        with patch.object(app.video_update_timer, "setInterval") as mock_set_interval:
-            app.set_target_fps(new_fps)
-            self.assertEqual(app.target_fps, new_fps)
-            expected_interval = 1000 // new_fps
-            mock_set_interval.assert_called_with(expected_interval)
 
-        # Test edge cases - should clamp values
-        app.set_target_fps(0)  # Should clamp to 1
-        self.assertEqual(app.target_fps, 1)
+class TestPickViewfinderSettings(KVMTestBase):
+    """Unit tests for _pick_viewfinder_settings."""
 
-        app.set_target_fps(200)  # Should clamp to 120
-        self.assertEqual(app.target_fps, 120)
+    def _make_setting(self, w, h, fmt):
+        """Return a mock QCameraViewfinderSettings entry for a given resolution and pixel format."""
+        s = MagicMock()
+        size = MagicMock()
+        size.width.return_value = w
+        size.height.return_value = h
+        s.resolution.return_value = size
+        s.pixelFormat.return_value = fmt
+        return s
 
-    def test_canvas_size_updates(self):
-        """Test canvas size updates propagate to video worker."""
+    def _make_app_with_supported(self, supported_settings):
         app = self.create_kvm_app()
+        app.qcamera = MagicMock()
+        app.qcamera.supportedViewfinderSettings.return_value = supported_settings
+        return app
 
-        # Mock the video worker's set_canvas_size method
-        with patch.object(app.video_worker, "set_canvas_size") as mock_set_size:
-            # Create a mock resize event
-            mock_event = MagicMock()
+    def _result_fmt(self, app, w, h):
+        """Call _pick_viewfinder_settings and return the pixel format it requested.
 
-            # Mock the video view size
-            mock_size = MagicMock()
-            mock_size.width.return_value = 800
-            mock_size.height.return_value = 600
-            app.video_view.size = MagicMock(return_value=mock_size)
+        QCameraViewfinderSettings is mocked by KVMTestBase, so we can't read back
+        pixelFormat() — instead we inspect what setPixelFormat() was called with.
+        """
+        result = app._pick_viewfinder_settings(w, h)
+        if result is None:
+            return None
+        if result.setPixelFormat.called:
+            return result.setPixelFormat.call_args[0][0]
+        return None
 
-            # Trigger resize event
-            with patch("kvm_serial.kvm.QMainWindow.resizeEvent"):
-                app.resizeEvent(mock_event)
+    def test_prefers_argb32_over_uyvy(self):
+        """ARGB32 must be chosen over UYVY when both are available."""
+        from PyQt5.QtMultimedia import QVideoFrame
 
-            # Should have called set_canvas_size with new dimensions
-            mock_set_size.assert_called_once_with(800, 600)
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1920, 1080, QVideoFrame.Format_UYVY),
+                self._make_setting(1920, 1080, QVideoFrame.Format_ARGB32),
+            ]
+        )
+        self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_ARGB32)
 
-    def test_canvas_size_updates_with_invalid_dimensions(self):
-        """Test canvas size updates handle invalid dimensions gracefully."""
+    def test_prefers_bgra32_over_yuyv(self):
+        """BGRA32 must be chosen over YUYV when both are available."""
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1920, 1080, QVideoFrame.Format_YUYV),
+                self._make_setting(1920, 1080, QVideoFrame.Format_BGRA32),
+            ]
+        )
+        self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_BGRA32)
+
+    def test_argb32_preferred_over_bgra32(self):
+        """ARGB32 has higher priority than BGRA32."""
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1920, 1080, QVideoFrame.Format_BGRA32),
+                self._make_setting(1920, 1080, QVideoFrame.Format_ARGB32),
+            ]
+        )
+        self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_ARGB32)
+
+    def test_falls_back_to_uyvy_when_only_option(self):
+        """When UYVY is the only format at 1920x1080, it must still be chosen."""
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1920, 1080, QVideoFrame.Format_UYVY),
+            ]
+        )
+        self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_UYVY)
+
+    def test_returns_none_when_no_match_for_resolution(self):
+        """When no supported settings match the requested resolution, None is returned."""
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1280, 720, QVideoFrame.Format_NV12),
+            ]
+        )
+        self.assertIsNone(app._pick_viewfinder_settings(1920, 1080))
+
+    def test_returns_none_when_supported_list_is_empty(self):
+        app = self._make_app_with_supported([])
+        self.assertIsNone(app._pick_viewfinder_settings(1920, 1080))
+
+    def test_result_has_correct_resolution(self):
+        """The returned settings object must carry the requested resolution."""
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        app = self._make_app_with_supported(
+            [
+                self._make_setting(1920, 1080, QVideoFrame.Format_ARGB32),
+            ]
+        )
+        with patch("kvm_serial.kvm.QCameraViewfinderSettings") as MockSettings:
+            mock_s = MockSettings.return_value
+            app._pick_viewfinder_settings(1920, 1080)
+            mock_s.setResolution.assert_called_once_with(1920, 1080)
+            mock_s.setPixelFormat.assert_called_once_with(QVideoFrame.Format_ARGB32)
+
+
+class TestPickViewfinderSettingsPlatformGating(KVMTestBase):
+    """The unsupported-format set is platform-gated. Each entry has a confirmed
+    failure mode on real hardware; these tests pin the gating so a future
+    refactor can't silently regress one of the known-broken combinations.
+    """
+
+    def _make_setting(self, w, h, fmt):
+        s = MagicMock()
+        size = MagicMock()
+        size.width.return_value = w
+        size.height.return_value = h
+        s.resolution.return_value = size
+        s.pixelFormat.return_value = fmt
+        return s
+
+    def _make_app_with_supported(self, supported_settings):
         app = self.create_kvm_app()
+        app.qcamera = MagicMock()
+        app.qcamera.supportedViewfinderSettings.return_value = supported_settings
+        return app
 
-        with patch.object(app.video_worker, "set_canvas_size") as mock_set_size:
-            mock_event = MagicMock()
+    def _result_fmt(self, app, w, h):
+        result = app._pick_viewfinder_settings(w, h)
+        if result is None:
+            return None
+        if result.setPixelFormat.called:
+            return result.setPixelFormat.call_args[0][0]
+        return None
 
-            # Test zero dimensions
-            mock_size = MagicMock()
-            mock_size.width.return_value = 0
-            mock_size.height.return_value = 0
-            app.video_view.size = MagicMock(return_value=mock_size)
+    def test_macos_rejects_yuyv_when_alternative_exists(self):
+        """Regression: macOS AVFoundation cannot render YUYV (Razer capture card,
+        confirmed black screen). When a non-YUYV format is also available it must
+        be chosen instead, even if it's not in the preferred list.
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
 
-            with patch("kvm_serial.kvm.QMainWindow.resizeEvent"):
-                app.resizeEvent(mock_event)
+        with patch("kvm_serial.kvm.sys.platform", "darwin"):
+            app = self._make_app_with_supported(
+                [
+                    self._make_setting(1920, 1080, QVideoFrame.Format_YUYV),
+                    self._make_setting(1920, 1080, QVideoFrame.Format_Jpeg),
+                ]
+            )
+            # Jpeg is not in the macOS reject set, YUYV is — Jpeg wins by elimination.
+            self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_Jpeg)
 
-            # Should not call set_canvas_size with invalid dimensions
-            mock_set_size.assert_not_called()
+    def test_macos_rejects_uyvy_when_alternative_exists(self):
+        """macOS AVFoundation cannot render UYVY ("Failed to start viewfinder")."""
+        from PyQt5.QtMultimedia import QVideoFrame
 
-    def test_frame_ready_processing_rgb888(self):
-        """Test frame processing for RGB888 format."""
+        with patch("kvm_serial.kvm.sys.platform", "darwin"):
+            app = self._make_app_with_supported(
+                [
+                    self._make_setting(1920, 1080, QVideoFrame.Format_UYVY),
+                    self._make_setting(1920, 1080, QVideoFrame.Format_NV12),
+                ]
+            )
+            self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_NV12)
+
+    def test_windows_picks_yuyv_over_jpeg_at_1080p(self):
+        """Regression: at 1920x1080 a typical USB capture card on Windows DirectShow
+        offers only {MJPG (Format_Jpeg), YUY2 (Format_YUYV)}. YUYV renders correctly
+        on DirectShow; Jpeg is a silent black screen. The prior unified blocklist
+        rejected YUYV alongside UYVY, forcing fallback to Jpeg → black screen on
+        startup. Verify YUYV is now chosen.
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        with patch("kvm_serial.kvm.sys.platform", "win32"):
+            app = self._make_app_with_supported(
+                [
+                    self._make_setting(1920, 1080, QVideoFrame.Format_Jpeg),
+                    self._make_setting(1920, 1080, QVideoFrame.Format_YUYV),
+                ]
+            )
+            self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_YUYV)
+
+    def test_windows_does_not_reject_yuyv_alone(self):
+        """On Windows YUYV is explicitly *not* in the unsupported set; if it's the
+        only format offered, it must be picked (and the camera renders).
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        with patch("kvm_serial.kvm.sys.platform", "win32"):
+            app = self._make_app_with_supported(
+                [self._make_setting(1920, 1080, QVideoFrame.Format_YUYV)]
+            )
+            self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_YUYV)
+
+    def test_linux_rejects_nothing(self):
+        """Linux V4L2 has no observed failure modes — the rejection set is empty,
+        so even YUYV-only or Jpeg-only must round-trip without falling through to
+        the 'all unsupported' warning branch.
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
+
+        # Per docs/TESTING.md, create_kvm_app exhausts shared Qt mock side_effects
+        # if called repeatedly inside a single test. Create the app once and rebind
+        # supportedViewfinderSettings per subtest.
         app = self.create_kvm_app()
+        app.qcamera = MagicMock()
 
-        # Create a mock RGB frame (3 channels, uint8)
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-        mock_frame[:, :, 0] = 255  # Red channel
+        for fmt in (QVideoFrame.Format_YUYV, QVideoFrame.Format_UYVY, QVideoFrame.Format_Jpeg):
+            with self.subTest(fmt=fmt), patch("kvm_serial.kvm.sys.platform", "linux"):
+                app.qcamera.supportedViewfinderSettings.return_value = [
+                    self._make_setting(1920, 1080, fmt)
+                ]
+                self.assertEqual(self._result_fmt(app, 1920, 1080), fmt)
 
-        # The mocked base class prevents actual QImage creation, so test the logic path
-        with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-            patch("kvm_serial.kvm.QPixmap") as mock_qpixmap_class,
-        ):
-            # Set up successful mocks
-            mock_converted_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            mock_cvtcolor.return_value = mock_converted_frame
+    def test_preferred_format_wins_regardless_of_platform(self):
+        """ARGB32/BGRA32/NV12 are picked first on any platform, before the reject
+        set is even consulted. Pin this so a future refactor that moves the
+        rejection check before the preferred loop doesn't silently regress macOS
+        cameras that offer NV12 alongside YUYV.
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
 
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = False
-            mock_qimage_class.return_value = mock_qimage
-
-            mock_pixmap = MagicMock()
-            mock_qpixmap_class.fromImage.return_value = mock_pixmap
-
-            # Process the frame
-            app._on_frame_ready(mock_frame)
-
-            # Verify BGR to RGB conversion was called
-            mock_cvtcolor.assert_called_once()
-
-    def test_frame_ready_processing_rgba8888(self):
-        """Test frame processing for RGBA8888 format."""
         app = self.create_kvm_app()
-
-        # Create a mock RGBA frame (4 channels, uint8)
-        mock_frame = np.zeros((480, 640, 4), dtype=np.uint8)
-
-        with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-        ):
-            # Set up mocks
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = False
-            mock_qimage_class.return_value = mock_qimage
-
-            # Process the frame
-            app._on_frame_ready(mock_frame)
-
-            # Should not call color conversion for RGBA
-            mock_cvtcolor.assert_not_called()
-
-            # Should attempt to create QImage (even though it fails in mocked environment)
-            self.assertTrue(mock_qimage_class.called)
-
-    def test_frame_ready_processing_invalid_dimensions(self):
-        """Test frame processing handles invalid frame dimensions."""
-        app = self.create_kvm_app()
-
-        # Create frames with invalid dimensions
-        invalid_frames = [
-            np.zeros((480, 640), dtype=np.uint8),  # 2D frame (missing channels)
-            np.zeros((480, 640, 2), dtype=np.uint8),  # 2 channels (invalid)
-            np.zeros((480, 640, 5), dtype=np.uint8),  # 5 channels (invalid)
+        app.qcamera = MagicMock()
+        app.qcamera.supportedViewfinderSettings.return_value = [
+            self._make_setting(1920, 1080, QVideoFrame.Format_YUYV),
+            self._make_setting(1920, 1080, QVideoFrame.Format_NV12),
         ]
 
-        for invalid_frame in invalid_frames:
-            with self.subTest(frame_shape=invalid_frame.shape):
-                # Should handle invalid frames without crashing
-                try:
-                    app._on_frame_ready(invalid_frame)
-                except Exception:
-                    self.fail(f"Should handle invalid frame shape {invalid_frame.shape} gracefully")
+        for platform in ("darwin", "win32", "linux"):
+            with self.subTest(platform=platform), patch("kvm_serial.kvm.sys.platform", platform):
+                self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_NV12)
 
-    def test_frame_ready_processing_qimage_creation_failure(self):
-        """Test frame processing handles QImage creation failure."""
-        app = self.create_kvm_app()
-
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Test the actual failure path in the code (QImage.isNull() returns True)
-        with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-        ):
-            # Mock QImage creation to return null image
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = True  # This triggers the failure path
-            mock_qimage_class.return_value = mock_qimage
-            mock_cvtcolor.return_value = mock_frame
-
-            # Should handle null QImage gracefully
-            try:
-                app._on_frame_ready(mock_frame)
-            except Exception:
-                self.fail("Should handle QImage creation failure gracefully")
-
-    def test_frame_ready_processing_exception_handling(self):
-        """Test frame processing handles exceptions gracefully."""
-        app = self.create_kvm_app()
-
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Test that exceptions in color conversion are handled
-        with patch("cv2.cvtColor", side_effect=Exception("Color conversion failed")):
-            # Should not raise exception
-            try:
-                app._on_frame_ready(mock_frame)
-            except Exception:
-                self.fail("Should handle color conversion exceptions gracefully")
-
-    def test_fps_calculation_logic(self):
-        """Test FPS calculation and tracking over time."""
-        app = self.create_kvm_app()
-
-        # Test that FPS calculation attributes exist and work correctly
-        self.assertTrue(hasattr(app, "frame_count"))
-        self.assertTrue(hasattr(app, "fps_calculation_start"))
-        self.assertTrue(hasattr(app, "actual_fps"))
-
-        # Test FPS calculation logic by calling directly with valid frame
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Initialize FPS calculation variables
-        start_time = 1000.0
-        app.fps_calculation_start = start_time
-        app.frame_count = 0
-
-        # Test frame counting increments
-        initial_count = app.frame_count
-
-        # Simulate one frame processed successfully (bypass QImage issues)
-        with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-            patch("kvm_serial.kvm.QPixmap") as mock_qpixmap_class,
-            patch("time.time", return_value=start_time + 0.5),  # Half second later
-        ):
-            # Mock successful image processing
-            mock_converted_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            mock_cvtcolor.return_value = mock_converted_frame
-
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = False
-            mock_qimage_class.return_value = mock_qimage
-
-            mock_pixmap = MagicMock()
-            mock_qpixmap_class.fromImage.return_value = mock_pixmap
-
-            app._on_frame_ready(mock_frame)
-
-            # Frame count should increment when processing succeeds
-            self.assertEqual(app.frame_count, initial_count + 1)
-
-    def test_video_worker_camera_index_setting(self):
-        """Test video worker camera index updates."""
-        app = self.create_kvm_app()
-
-        with patch.object(app.video_worker, "set_camera_index") as mock_set_index:
-            # Test setting valid camera index
-            app._on_video_device_selected(2, "Camera 2")
-            mock_set_index.assert_called_once_with(2)
-
-    def test_video_worker_thread_lifecycle(self):
-        """Test video worker thread start and cleanup."""
-        app = self.create_kvm_app()
-
-        # Mock video worker methods
-        with (
-            patch.object(app.video_worker, "quit") as mock_quit,
-            patch.object(app.video_worker, "wait") as mock_wait,
-        ):
-            # Trigger cleanup
-            mock_event = MagicMock()
-            mock_event.accept = MagicMock()
-            app.closeEvent(mock_event)
-
-            # Should properly clean up video worker thread
-            mock_quit.assert_called_once()
-            mock_wait.assert_called_once()
-            mock_event.accept.assert_called_once()
-
-    def test_video_timer_lifecycle(self):
-        """Test video update timer lifecycle management."""
-        app = self.create_kvm_app()
-
-        with patch.object(app.video_update_timer, "stop") as mock_stop:
-            mock_event = MagicMock()
-            mock_event.accept = MagicMock()
-            app.closeEvent(mock_event)
-
-            # Should stop video timer during cleanup
-            mock_stop.assert_called_once()
-
-    def test_video_scene_and_view_coordination(self):
-        """Test coordination between video scene and view."""
-        app = self.create_kvm_app()
-
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-
-        # Test that scene and view methods are called when frame processing succeeds
-        with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-            patch("kvm_serial.kvm.QPixmap") as mock_qpixmap_class,
-            patch.object(app.video_pixmap_item, "setPixmap") as mock_set_pixmap,
-            patch.object(app.video_scene, "setSceneRect") as mock_set_rect,
-            patch.object(app.video_view, "fitInView") as mock_fit_view,
-        ):
-            # Set up successful processing mocks
-            mock_converted_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            mock_cvtcolor.return_value = mock_converted_frame
-
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = False
-            mock_qimage_class.return_value = mock_qimage
-
-            mock_pixmap = MagicMock()
-            mock_qpixmap_class.fromImage.return_value = mock_pixmap
-
-            # Mock the bounding rect and scene rect to be the same object
-            mock_rect = MagicMock()
-            app.video_pixmap_item.boundingRect = MagicMock(return_value=mock_rect)
-            app.video_scene.sceneRect = MagicMock(return_value=mock_rect)
-
-            # Process frame
-            app._on_frame_ready(mock_frame)
-
-            # Verify scene-view coordination
-            mock_set_pixmap.assert_called_once_with(mock_pixmap)
-            mock_set_rect.assert_called_once_with(mock_rect)
-            # The actual call uses scene.sceneRect(), not the bounding rect directly
-            mock_fit_view.assert_called_once_with(mock_rect, Qt.AspectRatioMode.KeepAspectRatio)
-
-    def test_video_processing_frame_format_validation(self):
-        """Test video processing validates frame data types."""
-        app = self.create_kvm_app()
-
-        # Test unsupported data type
-        mock_frame_wrong_dtype = np.zeros((480, 640, 3), dtype=np.float32)  # Wrong dtype
-
-        # Should handle wrong data type gracefully
-        try:
-            app._on_frame_ready(mock_frame_wrong_dtype)
-        except Exception:
-            self.fail("Should handle unsupported frame data types gracefully")
-
-    def test_video_performance_monitoring(self):
-        """Test video performance monitoring and frame timing."""
-        app = self.create_kvm_app()
-
-        # Test frame timing attributes exist
-        self.assertTrue(hasattr(app, "last_frame_time"))
-        self.assertTrue(hasattr(app, "frame_count"))
-        self.assertTrue(hasattr(app, "fps_calculation_start"))
-        self.assertTrue(hasattr(app, "actual_fps"))
-
-        # Test frame drop threshold
-        self.assertGreater(app.frame_drop_threshold, 0)
-        self.assertLess(app.frame_drop_threshold, 1.0)  # Should be reasonable threshold
-
-    def test_video_error_recovery(self):
-        """Test video pipeline error recovery mechanisms."""
-        app = self.create_kvm_app()
-
-        # Test that video processing continues after worker errors
-        # The actual method doesn't handle exceptions, so we test the exception propagates
-        with patch.object(app.video_worker, "request_frame", side_effect=Exception("Worker error")):
-            # Should raise the exception since no error handling exists
-            with self.assertRaises(Exception):
-                app._request_video_frame()
-
-    def test_video_aspect_ratio_preservation(self):
-        """Test that video aspect ratio is preserved during display."""
-        app = self.create_kvm_app()
-
-        mock_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+    def test_only_unsupported_available_falls_through_with_warning(self):
+        """On macOS with a camera that only offers YUYV, the function must still
+        return a settings object (so the camera opens and the warning logs fire)
+        rather than returning None — black-with-explanation beats silent failure.
+        """
+        from PyQt5.QtMultimedia import QVideoFrame
 
         with (
-            patch("cv2.cvtColor") as mock_cvtcolor,
-            patch("kvm_serial.kvm.QImage") as mock_qimage_class,
-            patch("kvm_serial.kvm.QPixmap") as mock_qpixmap_class,
-            patch.object(app.video_view, "fitInView") as mock_fit_view,
+            patch("kvm_serial.kvm.sys.platform", "darwin"),
+            patch("kvm_serial.kvm.logging.warning") as mock_warning,
         ):
-            # Set up successful processing mocks
-            mock_converted_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-            mock_cvtcolor.return_value = mock_converted_frame
-
-            mock_qimage = MagicMock()
-            mock_qimage.isNull.return_value = False
-            mock_qimage_class.return_value = mock_qimage
-
-            mock_pixmap = MagicMock()
-            mock_qpixmap_class.fromImage.return_value = mock_pixmap
-
-            # Mock both rects to be the same object since the actual code uses scene.sceneRect()
-            mock_rect = MagicMock()
-            app.video_pixmap_item.boundingRect = MagicMock(return_value=mock_rect)
-            app.video_scene.sceneRect = MagicMock(return_value=mock_rect)
-
-            app._on_frame_ready(mock_frame)
-
-            # Verify aspect ratio preservation - fitInView is called with scene.sceneRect()
-            mock_fit_view.assert_called_once_with(
-                mock_rect,  # This will be scene.sceneRect() in the actual call
-                Qt.AspectRatioMode.KeepAspectRatio,
+            app = self._make_app_with_supported(
+                [self._make_setting(1920, 1080, QVideoFrame.Format_YUYV)]
             )
-
-
-if __name__ == "__main__":
-    unittest.main(verbosity=2)
+            self.assertEqual(self._result_fmt(app, 1920, 1080), QVideoFrame.Format_YUYV)
+            mock_warning.assert_called_once()
+            self.assertIn("unrenderable", mock_warning.call_args[0][0])

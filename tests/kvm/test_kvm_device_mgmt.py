@@ -32,6 +32,26 @@ class TestKVMDeviceManagement(
             self.assertEqual(app.serial_ports, test_ports)
             self.assertEqual(app.serial_port_var, test_ports[-1])
 
+    def test_populate_serial_ports_sets_var_before_menu_build(self):
+        """Regression: _populate_serial_port_menu reads serial_port_var to mark
+        the active entry's checkmark. serial_port_var must be set BEFORE the
+        menu is built — same class of bug as the video device checkmark.
+        """
+        test_ports = self.create_mock_serial_ports()
+        app = self.create_kvm_app()
+        observed = []
+
+        def record():
+            observed.append(app.serial_port_var)
+
+        with (
+            patch("kvm_serial.kvm.list_serial_ports", return_value=test_ports),
+            patch.object(app, "_populate_serial_port_menu", side_effect=record),
+        ):
+            app._populate_serial_ports()
+
+        self.assertEqual(observed, [test_ports[-1]])
+
     def test_populate_serial_ports_empty_list(self):
         """Test handling when no serial ports are found."""
         app = self.create_kvm_app()
@@ -108,30 +128,51 @@ class TestKVMDeviceManagement(
         app = self.create_kvm_app()
 
         with (
-            patch("kvm_serial.kvm.CaptureDevice.getCameras", return_value=test_cameras),
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=test_cameras),
             self.patch_kvm_method(app, "_populate_video_device_menu"),
+            self.patch_kvm_method(app, "_set_camera"),
+            self.patch_kvm_method(app, "_populate_resolution_menu"),
         ):
-            # _populate_video_devices now starts a thread and calls _on_cameras_found
             app._populate_video_devices()
-            # Manually call the callback that would be triggered by the thread
-            app._on_cameras_found(test_cameras)
 
             self.assertEqual(app.video_devices, test_cameras)
             self.assertEqual(app.video_device_var, str(test_cameras[0]))
             self.assertEqual(app.video_var, 0)
+
+    def test_populate_video_devices_sets_video_var_before_menu_build(self):
+        """Regression: _populate_video_device_menu reads video_var to mark the
+        active entry's checkmark. video_var must be set BEFORE the menu is built,
+        otherwise no checkmark appears on first launch when no settings file
+        carries an explicit video_device entry to re-apply later. Surfaced this
+        Windows-only checkmark bug during the QtMultimedia migration.
+        """
+        test_cameras = self.create_mock_cameras(2)
+        app = self.create_kvm_app()
+        observed_video_var = []
+
+        def record_video_var():
+            observed_video_var.append(app.video_var)
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=test_cameras),
+            patch.object(app, "_populate_video_device_menu", side_effect=record_video_var),
+            self.patch_kvm_method(app, "_set_camera"),
+            self.patch_kvm_method(app, "_populate_resolution_menu"),
+        ):
+            app._populate_video_devices()
+
+        self.assertEqual(observed_video_var, [0])
 
     def test_populate_video_devices_empty_list(self):
         """Test handling when no video devices are found."""
         app = self.create_kvm_app()
 
         with (
-            patch("kvm_serial.kvm.CaptureDevice.getCameras", return_value=[]),
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
             self.patch_kvm_method(app, "_populate_video_device_menu"),
             patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning,
         ):
             app._populate_video_devices()
-            # Manually call the callback that would be triggered by the thread
-            app._on_cameras_found([])
 
             self.assert_error_handling(mock_warning)
             self.assertEqual(app.video_devices, [])
@@ -143,15 +184,13 @@ class TestKVMDeviceManagement(
 
         with (
             patch(
-                "kvm_serial.kvm.CaptureDevice.getCameras",
+                "kvm_serial.kvm.enumerate_cameras",
                 side_effect=Exception("Camera discovery failed"),
             ),
             self.patch_kvm_method(app, "_populate_video_device_menu"),
             patch("kvm_serial.kvm.QMessageBox.critical") as mock_critical,
         ):
             app._populate_video_devices()
-            # Manually call the error callback that would be triggered by the thread
-            app._on_camera_enumeration_error("Camera discovery failed")
 
             self.assert_error_handling(mock_critical)
             self.assertEqual(app.video_devices, [])
@@ -170,16 +209,14 @@ class TestKVMDeviceManagement(
         mock_menu.actions.return_value = [mock_action]
         app.video_device_menu = mock_menu
 
-        # Mock video worker
-        app.video_worker = MagicMock()
-
-        app._on_video_device_selected(1, str(test_cameras[1]))
+        with (
+            self.patch_kvm_method(app, "_set_camera") as mock_set_camera,
+            self.patch_kvm_method(app, "_populate_resolution_menu"),
+        ):
+            app._on_video_device_selected(1, str(test_cameras[1]))
 
         self.assert_video_device_selection(app, 1, str(test_cameras[1]))
-        # set_camera_index now takes width and height parameters
-        app.video_worker.set_camera_index.assert_called_once_with(
-            1, width=test_cameras[1].width, height=test_cameras[1].height
-        )
+        mock_set_camera.assert_called_once_with(test_cameras[1])
 
     def test_serial_initialization_success(self):
         """Test successful serial port initialization."""
@@ -334,6 +371,286 @@ class TestKVMDeviceManagement(
             app._on_keyboard_layout_selected("en_US")
 
         self.assertIn("keyboard_layout_menu", str(context.exception))
+
+
+class _FakeQAction:
+    """Minimal QAction stand-in that stores label, checkable, and checked state."""
+
+    def __init__(self, label, parent=None):
+        self._text = label
+        self._checkable = False
+        self._checked = False
+        self.triggered = MagicMock()
+        self.triggered.connect = MagicMock()
+
+    def text(self):
+        return self._text
+
+    def setCheckable(self, v):
+        self._checkable = v
+
+    def isChecked(self):
+        return self._checked
+
+    def setChecked(self, v):
+        self._checked = v
+
+    def isSeparator(self):
+        return False
+
+
+class _FakeSeparator:
+    def text(self):
+        return ""
+
+    def isSeparator(self):
+        return True
+
+    def setChecked(self, v):
+        pass
+
+    def isChecked(self):
+        return False
+
+
+class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
+    """Tests for the Resolution submenu and related handlers."""
+
+    def _make_tracking_menu(self):
+        """Return a mock menu that tracks added actions via addAction/addSeparator."""
+        actions = []
+
+        menu = MagicMock()
+        menu.addAction.side_effect = lambda a: actions.append(a)
+        menu.addSeparator.side_effect = lambda: actions.append(_FakeSeparator())
+        menu.actions.side_effect = lambda: list(actions)
+        menu.clear.side_effect = actions.clear
+        return menu
+
+    def _populate(self, app, resolution_var="", resolutions=None):
+        """Wire a tracking menu + fake QAction onto app and populate the resolution menu."""
+        app.resolution_var = resolution_var
+        app.video_var = 0
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = resolutions or []
+        app.video_devices = cameras
+        app.resolution_menu = self._make_tracking_menu()
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+            app._populate_resolution_menu(0)
+
+    def test_unsupported_resolution_falls_back_to_default(self):
+        """Regression: switching from a 1080p camera with resolution_var='1920x1080'
+        to a 720p-max camera must NOT pass 1920x1080 to _set_camera (QCamera would
+        reject with 'Failed to configure preview format'). Instead, drop the
+        unsupported resolution and let the camera use its default.
+        """
+        app = self.create_kvm_app()
+        # Simulate state after the user picked 1920x1080 on a previous camera.
+        app.resolution_var = "1920x1080"
+        app.video_var = 0
+        # New camera only supports 720p.
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1280, 720), (640, 480)]
+        app.video_devices = cameras
+        app.resolution_menu = self._make_tracking_menu()
+
+        with (
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
+            app._populate_resolution_menu(0)
+
+        # _set_camera should NOT have been invoked with the unsupported resolution.
+        for call in mock_set_camera.call_args_list:
+            assert (
+                call.kwargs.get("width") != 1920
+            ), f"_set_camera called with unsupported width=1920: {call}"
+        # resolution_var must be cleared and "Use Default" re-checked.
+        self.assertEqual(app.resolution_var, "")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_supported_resolution_carries_over_between_devices(self):
+        """Inverse: when the new camera DOES support the requested resolution,
+        keep it and apply it via _set_camera (e.g. switching between two 1080p
+        capture cards should preserve the user's selection)."""
+        app = self.create_kvm_app()
+        app.resolution_var = "1920x1080"
+        app.video_var = 0
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1920, 1080), (1280, 720)]
+        app.video_devices = cameras
+        app.resolution_menu = self._make_tracking_menu()
+
+        with (
+            patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction),
+            patch.object(app, "_set_camera") as mock_set_camera,
+        ):
+            app._populate_resolution_menu(0)
+
+        mock_set_camera.assert_called_with(cameras[0], width=1920, height=1080)
+        self.assertEqual(app.resolution_var, "1920x1080")
+
+    def test_populate_resolution_menu_contains_use_default(self):
+        app = self.create_kvm_app()
+        self._populate(app)
+        labels = [a.text() for a in app.resolution_menu.actions()]
+        self.assertIn("Use Default", labels)
+
+    def test_populate_resolution_menu_has_one_separator(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolutions=[(1280, 720)])
+        separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
+        self.assertEqual(len(separators), 1)
+
+    def test_populate_resolution_menu_no_separator_when_resolutions_empty(self):
+        """When a camera reports no resolutions, the menu must not contain a separator —
+        only 'Use Default' is shown, with no dangling separator beneath it.
+        """
+        app = self.create_kvm_app()
+        self._populate(app, resolutions=[])
+        separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
+        self.assertEqual(len(separators), 0)
+        labels = [a.text() for a in app.resolution_menu.actions() if not a.isSeparator()]
+        self.assertEqual(labels, ["Use Default"])
+
+    def test_use_default_checked_when_resolution_var_empty(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_use_default_unchecked_when_resolution_var_set(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080", resolutions=[(1920, 1080)])
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertFalse(use_default.isChecked())
+
+    def test_on_resolution_selected_updates_var_and_unchecks_use_default(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="", resolutions=[(1920, 1080)])
+
+        with patch.object(app, "_set_camera"):
+            app._on_resolution_selected(1920, 1080)
+
+        self.assertEqual(app.resolution_var, "1920x1080")
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertFalse(use_default.isChecked())
+
+    def test_on_use_default_selected_clears_resolution_var(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080")
+
+        with patch.object(app, "_set_camera"):
+            app._on_use_default_selected()
+
+        self.assertEqual(app.resolution_var, "")
+
+    def test_on_use_default_selected_checks_use_default_action(self):
+        app = self.create_kvm_app()
+        self._populate(app, resolution_var="1920x1080", resolutions=[(1920, 1080)])
+
+        with patch.object(app, "_set_camera"):
+            app._on_use_default_selected()
+
+        use_default = next(a for a in app.resolution_menu.actions() if a.text() == "Use Default")
+        self.assertTrue(use_default.isChecked())
+
+    def test_on_use_default_selected_restores_camera_dims(self):
+        app = self.create_kvm_app()
+        self._populate(app)
+        # _populate replaced video_devices with fresh mocks; read what's now wired up.
+        camera = app.video_devices[0]
+        camera.default_resolution = (1280, 720)
+
+        with patch.object(app, "_set_camera") as mock_set_camera:
+            app._on_use_default_selected()
+
+        mock_set_camera.assert_called_with(camera)
+
+    def test_on_use_default_selected_menu_none_raises(self):
+        app = self.create_kvm_app()
+        app.resolution_menu = None
+        with self.assertRaises(TypeError):
+            app._on_use_default_selected()
+
+    def test_on_use_default_no_camera_skips_set_camera(self):
+        """With no selected camera, _on_use_default_selected should clear the var without calling _set_camera."""
+        app = self.create_kvm_app()
+        self._populate(app)
+        app.video_devices = []
+        app.video_var = 99
+        with patch.object(app, "_set_camera") as mock_set_camera:
+            app._on_use_default_selected()
+        mock_set_camera.assert_not_called()
+
+    def test_on_resolution_selected_menu_none_raises(self):
+        app = self.create_kvm_app()
+        app.resolution_menu = None
+        with self.assertRaises(TypeError):
+            app._on_resolution_selected(1920, 1080)
+
+    def test_resize_window_to_resolution(self):
+        app = self.create_kvm_app()
+        app._camera_resolution = MagicMock(return_value=(1920, 1080))
+        app.video_view = MagicMock()
+        app.video_view.viewport.return_value = MagicMock(width=MagicMock(return_value=800))
+        app.video_view.viewport.return_value.height.return_value = 600
+
+        with (
+            patch.object(app, "width", return_value=840),
+            patch.object(app, "height", return_value=640),
+            patch.object(app, "resize") as mock_resize,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_resize.assert_called_once_with(1960, 1120)  # 1920+40, 1080+40
+
+    def test_resize_window_to_resolution_respects_scale_factor(self):
+        app = self.create_kvm_app()
+        app.scale_mode_var = "0.5"
+        app._camera_resolution = MagicMock(return_value=(1920, 1080))
+        app.video_view = MagicMock()
+        app.video_view.viewport.return_value = MagicMock(width=MagicMock(return_value=800))
+        app.video_view.viewport.return_value.height.return_value = 600
+
+        with (
+            patch.object(app, "width", return_value=840),
+            patch.object(app, "height", return_value=640),
+            patch.object(app, "resize") as mock_resize,
+        ):
+            app._on_resize_window_to_resolution()
+
+        # 1920*0.5=960 + chrome 40, 1080*0.5=540 + chrome 40
+        mock_resize.assert_called_once_with(1000, 580)
+
+    def test_resize_window_to_resolution_restores_normal_from_maximized(self):
+        app = self.create_kvm_app()
+
+        with (
+            patch.object(app, "isFullScreen", return_value=False),
+            patch.object(app, "isMaximized", return_value=True),
+            patch.object(app, "showNormal") as mock_show_normal,
+            patch("kvm_serial.kvm.QTimer.singleShot") as mock_single_shot,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_show_normal.assert_called_once_with()
+        mock_single_shot.assert_called_once_with(0, app._resize_window_to_scaled_video)
+
+    def test_resize_window_to_resolution_restores_normal_from_fullscreen(self):
+        app = self.create_kvm_app()
+
+        with (
+            patch.object(app, "isFullScreen", return_value=True),
+            patch.object(app, "isMaximized", return_value=False),
+            patch.object(app, "showNormal") as mock_show_normal,
+            patch("kvm_serial.kvm.QTimer.singleShot") as mock_single_shot,
+        ):
+            app._on_resize_window_to_resolution()
+
+        mock_show_normal.assert_called_once_with()
+        mock_single_shot.assert_called_once_with(0, app._resize_window_to_scaled_video)
 
 
 if __name__ == "__main__":
