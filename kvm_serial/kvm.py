@@ -1354,7 +1354,7 @@ class KVMQtGui(QMainWindow):
         # Bind the camera into the closure so a deferred error from a previously
         # active QCamera can't read errorString() off whatever's in self.qcamera now.
         self.qcamera.error.connect(
-            lambda c=self.qcamera: self._on_camera_initialization_error(c.errorString())
+            lambda _err, c=self.qcamera: self._on_camera_initialization_error(c.errorString())
         )
 
         # load() must be called before start() so Qt can negotiate a pixel format
