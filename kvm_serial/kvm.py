@@ -1062,7 +1062,8 @@ class KVMQtGui(QMainWindow):
         use_max_action.triggered.connect(self._on_use_default_selected)
         self.resolution_menu.addAction(use_max_action)
 
-        self.resolution_menu.addSeparator()
+        if resolutions:
+            self.resolution_menu.addSeparator()
 
         for width, height in resolutions:
             label = f"{width}x{height}"

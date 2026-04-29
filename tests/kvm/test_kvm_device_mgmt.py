@@ -499,9 +499,20 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
 
     def test_populate_resolution_menu_has_one_separator(self):
         app = self.create_kvm_app()
-        self._populate(app)
+        self._populate(app, resolutions=[(1280, 720)])
         separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
         self.assertEqual(len(separators), 1)
+
+    def test_populate_resolution_menu_no_separator_when_resolutions_empty(self):
+        """When a camera reports no resolutions, the menu must not contain a separator —
+        only 'Use Default' is shown, with no dangling separator beneath it.
+        """
+        app = self.create_kvm_app()
+        self._populate(app, resolutions=[])
+        separators = [a for a in app.resolution_menu.actions() if a.isSeparator()]
+        self.assertEqual(len(separators), 0)
+        labels = [a.text() for a in app.resolution_menu.actions() if not a.isSeparator()]
+        self.assertEqual(labels, ["Use Default"])
 
     def test_use_default_checked_when_resolution_var_empty(self):
         app = self.create_kvm_app()

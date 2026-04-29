@@ -136,6 +136,55 @@ class TestEnumerateCameras:
         with patch.object(video_mod.QCameraInfo, "availableCameras", return_value=[]):
             assert video_mod.enumerate_cameras() == []
 
+    def test_empty_viewfinder_settings_and_invalid_default_gives_empty_resolutions(self, fake_info):
+        """When supportedViewfinderSettings() is empty and viewfinderSettings() returns
+        an invalid size, resolutions must be [] — not [(0, 0)].
+        """
+        from kvm_serial.backend import video as video_mod
+
+        cam = MagicMock()
+        cam.supportedViewfinderSettings.return_value = []
+        current = MagicMock()
+        size = MagicMock()
+        size.isValid.return_value = False
+        size.width.return_value = 0
+        current.resolution.return_value = size
+        cam.viewfinderSettings.return_value = current
+
+        with (
+            patch.object(video_mod.QCameraInfo, "availableCameras", return_value=[fake_info]),
+            patch.object(video_mod, "QCamera", return_value=cam),
+        ):
+            cameras = video_mod.enumerate_cameras()
+
+        assert cameras[0].resolutions == []
+        assert cameras[0].default_resolution == (0, 0)
+
+    def test_empty_viewfinder_settings_with_valid_default_uses_default_as_fallback(self, fake_info):
+        """When supportedViewfinderSettings() is empty but viewfinderSettings() returns a
+        valid size, that size should be used as the sole entry in resolutions.
+        """
+        from kvm_serial.backend import video as video_mod
+
+        cam = MagicMock()
+        cam.supportedViewfinderSettings.return_value = []
+        current = MagicMock()
+        size = MagicMock()
+        size.isValid.return_value = True
+        size.width.return_value = 1280
+        size.height.return_value = 720
+        current.resolution.return_value = size
+        cam.viewfinderSettings.return_value = current
+
+        with (
+            patch.object(video_mod.QCameraInfo, "availableCameras", return_value=[fake_info]),
+            patch.object(video_mod, "QCamera", return_value=cam),
+        ):
+            cameras = video_mod.enumerate_cameras()
+
+        assert cameras[0].resolutions == [(1280, 720)]
+        assert cameras[0].default_resolution == (1280, 720)
+
     def test_failing_probe_skips_camera_without_raising(self, fake_info, fake_camera_factory):
         """A QCamera that throws should not abort enumeration of other devices."""
         from kvm_serial.backend import video as video_mod

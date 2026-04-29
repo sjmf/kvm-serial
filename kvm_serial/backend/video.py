@@ -126,6 +126,14 @@ def _probe_camera(info: QCameraInfo, index: int) -> CameraProperties:
 
     cam.unload()
 
+    # Only include default_res as a fallback when it is a valid (non-zero) size.
+    # If both supportedViewfinderSettings() and viewfinderSettings() return nothing
+    # useful, leave resolutions empty rather than propagating a "0x0" entry into
+    # the GUI where it would appear as a selectable option and later be passed to
+    # QCameraViewfinderSettings.setResolution(0, 0).
+    if not resolutions and default_res[0] > 0:
+        resolutions = [default_res]
+
     return CameraProperties(
         index=index,
         name=info.description() or info.deviceName() or f"Camera {index}",
@@ -133,7 +141,7 @@ def _probe_camera(info: QCameraInfo, index: int) -> CameraProperties:
         width=default_res[0],
         height=default_res[1],
         fps=max_fps,
-        resolutions=resolutions or [default_res],
+        resolutions=resolutions,
         default_resolution=default_res,
         info=info,
     )
