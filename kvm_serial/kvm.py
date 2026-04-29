@@ -1118,8 +1118,7 @@ class KVMQtGui(QMainWindow):
 
         selected_camera = self._selected_camera()
         if selected_camera:
-            w, h = selected_camera.default_resolution
-            self._set_camera(selected_camera, width=w, height=h)
+            self._set_camera(selected_camera)
         logging.info("Resolution set to device default")
 
     def _on_resolution_selected(self, width: int, height: int):
@@ -1296,13 +1295,18 @@ class KVMQtGui(QMainWindow):
             lambda c=self.qcamera: self._on_camera_initialization_error(c.errorString())
         )
 
+        # load() must be called before start() so Qt can negotiate a pixel format
+        # compatible with the QGraphicsVideoItem surface.  Without it, the camera
+        # starts on its native format (often UYVY for HDMI capture cards) which
+        # QGraphicsVideoItem may not support, producing "Failed to start viewfinder".
+        self.qcamera.load()
+
         # Apply viewfinder settings (resolution). Must be set before start().
         target_w = width if width is not None else camera.default_resolution[0]
         target_h = height if height is not None else camera.default_resolution[1]
         if target_w > 0 and target_h > 0:
             settings = QCameraViewfinderSettings()
             settings.setResolution(target_w, target_h)
-            self.qcamera.load()
             self.qcamera.setViewfinderSettings(settings)
             logging.info(f"Camera {camera.name} viewfinder set to {target_w}x{target_h}")
 

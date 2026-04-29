@@ -566,7 +566,7 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         with patch.object(app, "_set_camera") as mock_set_camera:
             app._on_use_default_selected()
 
-        mock_set_camera.assert_called_with(camera, width=1280, height=720)
+        mock_set_camera.assert_called_with(camera)
 
     def test_on_use_default_selected_menu_none_raises(self):
         app = self.create_kvm_app()
