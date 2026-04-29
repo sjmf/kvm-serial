@@ -682,6 +682,47 @@ class TestKVMSettingsPersistence(
 
         self.assertEqual(app.resolution_var, "")  # unchanged from default
 
+    def test_zero_resolution_in_settings_is_ignored(self):
+        """Zero dimensions (e.g. '0x0') must not be stored in resolution_var."""
+        app = self.create_kvm_app()
+        app.video_devices = self.create_mock_cameras(1)
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+        app.resolution_menu = MagicMock()
+        app.resolution_menu.actions.return_value = []
+
+        for bad in ("0x0", "0x1080", "1920x0"):
+            with self.subTest(resolution=bad):
+                app.resolution_var = ""
+                settings = self.create_test_settings({"resolution": bad})
+                with (
+                    patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+                    self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+                ):
+                    app._load_settings("test_config.ini")
+                self.assertEqual(app.resolution_var, "")
+
+    def test_whitespace_resolution_in_settings_is_normalised(self):
+        """'1920x 1080' must be normalised to '1920x1080' so it matches menu labels."""
+        app = self.create_kvm_app()
+        cameras = self.create_mock_cameras(1)
+        cameras[0].resolutions = [(1920, 1080)]
+        app.video_devices = cameras
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+        app.resolution_menu = MagicMock()
+        app.resolution_menu.actions.return_value = []
+
+        settings = self.create_test_settings({"resolution": "1920x 1080"})
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+            patch.object(app, "_set_camera"),
+        ):
+            app._load_settings("test_config.ini")
+
+        self.assertEqual(app.resolution_var, "1920x1080")
+
     def test_populate_resolution_menu_applies_stored_resolution(self):
         """After menu is populated, stored resolution_var is applied via _set_camera.
 

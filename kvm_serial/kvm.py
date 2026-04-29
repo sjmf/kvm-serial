@@ -566,7 +566,10 @@ class KVMQtGui(QMainWindow):
             parts = saved_res.split("x")
             try:
                 w, h = int(parts[0]), int(parts[1])
-                self.resolution_var = saved_res
+                if w > 0 and h > 0:
+                    self.resolution_var = f"{w}x{h}"
+                else:
+                    logging.warning(f"Invalid resolution in settings (zero/negative): {saved_res}")
             except (ValueError, IndexError):
                 logging.warning(f"Invalid resolution in settings: {saved_res}")
 
