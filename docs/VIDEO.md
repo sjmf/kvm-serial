@@ -84,9 +84,15 @@ so menu/device setup runs after the event loop starts.
 `_populate_video_devices()` calls `enumerate_cameras()`, then:
 
 1. fills the video menu
-2. selects first camera by default
-3. opens it via `_set_camera(...)`
-4. populates resolution menu from cached capabilities
+2. selects the first camera by default (sets `video_var = 0`) without opening the device
+3. populates the resolution menu from cached capabilities for device 0
+
+Actual camera opening is deferred to `_load_settings()`, which is the single
+source of truth for applying the saved camera choice and saved resolution via
+`_set_camera(...)`. `_load_settings()` sets `video_var` to the saved index,
+loads `resolution_var` from settings, then calls `_populate_resolution_menu()`
+for the active device — which rebuilds the resolution menu and opens the camera
+at the correct resolution in a single `_set_camera(...)` call.
 
 ## Opening and Switching Cameras
 
