@@ -167,9 +167,9 @@ def main():
 
     if args.video or args.windowed or args.camindex is not None:
         logging.error(
-            "The --video / --windowed / --camindex switches have been removed."
+            "The --video / --windowed / --camindex switches have been removed.\n"
             "Headless OpenCV-window video display is no longer supported.\n"
-            "See https://github.com/sjmf/kvm-serial/issues/32 for more detail."
+            "See https://github.com/sjmf/kvm-serial/issues/32 for more detail.\n"
             "Use the GUI (`kvm-gui`) for live video, or install the last working "
             "version with: pip install 'kvm-serial==1.5.4'"
         )
