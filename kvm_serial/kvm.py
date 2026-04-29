@@ -326,7 +326,7 @@ class KVMQtGui(QMainWindow):
         self.scale_menu = cast(QMenu, view_menu.addMenu("Scale Video"))
         self._scale_actions: dict[str, QAction] = {}
         for label, mode in [
-            ("Fit Video to Window", "fit"),
+            ("Dynamic (Fit to Window)", "fit"),
             ("1:4 ratio", "0.25"),
             ("1:2 ratio", "0.5"),
             ("1:1 ratio", "1"),
