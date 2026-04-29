@@ -442,8 +442,8 @@ class KVMQtGui(QMainWindow):
             self.video_view.mousePressed.connect(self._on_mouse_click)
             self.video_view.mouseReleased.connect(self._on_mouse_click)
             self.video_view.mouseMoved.connect(self._on_mouse_move)
-        except Exception:
-            pass
+        except (AttributeError, TypeError) as e:
+            logging.warning(f"Could not connect video view mouse signals: {e}")
 
     def __init_timers(self):
         # QtMultimedia owns the frame pipeline; no per-frame Python timer is needed.
@@ -897,7 +897,7 @@ class KVMQtGui(QMainWindow):
                     f"System locale {system_locale.name()} is not English, defaulting to {default_layout}"
                 )
                 return default_layout
-        except Exception as e:
+        except (AttributeError, ValueError) as e:
             logging.warning(
                 f"Failed to auto-detect keyboard layout: {e}, defaulting to {default_layout}"
             )
@@ -1451,7 +1451,7 @@ class KVMQtGui(QMainWindow):
             with open(pyproject_path, "r") as f:
                 data = toml.load(f)
             return data["project"]["version"]
-        except Exception as e:
+        except (FileNotFoundError, KeyError, AttributeError, ValueError) as e:
             logging.warning(f"Could not read version from pyproject.toml: {e}")
             return "?"
 
