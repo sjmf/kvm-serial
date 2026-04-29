@@ -28,7 +28,7 @@ except ImportError as e:  # pragma: no cover - environment-specific
 # Maximum time to wait for QCamera.load() to populate supported settings.
 # load() is documented as asynchronous; in practice AVFoundation/DirectShow
 # return synchronously, but V4L2 may take a moment on first access.
-PROBE_TIMEOUT_MS = 2000
+PROBE_TIMEOUT_MS = 500
 
 
 class CaptureDeviceException(Exception):
