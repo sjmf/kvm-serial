@@ -469,7 +469,7 @@ class KVMQtGui(QMainWindow):
         self._populate_baud_rates()
         self._populate_video_devices()
         self._populate_keyboard_layouts()
-        self._load_settings(self.CONFIG_FILE)
+        QTimer.singleShot(10, lambda: self._load_settings(self.CONFIG_FILE))
 
     def _update_status_bar(self):
         """
