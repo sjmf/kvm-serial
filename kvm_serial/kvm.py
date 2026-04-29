@@ -1297,7 +1297,15 @@ class KVMQtGui(QMainWindow):
             QVideoFrame.Format_BGRA32,  # 8  — universally supported
             QVideoFrame.Format_NV12,  # 22 — hardware path, not reliable on all platforms
         )
-        _packed_yuv = {QVideoFrame.Format_UYVY, QVideoFrame.Format_YUYV}
+        # Formats QGraphicsVideoItem's QPainterVideoSurface cannot render. UYVY/YUYV
+        # produce "Failed to start viewfinder" on macOS; Format_Jpeg (=30, what
+        # DirectShow exposes for MJPG capture cards at high resolutions) produces a
+        # silent black screen on Windows because the surface has no JPEG decoder.
+        _unsupported = {
+            QVideoFrame.Format_UYVY,
+            QVideoFrame.Format_YUYV,
+            QVideoFrame.Format_Jpeg,
+        }
 
         all_settings = self.qcamera.supportedViewfinderSettings()
         available_fmts = {
@@ -1305,6 +1313,11 @@ class KVMQtGui(QMainWindow):
             for s in all_settings
             if s.resolution().width() == width and s.resolution().height() == height
         }
+        logging.debug(
+            f"Viewfinder formats available at {width}x{height}: "
+            f"{sorted(available_fmts)} (preferred: {list(_preferred)}, "
+            f"unsupported: {sorted(_unsupported)})"
+        )
         if not available_fmts:
             return None
 
@@ -1313,12 +1326,25 @@ class KVMQtGui(QMainWindow):
                 s = QCameraViewfinderSettings()
                 s.setResolution(width, height)
                 s.setPixelFormat(fmt)
+                logging.info(f"Picked preferred viewfinder format {fmt} at {width}x{height}")
                 return s
 
-        # No preferred format: take anything that isn't packed YCbCr.
-        fallback = next((f for f in available_fmts if f not in _packed_yuv), None)
+        # No preferred format. Skip known-unrenderable formats; if all that remain
+        # are unsupported, fall through to one anyway so the camera still opens —
+        # the user sees a black feed plus a clear warning rather than a missing menu.
+        fallback = next((f for f in available_fmts if f not in _unsupported), None)
         if fallback is None:
-            fallback = next(iter(available_fmts))  # only packed YCbCr available
+            fallback = next(iter(available_fmts))
+            logging.warning(
+                f"Camera offers only unrenderable formats {sorted(available_fmts)} at "
+                f"{width}x{height}; viewfinder will likely show a black screen. Try a "
+                f"different resolution from the Resolution menu."
+            )
+        else:
+            logging.info(
+                f"No preferred format at {width}x{height}; using fallback {fallback} "
+                f"(available: {sorted(available_fmts)})"
+            )
         s = QCameraViewfinderSettings()
         s.setResolution(width, height)
         s.setPixelFormat(fallback)
