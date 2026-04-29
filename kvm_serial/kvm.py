@@ -6,7 +6,7 @@ import time
 import math
 from typing import cast, Optional
 from serial import Serial, SerialException
-from PyQt5.QtCore import Qt, QTimer, QSizeF, QEvent, QLocale, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer, QSizeF, QRectF, QEvent, QLocale, pyqtSignal
 from PyQt5.QtGui import (
     QIcon,
     QMouseEvent,
@@ -1400,7 +1400,7 @@ class KVMQtGui(QMainWindow):
             try:
                 self.video_scene.render(
                     painter,
-                    target=pixmap.rect(),
+                    target=QRectF(pixmap.rect()),
                     source=self.video_item.boundingRect(),
                 )
             finally:

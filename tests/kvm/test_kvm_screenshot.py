@@ -209,5 +209,46 @@ class TestKVMScreenshot(KVMTestBase):
             app._take_screenshot()
 
 
+class TestGrabVideoFrame(KVMTestBase):
+    """Tests for _grab_video_frame, the screenshot capture path."""
+
+    def test_renders_scene_with_qrectf_target(self):
+        """Regression: QGraphicsScene.render() requires QRectF for target/source.
+        Passing QPixmap.rect() (a QRect) raises TypeError on PyQt5.
+        """
+        from PyQt5.QtCore import QRectF
+
+        app = self.create_kvm_app()
+
+        native = MagicMock()
+        native.isValid.return_value = True
+        native.width.return_value = 1920
+        native.height.return_value = 1080
+        app.video_item = MagicMock()
+        app.video_item.nativeSize.return_value = native
+        app.video_item.boundingRect.return_value = QRectF(0, 0, 1920, 1080)
+        app.video_scene = MagicMock()
+
+        with (
+            patch("kvm_serial.kvm.QPixmap") as MockPixmap,
+            patch("kvm_serial.kvm.QPainter"),
+        ):
+            mock_pixmap = MockPixmap.return_value
+            # Real QRect — what QPixmap.rect() returns in production.
+            from PyQt5.QtCore import QRect
+
+            mock_pixmap.rect.return_value = QRect(0, 0, 1920, 1080)
+
+            app._grab_video_frame()
+
+            app.video_scene.render.assert_called_once()
+            kwargs = app.video_scene.render.call_args.kwargs
+            self.assertIsInstance(
+                kwargs["target"],
+                QRectF,
+                "target must be QRectF; QGraphicsScene.render rejects QRect",
+            )
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
