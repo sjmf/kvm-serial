@@ -16,7 +16,7 @@ from PyQt5.QtGui import (
     QWheelEvent,
     QPainter,
 )
-from PyQt5.QtMultimedia import QCamera, QCameraViewfinderSettings
+from PyQt5.QtMultimedia import QCamera, QCameraViewfinderSettings, QVideoFrame
 from PyQt5.QtMultimediaWidgets import QGraphicsVideoItem
 from PyQt5.QtWidgets import (
     QApplication,
@@ -1265,6 +1265,65 @@ class KVMQtGui(QMainWindow):
             return cam.width, cam.height
         return self.window_default_width, self.window_default_height
 
+    def _pick_viewfinder_settings(
+        self, width: int, height: int
+    ) -> Optional[QCameraViewfinderSettings]:
+        """Return QCameraViewfinderSettings for width×height with a surface-compatible format.
+
+        QPainterVideoSurface (the backing surface of QGraphicsVideoItem) does not
+        support packed YCbCr formats such as UYVY (20) or YUYV (21).  Qt picks the
+        first format in supportedViewfinderSettings() — which is almost always UYVY
+        for webcams and capture cards — causing "Failed to start viewfinder" and no
+        video output.
+
+        This was invisible under the old OpenCV pipeline (removed in d107c08) because
+        cv2.VideoCapture decoded every frame to BGR regardless of the camera's native
+        format.  The QtMultimedia pipeline streams frames natively between Qt objects,
+        so format negotiation between the camera and the surface now matters.
+
+        This method reads the supported format list, picks the highest-priority format
+        from _preferred that the camera actually offers at the requested resolution,
+        then constructs a fresh QCameraViewfinderSettings with that resolution + format
+        (no fps constraint, so Qt chooses the best rate).
+
+        Returns None when no supported settings exist for the given resolution.
+        """
+        # Formats compatible with QPainterVideoSurface / QGraphicsVideoItem, best first.
+        # ARGB32/BGRA32 are universally supported by the software surface.
+        # NV12 is listed last — it is hardware-accelerated where supported but
+        # QGraphicsVideoItem does not reliably handle it on all platforms.
+        _preferred = (
+            QVideoFrame.Format_ARGB32,  # 1  — universally supported
+            QVideoFrame.Format_BGRA32,  # 8  — universally supported
+            QVideoFrame.Format_NV12,  # 22 — hardware path, not reliable on all platforms
+        )
+        _packed_yuv = {QVideoFrame.Format_UYVY, QVideoFrame.Format_YUYV}
+
+        all_settings = self.qcamera.supportedViewfinderSettings()
+        available_fmts = {
+            s.pixelFormat()
+            for s in all_settings
+            if s.resolution().width() == width and s.resolution().height() == height
+        }
+        if not available_fmts:
+            return None
+
+        for fmt in _preferred:
+            if fmt in available_fmts:
+                s = QCameraViewfinderSettings()
+                s.setResolution(width, height)
+                s.setPixelFormat(fmt)
+                return s
+
+        # No preferred format: take anything that isn't packed YCbCr.
+        fallback = next((f for f in available_fmts if f not in _packed_yuv), None)
+        if fallback is None:
+            fallback = next(iter(available_fmts))  # only packed YCbCr available
+        s = QCameraViewfinderSettings()
+        s.setResolution(width, height)
+        s.setPixelFormat(fallback)
+        return s
+
     def _set_camera(
         self,
         camera: CameraProperties,
@@ -1304,14 +1363,24 @@ class KVMQtGui(QMainWindow):
         # QGraphicsVideoItem may not support, producing "Failed to start viewfinder".
         self.qcamera.load()
 
-        # Apply viewfinder settings (resolution). Must be set before start().
+        # Apply viewfinder settings (resolution + pixel format). Must be set
+        # before start(). _pick_viewfinder_settings searches the supported list
+        # and avoids UYVY when an alternative is available.
         target_w = width if width is not None else camera.default_resolution[0]
         target_h = height if height is not None else camera.default_resolution[1]
         if target_w > 0 and target_h > 0:
-            settings = QCameraViewfinderSettings()
-            settings.setResolution(target_w, target_h)
-            self.qcamera.setViewfinderSettings(settings)
-            logging.info(f"Camera {camera.name} viewfinder set to {target_w}x{target_h}")
+            settings = self._pick_viewfinder_settings(target_w, target_h)
+            if settings is not None:
+                self.qcamera.setViewfinderSettings(settings)
+                fmt = settings.pixelFormat()
+                logging.info(
+                    f"Camera {camera.name} viewfinder set to {target_w}x{target_h} ({fmt})"
+                )
+            else:
+                logging.warning(
+                    f"Camera {camera.name}: no supported viewfinder settings for "
+                    f"{target_w}x{target_h}; letting Qt choose"
+                )
 
         self.qcamera.start()
 
