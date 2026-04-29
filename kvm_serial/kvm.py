@@ -1304,11 +1304,9 @@ class KVMQtGui(QMainWindow):
             return None
         native = self.video_item.nativeSize()
         if native.isValid() and native.width() > 0:
-            from PyQt5.QtGui import QPainter as _QPainter
-
             pixmap = QPixmap(int(native.width()), int(native.height()))
             pixmap.fill(Qt.GlobalColor.black)
-            painter = _QPainter(pixmap)
+            painter = QPainter(pixmap)
             try:
                 self.video_scene.render(
                     painter,
