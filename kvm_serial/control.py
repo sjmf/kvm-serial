@@ -10,9 +10,11 @@ import platform
 # the project root is on sys.path so that `kvm_serial.*` imports resolve.
 try:
     from importlib import import_module
+
     import_module("kvm_serial.backend")
 except ModuleNotFoundError:
     import os
+
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from serial import Serial
