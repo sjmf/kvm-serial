@@ -84,7 +84,7 @@ class TestKeyboardMain:
 
         def import_side_effect(name, *args, **kwargs):
             if name.startswith("kvm_serial.backend.implementations."):
-                raise ModuleNotFoundError(name)
+                raise ModuleNotFoundError(name, name=name)
             if name == "backend.implementations.testmod":
                 return mock_module
             return real_import_module(name, *args, **kwargs)
