@@ -135,6 +135,17 @@ class PynputOp(BaseOp):
         :param key:
         :return:
         """
+        # Some exit conditions must be checked BEFORE processing/sending the key
+        # On Windows, Ctrl+C may deliver '\x03' directly without Ctrl in modifier_map
+        try:
+            # If we received a raw ETX control character (Ctrl+C on Windows)
+            # then release all keys (avoids sticky Ctrl!) and exit
+            if key.char == "\x03":  # type: ignore[attr-defined]
+                self.hid_serial_out.release()
+                raise Listener.StopException()
+        except AttributeError:
+            pass
+
         scancode = [b for b in b"\x00" * 8]
 
         try:
