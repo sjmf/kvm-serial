@@ -1,4 +1,9 @@
 # curses implementation
+import sys
+
+if sys.platform == "win32":
+    raise ImportError("curses mode is not supported on Windows (no _curses module)")
+
 import curses
 from curses import error as CursesError
 import logging

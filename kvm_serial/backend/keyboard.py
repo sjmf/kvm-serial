@@ -18,8 +18,14 @@ def _load_implementation(module_name, class_name):
     """Load a handler class, trying package import first then script-mode fallback."""
     try:
         mod = import_module(f"kvm_serial.backend.implementations.{module_name}")
-    except ModuleNotFoundError:
-        mod = import_module(f"backend.implementations.{module_name}")
+    except ModuleNotFoundError as e:
+        # Only fall back to script-mode path when the kvm_serial package itself
+        # isn't found — not when a transitive import *inside* the module fails
+        # (e.g. `import curses` failing on Windows).
+        if e.name and e.name.startswith("kvm_serial"):
+            mod = import_module(f"backend.implementations.{module_name}")
+        else:
+            raise
     return getattr(mod, class_name)
 
 

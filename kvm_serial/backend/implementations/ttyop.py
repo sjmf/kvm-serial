@@ -1,5 +1,9 @@
 # tty implementation
 import sys
+
+if sys.platform == "win32":
+    raise ImportError("tty mode is not supported on Windows (no termios module)")
+
 import tty
 import termios
 import logging
