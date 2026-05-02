@@ -204,6 +204,7 @@ def main():
     finally:
         stop_threads()  # Stop remaining threads (if running)
         logging.info("Exiting. Bye!")
+        logging.shutdown()  # Flush and close all handlers before exit
 
 
 if __name__ == "__main__":

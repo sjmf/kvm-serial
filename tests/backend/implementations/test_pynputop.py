@@ -238,6 +238,19 @@ class TestPynputOperation:
                 op.on_press(key_maps["nonalpha_keys"]["esc"])
                 op.on_release(key_maps["nonalpha_keys"]["esc"])
 
+    def test_pynputop_exit_on_etx(self, op, sys_modules_patch):
+        """Windows delivers Ctrl+C as raw ETX ('\\x03') without populating
+        the modifier_map. on_press should release all keys and stop the listener."""
+        with patch.dict("sys.modules", sys_modules_patch):
+            from pynput.keyboard import Listener
+
+            with (
+                patch.object(Listener, "StopException", MockStopException),
+                pytest.raises(MockStopException),
+            ):
+                op.on_press(MockKeyCode(char="\x03"))
+            op.hid_serial_out.release.assert_called()
+
     def test_legacy_main_pynput(self, mock_serial, sys_modules_patch):
         """
         Test that main_pynput instantiates PynputOp, calls run, and returns None.
