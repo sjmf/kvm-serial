@@ -394,7 +394,11 @@ States 2, 3 and 4 are simpler modes that bypass the descriptor-exchange handshak
 | LOW | HIGH | 3 | BIOS keyboard + **absolute** mouse |
 | LOW | LOW | 4 | BIOS keyboard + abs mouse + **HID Digitizers** (multi-monitor) |
 
-The "BIOS keyboard" wording comes straight from the datasheet (§3.3 et seq.) and means a USB HID Boot-protocol keyboard — the kind a PC's BIOS/UEFI accepts before any OS-level HID drivers load. **This makes states 2/3/4 specifically suitable for legacy and pre-boot interfacing** (BIOS setup, boot menus, recovery consoles, headless servers without a USB stack), where the descriptor handshake of state 0/1 cannot be relied on. State 4 is the right choice on Windows 7 and later for KVM use across extended-screen multi-monitor setups, since absolute-mouse alone only addresses the primary monitor; HID Digitizers can address the full virtual desktop. Note: *some systems do not support HID Digitizers devices* (datasheet §3.5).
+The "BIOS keyboard" wording comes straight from the datasheet (§3.3 et seq.) and means a USB HID Boot-protocol keyboard — the kind a PC's BIOS/UEFI accepts before any OS-level HID drivers load. The mouse semantics, however, differ between the three modes, and that determines which mode is appropriate for which environment:
+
+- **State 2 — legacy / pre-boot.** BIOS keyboard + *relative* mouse. This is the right choice for BIOS setup, boot menus, recovery consoles, and UEFI CSM environments, where the boot mouse protocol only understands relative motion. States 3 and 4 will not enumerate in those environments because their absolute-mouse / HID-Digitizers descriptors fall outside the boot protocol.
+- **State 3 — modern OS, no handshake, abs mouse.** BIOS keyboard + absolute mouse. Useful when the descriptor-exchange handshake of state 0/1 isn't available (e.g. minimal embedded LC firmware) but absolute-cursor positioning is wanted. Most modern OSes (Linux, macOS, Windows) accept the abs-mouse interface.
+- **State 4 — Windows multi-monitor.** BIOS keyboard + abs mouse + HID Digitizers. Solves the Windows 7+ extended-screen problem where plain abs-mouse only addresses the primary monitor; HID Digitizers can address the full virtual desktop. Note from §3.5: *"some systems do not support HID Digitizers devices"* — non-Windows targets should usually pick state 3 instead.
 
 ### LC → UC fixed-length frames
 
