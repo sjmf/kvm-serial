@@ -6,7 +6,8 @@
 > including byte-for-byte matching of the `0x81` Device Connection Frames.
 > Coverage now includes power-on, attach, key/mouse forwarding, steady-state
 > operation, runtime disconnect, target-side reattach with full sequence replay,
-> and state-2 mode (`S1=HIGH, S0=LOW`) keyboard frames including `0x80` LED feedback.
+> and all four alternative dipswitch states (2/3/4) including `0x80` LED feedback,
+> state-2 relative mouse, and state-3/4 absolute mouse.
 >
 > **Manufacturer datasheet:** WCH CH9350 V2.3 — [wch-ic.com/downloads/CH9350DS_PDF.html](https://www.wch-ic.com/downloads/CH9350DS_PDF.html). Section references in this document refer to that datasheet. See [§Divergences from the datasheet](#divergences-from-the-datasheet) for the places where on-the-wire behaviour differs from what the datasheet documents.
 >
@@ -382,15 +383,27 @@ Empirically the UC accepts `Unknown`-protocol values (bits 2,1 = 00) and forward
 
 ---
 
-## State 2 Mode (Alternative Dipswitch Configuration)
+## States 2/3/4 (Alternative Dipswitch Configurations)
 
-State 2 is selected by setting `S1=HIGH, S0=LOW` on **both** ends (SEL still selects LC vs UC role). It is a simpler mode that bypasses descriptor exchange entirely: the UC presents fixed built-in HID descriptors to the target host, and the LC forwards HID reports as fixed-length frames.
+States 2, 3 and 4 are simpler modes that bypass the descriptor-exchange handshake: the UC presents fixed **built-in** HID descriptors to the target host, and the LC forwards HID reports as fixed-length frames. The three modes differ only in *what built-in descriptor the UC advertises*; the LC-side UART protocol is essentially identical between states 3 and 4. All three are selected via the `S1`/`S0` dipswitches on **both** ends (SEL still selects LC vs UC role); BAUD pins still control baud rate independently:
 
-| CMD | Frame | Description |
-|-----|-------|-------------|
-| `0x01` | `57 AB 01` + 8-byte HID boot keyboard report | Keyboard (LC → UC) |
-| `0x02` | `57 AB 02 [btn] [dx] [dy] [wheel]` | Relative mouse (LC → UC) |
-| `0x04` | `57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]` | Absolute mouse — **not supported in state 2** (datasheet only) |
+| S1 | S0 | State | UC built-in HID interfaces (datasheet §3.3–3.5) |
+|----|----|-------|-------------------------------------------------|
+| HIGH | HIGH | 0/1 (default) | None — descriptor sent over UART via `0x81` |
+| HIGH | LOW | 2 | BIOS keyboard + **relative** mouse |
+| LOW | HIGH | 3 | BIOS keyboard + **absolute** mouse |
+| LOW | LOW | 4 | BIOS keyboard + abs mouse + **HID Digitizers** (multi-monitor) |
+
+The "BIOS keyboard" wording comes straight from the datasheet (§3.3 et seq.) and means a USB HID Boot-protocol keyboard — the kind a PC's BIOS/UEFI accepts before any OS-level HID drivers load. **This makes states 2/3/4 specifically suitable for legacy and pre-boot interfacing** (BIOS setup, boot menus, recovery consoles, headless servers without a USB stack), where the descriptor handshake of state 0/1 cannot be relied on. State 4 is the right choice on Windows 7 and later for KVM use across extended-screen multi-monitor setups, since absolute-mouse alone only addresses the primary monitor; HID Digitizers can address the full virtual desktop. Note: *some systems do not support HID Digitizers devices* (datasheet §3.5).
+
+### LC → UC fixed-length frames
+
+| CMD | Frame | Used in | Description |
+|-----|-------|---------|-------------|
+| `0x01` | `57 AB 01` + 8-byte HID boot keyboard report | 2, 3, 4 | Keyboard |
+| `0x02` | `57 AB 02 [btn] [dx] [dy] [wheel]` | 2 only | Relative mouse |
+| `0x04` | `57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]` | 3, 4 | Absolute mouse — `id`=`0x01`, X/Y as 16-bit LE |
+| `0x10` | `57 AB 10 [VID_LO] [VID_HI] [PID_LO] [PID_HI]` | 2, 3, 4 | VID/PID modification (datasheet §3, p.9): override the UC's USB descriptor identity |
 
 Empirical capture (2026-05-03, bidirectional sniff with `S1=HIGH, S0=LOW` on both boards):
 
@@ -401,7 +414,20 @@ Empirical capture (2026-05-03, bidirectional sniff with `S1=HIGH, S0=LOW` on bot
 - **Mouse `0x02` verified empirically (2026-05-03, mouse_lc.txt).** Format on the wire is exactly `57 AB 02 [btn] [dx] [dy] [wheel]` with signed 8-bit dx/dy (two's complement) and no counter/checksum. The LC emits up to ~7 frames per ~50 ms burst during continuous motion — much higher rate than keyboard, with no retransmit padding (a dropped sample is masked by the next one). Button and wheel bytes were 0 throughout the captured run; only dx/dy varied.
 - **Idle keyboard reports interleaved with mouse activity.** With both a keyboard and mouse plugged into the LC, continuous mouse motion produces occasional `57 AB 01 00 00 00 00 00 00 00 00` frames (no key pressed) interleaved with mouse frames. They appear only during active mouse traffic and stop when the mouse stops — not seen during keyboard-only typing or steady-state idle. Most likely the LC's underlying USB host poll cycle reads both endpoints together and emits the keyboard endpoint's "no change" report alongside each batch of mouse reports.
 
-**Absolute mouse (`0x04`) is not forwarded in state 2.** Verified 2026-05-03 (absmouse_lc.txt) by plugging a CH9329 enumerated as a USB absolute-mouse + keyboard composite into the LC: keyboard reports forwarded fine via `0x01`, but no `0x04` frames ever appeared on the wire and abs-mouse coordinates were silently dropped. The LC's UC keep-alive stayed at `STATUS=0x07` throughout, so the link was healthy — the LC is choosing not to forward the abs-mouse HID interface. This matches the design: in state 2 the UC presents fixed built-in HID descriptors (boot keyboard + relative mouse) to the target, with no absolute-mouse interface to advertise, so the LC has no destination for those reports. Absolute mouse therefore requires state 0/1, where the LC forwards the device's actual descriptor via `0x81` and the UC mirrors it on the target. State-3/4 modes (selected by `S1=LOW`) are untested and may behave differently.
+**State 2 verified to drop absolute mouse.** 2026-05-03 (absmouse_lc.txt) plugged a CH9329 enumerated as a USB absolute-mouse + keyboard composite into the LC in state 2: keyboard reports forwarded via `0x01`, but no `0x04` frames ever appeared on the wire and abs-mouse coordinates were silently dropped. The link was healthy throughout (`STATUS=0x07`) — the LC simply has no destination for abs-mouse reports because the UC's state-2 built-in descriptor is relative-only. Switching the dipswitches to state 3 or 4 fixes this.
+
+### State 3/4 verified empirically (2026-05-03, s3_lc.txt / s4_lc.txt)
+
+States 3 and 4 are **on-the-wire identical to state 2 except they emit `0x04` absolute-mouse frames instead of (or alongside) `0x02` relative ones**:
+
+- Same startup announce: `0x86 → 0x80 0xFF → 0x89 → 0x80 0xFF`. No `0x81`.
+- Same UC `0x12` keep-alive cadence and `STATUS=0x07` semantics. PIDs stay `0000`.
+- Same `0x80 0x3N` LED-feedback channel from LC → UC.
+- Same per-keystroke retransmit pattern.
+- **`0x04` frames empirically verified.** Format on the wire: `57 AB 04 0x01 [btn] [XL XH] [YL YH] [wheel]` — 7-byte payload after the cmd byte; `id=0x01` is a fixed report-ID prefix; X/Y are 16-bit little-endian.
+- **Even with a relative-only physical mouse plugged into the LC**, the LC integrates the dx/dy deltas internally and emits absolute coordinates over the wire. So states 3/4 force absolute-mouse semantics on the target regardless of what the source device reports.
+
+State 3 and state 4 captures look identical at the UART layer — confirming the datasheet: the difference is only in the UC's USB-side built-in descriptor (HID Mouse vs HID Digitizers), not in any LC→UC framing. From the kvm-serial implementation perspective, **states 3 and 4 share the same code path**; the user picks between them by physically setting the dipswitches based on what their target host supports.
 
 ---
 
