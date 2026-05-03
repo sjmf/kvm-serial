@@ -257,6 +257,8 @@ Total frame length: 11 bytes.
 
 The `P1`/`P2` fields start as `00 00` after power-on and progressively populate as the UC processes each `0x81` frame. The LC uses this to confirm that the UC has accepted its descriptors before transitioning to state 1.
 
+> **Interpretation (USB HID).** The `LED` byte is the channel through which a USB HID OUTPUT report (host → keyboard, NumLk/CapsLk/ScrLk) reaches the LC so the physical keyboard's LEDs can be driven. This explains the cadence behaviour: when idle the UC has nothing new to forward and emits `0x12` at a steady ~1 s heartbeat; during typing the UC services more USB transactions on its target side and emits `0x12` more frequently. Each `0x83`/`0x88` keystroke from the LC also corresponds to an INPUT report consumed by the host on the UC side, which may produce `SET_REPORT` traffic the UC needs to forward.
+
 ---
 
 ## Attach Sequence Timeline
@@ -344,6 +346,13 @@ Decoded examples of observed values:
 
 Empirically the UC accepts `Unknown`-protocol values (bits 2,1 = 00) and forwards them correctly, despite the datasheet implying only HID/BIOS are valid.
 
+> **Interpretation (USB HID).** These bits likely map to USB HID's two `SET_PROTOCOL` modes:
+> - `HID` (`01`) → Report Protocol → frame carries an `RID` byte after SER (LEN = `0x0C` keyboard, `0x0A`/`0x08` mouse).
+> - `BIOS` (`10`) → Boot Protocol → fixed-layout 8-byte keyboard / 3-byte mouse report, no `RID`.
+> - `Unknown` (`00`) → device classified as neither (no Report ID item in its descriptor, no boot interface advertised); the UC handles it as fixed-layout, hence the `RID`-less LEN = `0x0B` / `0x07` variants.
+>
+> This is consistent with the data but has not been verified against a device that explicitly advertises HID Boot Protocol (`bInterfaceSubClass = 0x01`).
+
 ---
 
 ## State 2 Mode (Alternative Dipswitch Configuration)
@@ -396,6 +405,7 @@ The CH9350 V2.3 datasheet is broadly accurate but in several places contradicts 
 - **Datasheet (§3.2):** *"When CH9350L is used in pairs, it switches from state 0 to state 1."* — implies a single-event transition.
 - **Common prior assumption** (in earlier versions of this document and in the PoC): receiving any `0x12` from the UC is the trigger.
 - **Observed:** the UC sends `0x12` keep-alives starting ~30 ms after the second `0x80 0xFF`, well before any `0x81` has been sent — and continues sending them with `00 00` PIDs until each `0x81` is processed. The LC does not transition to state 1 (CMD `0x83`) until the UC's `0x12` reflects **every** PID the LC has announced via `0x81`. This was proven by bidirectional capture: with two devices announced, the LC stayed in state 0 until both `P1` and `P2` were populated in the UC's keep-alive.
+- **Interpretation (USB HID):** this is the natural ordering rule for a composite HID device — INPUT reports for any interface cannot be safely forwarded until *all* configured interfaces have completed enumeration on the target host. The PID-ack gate is the LC's mechanism for waiting on that.
 
 ### Labeling byte: "Unknown" protocol bits are valid
 
