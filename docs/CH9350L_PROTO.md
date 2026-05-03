@@ -5,7 +5,7 @@
 > reference implementation (`ch9350_poc.py`) reproduces them exactly,
 > including byte-for-byte matching of the `0x81` Device Connection Frames.
 > Coverage now includes power-on, attach, key/mouse forwarding, steady-state
-> operation, and runtime disconnect.
+> operation, runtime disconnect, and target-side reattach with full sequence replay.
 >
 > **Manufacturer datasheet:** WCH CH9350 V2.3 — [wch-ic.com/downloads/CH9350DS_PDF.html](https://www.wch-ic.com/downloads/CH9350DS_PDF.html). Section references in this document refer to that datasheet. See [§Divergences from the datasheet](#divergences-from-the-datasheet) for the places where on-the-wire behaviour differs from what the datasheet documents.
 >
@@ -242,20 +242,38 @@ The datasheet (§4.6) names this "Device Disconnect Command" and claims the UC "
 Sent by the UC approximately every 1 second.
 
 ```
-57 AB 12 [P1_LO] [P1_HI] [P2_LO] [P2_HI] [LED] [STATUS] [VERSION_LO] [VERSION_MID] [VERSION_HI]
+57 AB 12 [P1_LO] [P1_HI] [P2_LO] [P2_HI] [LED] [STATUS] [VERSION_HI] [VERSION_LO]
 ```
 
-Total frame length: 11 bytes.
+Total frame length: 11 bytes (header 2 + cmd 1 + payload 8).
 
 | Field | Size | Notes |
 |-------|------|-------|
 | `P1` | 2B LE | PID of port 1 — populated from the `PID` field of the LC's `0x81` frame for port 1, once accepted |
 | `P2` | 2B LE | PID of port 2 — populated similarly for port 2 |
-| `LED` | 1B | keyboard LED state: bit 0 = Num Lock, bit 1 = Caps Lock, bit 2 = Scroll Lock |
-| `STATUS` | 1B | `0x07` typical |
-| `VERSION` | 3B | `AC 20` typical (last byte varies) |
+| `LED` | 1B | keyboard LED state: bit 0 = Num Lock, bit 1 = Caps Lock, bit 2 = Scroll Lock. `0xFF` observed when target host hasn't reported LED state yet |
+| `STATUS` | 1B | bit-encoded UC health/enumeration state — see below |
+| `VERSION` | 2B | `AC 20` typical (last byte alternates `0B`/`20`) |
+
+`STATUS` byte interpretation (empirical, 2026-05-03):
+
+| Bit | Mask | Meaning |
+|-----|------|---------|
+| 0 | `0x01` | Port-0 device enumerated on target USB host |
+| 1 | `0x02` | Port-1 device enumerated on target USB host |
+| 2 | `0x04` | UART link healthy / UC alive |
+
+Common values:
+- `0x07` — both devices live on target, HID forwarding works (the only "all green" state)
+- `0x04` — UART up but target hasn't enumerated devices yet (e.g. cable in DM/DP-less port, or post-reattach before re-enumeration)
+- `0xFF` — transient/error during cable yank
+- `0x00` — pre-attach, before UC is fully up
 
 The `P1`/`P2` fields start as `00 00` after power-on and progressively populate as the UC processes each `0x81` frame. The LC uses this to confirm that the UC has accepted its descriptors before transitioning to state 1.
+
+> **State-1 entry is necessary but not sufficient for forwarding to work.** State-1 is gated on PID-ack (a UART-internal handshake — UC reflects PIDs once it has stored each `0x81`'s descriptor). It does **not** require any USB-device-side enumeration on the target. The proper "is HID actually being forwarded" indicator is `STATUS == 0x07`, not state-1 entry. A board with no DM/DP wiring, or a UC port that doesn't reach a target host, will still complete the UART-side handshake and reach state 1 — but `STATUS` will stay at `0x04` indefinitely and no input will land on a target.
+
+> **Diagnostic.** If the LC-side handshake completes (PIDs ack'd, state 1 entered) but `STATUS` persists at `0x04` and `LED` persists at `0xFF`, the protocol negotiation is healthy and the issue is downstream of the UART link — typically wiring (cable plugged into a port without a DM/DP path), a board-mode dipswitch in the wrong position, or no target host actually attached on DM/DP. Verified 2026-05-03 by plugging the target USB cable into a board's HM/HP-only port: LC frames byte-identical to the working case, but `STATUS` never moves off `0x04`.
 
 > **Interpretation (USB HID).** The `LED` byte is the channel through which a USB HID OUTPUT report (host → keyboard, NumLk/CapsLk/ScrLk) reaches the LC so the physical keyboard's LEDs can be driven. This explains the cadence behaviour: when idle the UC has nothing new to forward and emits `0x12` at a steady ~1 s heartbeat; during typing the UC services more USB transactions on its target side and emits `0x12` more frequently. Each `0x83`/`0x88` keystroke from the LC also corresponds to an INPUT report consumed by the host on the UC side, which may produce `SET_REPORT` traffic the UC needs to forward.
 
@@ -298,7 +316,13 @@ LC → UC   57 AB 82 A3        heartbeat (cadence unchanged)
 ... heartbeats only thereafter ...
 ```
 
-The interval between the two `0x86` frames in this capture (~2 s) was set by user action, not by the protocol. The UC's `0x12` keep-alive does **not** zero its `P1`/`P2` PID slots after disconnect — it continues to report the last-known PIDs at its normal ~1 s cadence. The LC also remains in state 1 (CMD `0x83`) and does not revert to state 0. Re-attach behaviour after disconnecting both devices was not captured and is not yet documented.
+The interval between the two `0x86` frames in this capture (~2 s) was set by user action, not by the protocol. The UC's `0x12` keep-alive does **not** zero its `P1`/`P2` PID slots after disconnect on the LC's USB-host side — it continues to report the last-known PIDs at its normal ~1 s cadence. The LC also remains in state 1 (CMD `0x83`) and does not revert to state 0.
+
+### Re-attach on the UC's USB-device side (target replug)
+
+When the UC's *target-PC* USB cable is unplugged and re-plugged (a different event from an LC-side peripheral disconnect), the UC's `0x12` does react: `P1`/`P2` clear to `00 00` for one or two frames during the transient, `STATUS` flashes `0xFF`, then PIDs settle back to their previous values but `STATUS` remains at `0x04` until the LC drives a re-enumeration.
+
+To get `STATUS` back to `0x07` (i.e. devices re-enumerated on the target host), the LC must replay the **full** attach sequence (`0x86 → 0x80 0xFF ×2 → 0x89 → 0x81 ×N`). Retransmitting `0x81` alone is insufficient — the UC accepts the descriptors and reflects the PIDs in `0x12`, but does not re-present its USB-device side to the target host. Validated 2026-05-03 with the PoC's `_run_attach_sequence(wait_for_uc=False)` reattach trigger.
 
 ---
 
