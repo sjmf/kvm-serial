@@ -5,7 +5,8 @@
 > reference implementation (`ch9350_poc.py`) reproduces them exactly,
 > including byte-for-byte matching of the `0x81` Device Connection Frames.
 > Coverage now includes power-on, attach, key/mouse forwarding, steady-state
-> operation, runtime disconnect, and target-side reattach with full sequence replay.
+> operation, runtime disconnect, target-side reattach with full sequence replay,
+> and state-2 mode (`S1=HIGH, S0=LOW`) keyboard frames including `0x80` LED feedback.
 >
 > **Manufacturer datasheet:** WCH CH9350 V2.3 — [wch-ic.com/downloads/CH9350DS_PDF.html](https://www.wch-ic.com/downloads/CH9350DS_PDF.html). Section references in this document refer to that datasheet. See [§Divergences from the datasheet](#divergences-from-the-datasheet) for the places where on-the-wire behaviour differs from what the datasheet documents.
 >
@@ -275,6 +276,8 @@ The `P1`/`P2` fields start as `00 00` after power-on and progressively populate 
 
 > **Diagnostic.** If the LC-side handshake completes (PIDs ack'd, state 1 entered) but `STATUS` persists at `0x04` and `LED` persists at `0xFF`, the protocol negotiation is healthy and the issue is downstream of the UART link — typically wiring (cable plugged into a port without a DM/DP path), a board-mode dipswitch in the wrong position, or no target host actually attached on DM/DP. Verified 2026-05-03 by plugging the target USB cable into a board's HM/HP-only port: LC frames byte-identical to the working case, but `STATUS` never moves off `0x04`.
 
+> **Single-DM/DP boards.** Many CH9350L breakout boards expose two USB-A ports but only wire DM/DP through to one of them. On such boards, the UC's USB-device cable to the target PC **must** be plugged into the port with the wired DM/DP pair — the other port will complete the UART handshake (state 1, PIDs ack'd) but `STATUS` will stay at `0x04` and no HID input will reach the target. Identify the correct port empirically: the one where `STATUS` reaches `0x07` and the on-board LEDs mirror host NumLk/CapsLk/ScrLk state.
+
 > **Interpretation (USB HID).** The `LED` byte is the channel through which a USB HID OUTPUT report (host → keyboard, NumLk/CapsLk/ScrLk) reaches the LC so the physical keyboard's LEDs can be driven. This explains the cadence behaviour: when idle the UC has nothing new to forward and emits `0x12` at a steady ~1 s heartbeat; during typing the UC services more USB transactions on its target side and emits `0x12` more frequently. Each `0x83`/`0x88` keystroke from the LC also corresponds to an INPUT report consumed by the host on the UC side, which may produce `SET_REPORT` traffic the UC needs to forward.
 
 ---
@@ -381,15 +384,24 @@ Empirically the UC accepts `Unknown`-protocol values (bits 2,1 = 00) and forward
 
 ## State 2 Mode (Alternative Dipswitch Configuration)
 
-When the UC dipswitch is set to `S0=LOW, S1=HIGH`, the UC enters a simpler mode that accepts unframed fixed-length reports with no pairing or counter. This mode requires no handshake.
+State 2 is selected by setting `S1=HIGH, S0=LOW` on **both** ends (SEL still selects LC vs UC role). It is a simpler mode that bypasses descriptor exchange entirely: the UC presents fixed built-in HID descriptors to the target host, and the LC forwards HID reports as fixed-length frames.
 
 | CMD | Frame | Description |
 |-----|-------|-------------|
-| `0x01` | `57 AB 01` + 8-byte HID boot keyboard report | Keyboard |
-| `0x02` | `57 AB 02 [btn] [dx] [dy] [wheel]` | Relative mouse |
-| `0x04` | `57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]` | Absolute mouse |
+| `0x01` | `57 AB 01` + 8-byte HID boot keyboard report | Keyboard (LC → UC) |
+| `0x02` | `57 AB 02 [btn] [dx] [dy] [wheel]` | Relative mouse (LC → UC) |
+| `0x04` | `57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]` | Absolute mouse — **not supported in state 2** (datasheet only) |
 
-> **Note:** State 2 frames have not been verified empirically; they are documented from the CH9350L datasheet and the PoC implementation only. This is future work.
+Empirical capture (2026-05-03, bidirectional sniff with `S1=HIGH, S0=LOW` on both boards):
+
+- **Startup announce still happens.** The LC emits `0x86 → 0x80 0xFF → 0x89 → 0x80 0xFF` at attach, identical to state 0/1 but with **no `0x81` Device Connection frames**. The UC has built-in descriptors and does not need them.
+- **UC keep-alive (`0x12`) still flows.** Within ~250 ms of the LC's startup announce, the UC begins emitting `0x12` keep-alives at ~1 s cadence and `STATUS` reaches `0x07` (both ports enumerated on target). PIDs in `P1`/`P2` stay at `0000` for the entire session (no descriptor announce, nothing to ack), confirming `STATUS` bits are gated on USB-side enumeration on the target, **not** on PID-ack.
+- **`0x80` is reused as a LED-feedback channel from LC → UC.** During operation the LC emits `0x80 0xNN` frames where `NN` is `0x30 | LED_BITS` — high nibble `3` is a fixed type marker, low nibble carries the same NumLk/CapsLk/ScrLk encoding as `0x12`'s LED byte. Example: pressing CapsLk causes the LC to emit `01 00 00 39 ...` (CAPS down) → UC responds with `12 ... led=0x02` → LC echoes `80 32`; on release the LC drops back to `80 30`. The "Status Change Command" name from datasheet §4.8 is a reasonable fit, and this is the mode in which it actually appears.
+- **Per-keystroke retransmit.** Each key event produces 3–4 repeated frames on the wire (no SER, no counter, no checksum, so the LC cannot detect loss — it just retransmits).
+- **Mouse `0x02` verified empirically (2026-05-03, mouse_lc.txt).** Format on the wire is exactly `57 AB 02 [btn] [dx] [dy] [wheel]` with signed 8-bit dx/dy (two's complement) and no counter/checksum. The LC emits up to ~7 frames per ~50 ms burst during continuous motion — much higher rate than keyboard, with no retransmit padding (a dropped sample is masked by the next one). Button and wheel bytes were 0 throughout the captured run; only dx/dy varied.
+- **Idle keyboard reports interleaved with mouse activity.** With both a keyboard and mouse plugged into the LC, continuous mouse motion produces occasional `57 AB 01 00 00 00 00 00 00 00 00` frames (no key pressed) interleaved with mouse frames. They appear only during active mouse traffic and stop when the mouse stops — not seen during keyboard-only typing or steady-state idle. Most likely the LC's underlying USB host poll cycle reads both endpoints together and emits the keyboard endpoint's "no change" report alongside each batch of mouse reports.
+
+**Absolute mouse (`0x04`) is not forwarded in state 2.** Verified 2026-05-03 (absmouse_lc.txt) by plugging a CH9329 enumerated as a USB absolute-mouse + keyboard composite into the LC: keyboard reports forwarded fine via `0x01`, but no `0x04` frames ever appeared on the wire and abs-mouse coordinates were silently dropped. The LC's UC keep-alive stayed at `STATUS=0x07` throughout, so the link was healthy — the LC is choosing not to forward the abs-mouse HID interface. This matches the design: in state 2 the UC presents fixed built-in HID descriptors (boot keyboard + relative mouse) to the target, with no absolute-mouse interface to advertise, so the LC has no destination for those reports. Absolute mouse therefore requires state 0/1, where the LC forwards the device's actual descriptor via `0x81` and the UC mirrors it on the target. State-3/4 modes (selected by `S1=LOW`) are untested and may behave differently.
 
 ---
 
@@ -404,10 +416,11 @@ The CH9350 V2.3 datasheet is broadly accurate but in several places contradicts 
 - **Observed (disconnect):** the LC emits a *bare* `0x86` per device unplugged, with no follow-up frames. The opcode is the same in both contexts; the presence or absence of subsequent `0x80`/`0x89`/`0x81` frames is what disambiguates.
 - **No chip reset:** after both devices are disconnected, the UC's `0x12` keep-alive continues at its normal cadence with its previously-learned PIDs in the `P1`/`P2` slots. Whatever "reset" the datasheet refers to is internal to the UC and not visible from the LC side.
 
-### `0x80` is used in state 0/1, not just 2/3/4
+### `0x80` is used in state 0/1 and state 2
 
 - **Datasheet (§4.8 "Status Change Command"):** *"State 2/3/4 supports this command, which is sent by the lower computer, received by the upper computer and has response."*
-- **Observed:** `0x80 0xFF` is sent twice (~210–260 ms apart) at attach time in state 0/1, immediately after `0x86`. The `0xFF` payload's exact semantics are not yet decoded.
+- **Observed in state 0/1:** `0x80 0xFF` is sent twice (~210–260 ms apart) at attach time, immediately after `0x86`. The `0xFF` payload appears to mean "LED state unknown" (pre-enumeration default).
+- **Observed in state 2:** in addition to the same `0x80 0xFF` startup pair, `0x80 0xNN` recurs during operation as a LED-feedback channel from LC → UC. The payload encodes `0x30 | LED_BITS` where the low nibble matches the NumLk/CapsLk/ScrLk encoding of `0x12`'s LED byte. This matches the datasheet's "Status Change Command" name and direction; the datasheet is correct that it operates in state 2, but wrong that it is *exclusive* to state 2/3/4.
 
 ### `0x89` is not defined in the datasheet at all
 
