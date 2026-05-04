@@ -54,6 +54,19 @@ class DataComm(ABC):
         unused fields (e.g. button-only events or pure scroll events).
         """
 
+    def start(self) -> None:
+        """
+        Optional lifecycle hook invoked once the comm is wired into a BaseOp.
+        Implementations that need background threads or a handshake (e.g.
+        CH9350Comm state 0) override this; default is a no-op.
+        """
+
+    def stop(self) -> None:
+        """
+        Optional lifecycle hook invoked at shutdown. Pairs with start();
+        default is a no-op.
+        """
+
 
 def list_serial_ports():
     """

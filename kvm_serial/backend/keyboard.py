@@ -52,6 +52,7 @@ class KeyboardListener(InputHandler):
         mode: Mode | str = "pynput",
         baud: int = 9600,
         layout: str = "en_GB",
+        comm_cls=None,
     ):
 
         if isinstance(serial_port, str):
@@ -65,6 +66,7 @@ class KeyboardListener(InputHandler):
             self.mode = mode
 
         self.layout = layout
+        self.comm_cls = comm_cls
         self.running = False
         self.thread = threading.Thread(target=self.run_keyboard)
 
@@ -87,7 +89,11 @@ class KeyboardListener(InputHandler):
 
         module_name, class_name = _MODE_IMPLEMENTATIONS[self.mode]
         Impl = _load_implementation(module_name, class_name)
-        Impl(self.serial_port, layout=self.layout).run()
+        op = Impl(self.serial_port, layout=self.layout, comm_cls=self.comm_cls)
+        try:
+            op.run()
+        finally:
+            op.cleanup()
 
 
 def keyboard_main():

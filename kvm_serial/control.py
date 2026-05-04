@@ -38,6 +38,19 @@ def signal_handler_ignore(sig, frame):
     logging.debug("Ignoring Ctrl+C")
 
 
+def _build_comm_cls(args):
+    """
+    Resolve --ch9350 / --ch9350-state into a DataComm implementation;
+    None preserves the existing CH9329Comm path inside BaseOp.
+    """
+    if not args.ch9350:
+        return None
+    from kvm_serial.utils.ch9350 import CH9350Comm
+
+    state = args.ch9350_state
+    return lambda port: CH9350Comm(port, state=state)
+
+
 def start_threads(args, serial_port):
     """Start handler threads based on command line arguments.
 
@@ -47,18 +60,25 @@ def start_threads(args, serial_port):
     """
     global ml, keeb
 
+    comm_cls = _build_comm_cls(args)
+
     # Start mouse listner on --mouse (-e)
     if args.mouse:
         from kvm_serial.backend.mouse import MouseListener
 
-        ml = MouseListener(serial_port)
+        ml = MouseListener(serial_port, comm_cls=comm_cls)
         ml.start()
 
     # Do not capture keyboard with --no-keyboard (-n)
     if not args.no_keyboard:
         from kvm_serial.backend.keyboard import KeyboardListener
 
-        keeb = KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout)
+        keeb = KeyboardListener(
+            serial_port,
+            mode=args.mode,
+            layout=args.keyboard_layout,
+            comm_cls=comm_cls,
+        )
         keeb.start()
 
 
@@ -139,6 +159,26 @@ def parse_args():
         "-e",
         help="Capture mouse input",
         action="store_true",
+    )
+    proto_group = parser.add_mutually_exclusive_group()
+    proto_group.add_argument(
+        "--ch9329",
+        help="Use the CH9329 protocol (default; flag for imperative declaration)",
+        action="store_true",
+    )
+    proto_group.add_argument(
+        "--ch9350",
+        help="Use the CH9350L extender protocol",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--ch9350-state",
+        help="CH9350L working state to drive (default 2: legacy BIOS / UEFI CSM "
+        "compatible). 0 = paired-mode descriptor handshake; 3 = absolute mouse; "
+        "4 = HID Digitizers. See docs/CH9350L_PROTO.md.",
+        type=int,
+        default=2,
+        choices=[0, 2, 3, 4],
     )
     vids_group = parser.add_argument_group(
         "Video Options (removed)",

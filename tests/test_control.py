@@ -44,6 +44,47 @@ class TestControl:
         assert not args.verbose
         assert not args.mouse
         assert not args.video
+        # CH9329 is the default; --ch9350 is opt-in.
+        assert not args.ch9350
+        assert args.ch9350_state == 2
+
+    @patch("sys.argv", ["control.py", "/dev/ttyUSB0"])
+    def test_build_comm_cls_default_is_none(self):
+        """Without --ch9350, the factory is None so BaseOp falls back to CH9329."""
+        from kvm_serial.control import _build_comm_cls, parse_args
+
+        assert _build_comm_cls(parse_args()) is None
+
+    @patch("sys.argv", ["control.py", "/dev/ttyUSB0", "--ch9329"])
+    def test_explicit_ch9329_flag_is_a_no_op(self):
+        """--ch9329 declares the default explicitly; factory is still None."""
+        from kvm_serial.control import _build_comm_cls, parse_args
+
+        args = parse_args()
+        assert args.ch9329
+        assert not args.ch9350
+        assert _build_comm_cls(args) is None
+
+    @patch("sys.argv", ["control.py", "/dev/ttyUSB0", "--ch9329", "--ch9350"])
+    def test_protocol_flags_are_mutually_exclusive(self):
+        """--ch9329 and --ch9350 cannot both be passed."""
+        from kvm_serial.control import parse_args
+
+        with pytest.raises(SystemExit):
+            parse_args()
+
+    @patch("sys.argv", ["control.py", "/dev/ttyUSB0", "--ch9350", "--ch9350-state", "3"])
+    def test_build_comm_cls_ch9350(self):
+        """With --ch9350, the factory yields a CH9350Comm in the requested state."""
+        from kvm_serial.control import _build_comm_cls, parse_args
+        from kvm_serial.utils.ch9350 import CH9350Comm
+        from tests._utilities import MockSerial
+
+        factory = _build_comm_cls(parse_args())
+        assert factory is not None
+        comm = factory(MockSerial())
+        assert isinstance(comm, CH9350Comm)
+        assert comm.state == 3
 
     def test_stop_threads(self):
         """Test stop_threads function with mock objects"""
