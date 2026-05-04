@@ -239,6 +239,10 @@ class CH9350Comm(DataComm):
         self._stop = threading.Event()
         self._uc_seen = threading.Event()
         self._reattach_needed = threading.Event()
+        # Last LED byte echoed back to the UC via 0x80 0x3N (states 2/3/4).
+        # Sentinel 0xFF means "nothing echoed yet"; the UC's pre-enum default
+        # is also 0xFF and we deliberately do not echo that.
+        self._echoed_led = 0xFF
         # Serialise port writes — rx callbacks (LED echo), tx maintenance
         # (heartbeat / retransmit), and user sends all converge on port.write.
         self._tx_lock = threading.Lock()
@@ -249,27 +253,29 @@ class CH9350Comm(DataComm):
 
     def start(self) -> None:
         """
-        Begin the state-0/1 attach handshake and spawn the rx + maintenance
-        threads. No-op for states 2/3/4.
+        Spawn the rx thread, plus (state 0 only) the tx-maintenance thread
+        that drives the attach handshake, heartbeats, and reattach replay.
+
+        State 0:    rx + tx-maintenance.
+        States 2/3/4: rx only - there's no handshake, but the rx loop drives
+                     LED echo back to the source keyboard from the UC's 0x12
+                     keep-alive.
         """
-        if self.state != self.STATE_0:
-            return
         if self._rx_thread is not None:
             raise RuntimeError("CH9350Comm.start() called twice")
         self._stop.clear()
         self._rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
         self._rx_thread.start()
-        # Run the initial attach in the maintenance thread so start() returns
-        # immediately; the caller is then free to send frames (which will
-        # emit 0x88 unpaired until the UC acks all PIDs and we transition
-        # to state 1).
-        self._tx_thread = threading.Thread(target=self._tx_maint_loop, daemon=True)
-        self._tx_thread.start()
+        if self.state == self.STATE_0:
+            # Run the initial attach in the maintenance thread so start()
+            # returns immediately; the caller is then free to send frames
+            # (which will emit 0x88 unpaired until the UC acks all PIDs and
+            # we transition to state 1).
+            self._tx_thread = threading.Thread(target=self._tx_maint_loop, daemon=True)
+            self._tx_thread.start()
 
     def stop(self) -> None:
-        """Halt the rx + maintenance threads. No-op for states 2/3/4."""
-        if self.state != self.STATE_0:
-            return
+        """Halt the rx (and, in state 0, tx-maintenance) threads."""
         self._stop.set()
         if self._tx_thread is not None:
             self._tx_thread.join(timeout=2.0)
@@ -553,16 +559,18 @@ class CH9350Comm(DataComm):
 
     def _handle_frame(self, cmd: int, payload: bytes) -> None:
         """
-        State-0/1 receive-side state machine. Pure function modulo
-        ``self``: tests can drive it directly with synthetic UC frames.
+        Receive-side state machine. Pure function modulo ``self``: tests
+        can drive it directly with synthetic UC frames.
 
-        Decodes the UC's 0x12 keep-alive (PIDs in P1/P2, STATUS, LED byte)
-        and:
-          - sets _uc_seen on the first 0x12 (cleared to send 0x81 frames)
-          - transitions state 0 -> state 1 once every announced PID is
-            reflected back
-          - reverts state 1 -> state 0 and triggers _reattach_needed when
-            the UC drops a previously-acked PID (target-side replug)
+        Decodes the UC's 0x12 keep-alive (PIDs in P1/P2, LED byte at index 4,
+        STATUS at index 5) and dispatches:
+          - State 0: sets _uc_seen on first 0x12 (cleared to send 0x81),
+            transitions to state 1 once every announced PID is reflected.
+          - State 1: reverts to state 0 + sets _reattach_needed when the UC
+            drops a previously-acked PID (target-side USB replug).
+          - States 2/3/4: echoes the UC's reported LED state back as a
+            0x80 0x3N frame so the source keyboard's lock-key LEDs mirror
+            the target host. Echoes only on change to avoid flooding.
         """
         logger.debug("rx cmd=%02x payload=%s", cmd, payload.hex(" "))
         if cmd != 0x12 or len(payload) < 4:
@@ -572,8 +580,20 @@ class CH9350Comm(DataComm):
         if len(payload) >= 6:
             self._uc_status = payload[5]
         if not self._uc_seen.is_set():
-            logger.info("UC keep-alive observed — announce phase cleared")
+            logger.info("UC keep-alive observed -- announce phase cleared")
             self._uc_seen.set()
+
+        # LED echo for the simple modes. The UC's 0x12 byte 4 carries the
+        # target host's keyboard LED state (NumLk/CapsLk/ScrLk in the low
+        # three bits); we mirror it back to the LC's USB-host side via
+        # 0x80 0x3N so the source keyboard's lock LEDs follow the target.
+        # 0xFF means "UC has no target enumerated yet"; never echo that.
+        if self.state in (self.STATE_2, self.STATE_3, self.STATE_4) and len(payload) >= 5:
+            led_byte = payload[4]
+            if led_byte != 0xFF and led_byte != self._echoed_led:
+                self._send_locked(HEADER + bytes([0x80, 0x30 | (led_byte & 0x07)]))
+                self._echoed_led = led_byte
+            return
 
         want_p1 = self.mouse_pid if self.mouse_desc else b"\x00\x00"
         want_p2 = self.kbd_pid if self.kbd_desc else b"\x00\x00"
@@ -581,14 +601,14 @@ class CH9350Comm(DataComm):
         all_acked = self._uc_p1 == want_p1 and self._uc_p2 == want_p2
 
         if self.state == self.STATE_0 and any_announced and all_acked:
-            logger.info("UC acknowledged all PIDs — entering state 1")
+            logger.info("UC acknowledged all PIDs - entering state 1")
             self.state = self.STATE_1
         elif self.state == self.STATE_1 and not all_acked:
-            # UC dropped a PID — likely target-side USB replug. Revert to
+            # UC dropped a PID - likely target-side USB replug. Revert to
             # state 0 and trigger the maintenance thread to replay the full
             # attach sequence (0x81 alone won't make the UC re-enumerate).
             logger.info(
-                "UC PIDs no longer match (p1=%s p2=%s) — reverting to state 0, triggering reattach",
+                "UC PIDs no longer match (p1=%s p2=%s) - reverting to state 0, triggering reattach",
                 self._uc_p1.hex(),
                 self._uc_p2.hex(),
             )

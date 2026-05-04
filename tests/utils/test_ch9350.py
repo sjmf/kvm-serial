@@ -304,11 +304,51 @@ class TestCH9350Comm:
             CH9350Comm(mock_serial, state=0, kbd_pid=b"\x03\x15\x00")
 
     @patch("serial.Serial", MockSerial)
-    def test_start_stop_no_op_for_simple_states(self, mock_serial):
-        """States 2/3/4 don't need a handshake, so start()/stop() do nothing."""
+    def test_start_stop_simple_states_spawns_rx_only(self, mock_serial):
+        """States 2/3/4 spawn just the rx thread (for LED echo); no
+        tx-maintenance thread is needed since there's no handshake."""
         for state in (2, 3, 4):
             dc = CH9350Comm(mock_serial, state=state)
-            dc.start()  # no thread spawned
-            assert dc._rx_thread is None
+            dc.start()
+            assert dc._rx_thread is not None
             assert dc._tx_thread is None
-            dc.stop()  # no-op
+            dc.stop()
+            assert dc._rx_thread is None
+
+    @patch("serial.Serial", MockSerial)
+    def test_led_echo_simple_states(self, mock_serial):
+        """
+        States 2/3/4 mirror the UC's reported LED state back as 0x80 0x3N
+        so the source keyboard's lock LEDs follow the target host. Echoed
+        only on change; the 0xFF pre-enum sentinel is never echoed.
+        """
+        for state in (2, 3, 4):
+            dc = CH9350Comm(mock_serial, state=state)
+            mock_serial.write.reset_mock()
+
+            # 0xFF (UC has no target yet) is never echoed.
+            dc._handle_frame(0x12, b"\x00\x00\x00\x00\xff\x04\xac\x20")
+            mock_serial.write.assert_not_called()
+
+            # NumLk on (LED bits 0x01) -> echo 0x80 0x31.
+            dc._handle_frame(0x12, b"\x00\x00\x00\x00\x01\x07\xac\x20")
+            mock_serial.write.assert_called_once_with(b"\x57\xab\x80\x31")
+            mock_serial.write.reset_mock()
+
+            # Same LED byte twice -> no re-echo (avoids flooding).
+            dc._handle_frame(0x12, b"\x00\x00\x00\x00\x01\x07\xac\x20")
+            mock_serial.write.assert_not_called()
+
+            # CapsLk added (LED bits 0x03) -> echo 0x80 0x33.
+            dc._handle_frame(0x12, b"\x00\x00\x00\x00\x03\x07\xac\x20")
+            mock_serial.write.assert_called_once_with(b"\x57\xab\x80\x33")
+
+    @patch("serial.Serial", MockSerial)
+    def test_led_echo_does_not_run_state0_pid_logic(self, mock_serial):
+        """Simple-mode 0x12 handling early-returns before the state-0 PID
+        bookkeeping; state stays at the user-selected mode and _reattach_needed
+        is never set even when PIDs are 'wrong' (since they're not used here)."""
+        dc = CH9350Comm(mock_serial, state=2)
+        dc._handle_frame(0x12, b"\x00\x00\x00\x00\x01\x07\xac\x20")
+        assert dc.state == CH9350Comm.STATE_2
+        assert not dc._reattach_needed.is_set()
