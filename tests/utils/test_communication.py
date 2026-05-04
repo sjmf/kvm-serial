@@ -1,7 +1,8 @@
 import pytest
 import termios
 from unittest.mock import patch
-from kvm_serial.utils.communication import CH9329Comm, list_serial_ports
+from kvm_serial.utils.communication import list_serial_ports
+from kvm_serial.utils.ch9329 import CH9329Comm
 
 from tests._utilities import MockSerial, mock_serial
 

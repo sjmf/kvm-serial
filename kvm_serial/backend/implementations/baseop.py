@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Type
 from serial import Serial
-from kvm_serial.utils.communication import DataComm, CH9329Comm
+from kvm_serial.utils.communication import DataComm
+from kvm_serial.utils.ch9329 import CH9329Comm
 
 
 class BaseOp(ABC):
