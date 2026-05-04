@@ -1,6 +1,12 @@
 import pytest
 from unittest.mock import patch
-from kvm_serial.utils.ch9350 import CH9350Comm
+from kvm_serial.utils.ch9350 import (
+    CH9350Comm,
+    DEFAULT_KBD_PID,
+    DEFAULT_MOUSE_PID,
+    HEADER,
+    _parse_frames,
+)
 
 from tests._utilities import MockSerial, mock_serial
 
@@ -8,16 +14,16 @@ from tests._utilities import MockSerial, mock_serial
 class TestCH9350Comm:
     """
     Test suite for CH9350Comm — verifies CH9350L wire-level packet framing
-    in working states 2, 3, and 4.
-
-    State 0/1 (paired-mode descriptor handshake) is not yet implemented and
-    will get its own test coverage when it lands.
+    across all four working states. State 1 is reached internally via the
+    state-0 handshake and is not user-selectable from the constructor.
     """
 
     @patch("serial.Serial", MockSerial)
     def test_init_rejects_unsupported_state(self, mock_serial):
-        """Constructor refuses states outside the implemented range."""
-        for unsupported in (0, 1, 5, -1):
+        """Constructor refuses states outside the supported range; state 1
+        is rejected because it's reached via the state-0 handshake, not
+        user-selectable."""
+        for unsupported in (1, 5, -1):
             with pytest.raises(ValueError):
                 CH9350Comm(mock_serial, state=unsupported)
 
@@ -155,3 +161,154 @@ class TestCH9350Comm:
         state4_bytes = mock_serial.write.call_args[0][0]
 
         assert state3_bytes == state4_bytes
+
+    # ----------------------------------------------------- state 0/1 builders
+
+    @patch("serial.Serial", MockSerial)
+    def test_state0_kbd_frame_format(self, mock_serial):
+        """
+        State 0 keyboard frame:
+            HEADER + 0x88 + LEN + SER + RID + [mod rsvd k0..k5] + CTR + CTRSUM
+        Per-frame counter starts at 0 and increments; CTRSUM = (CTR + sum(hid)) & 0xFF.
+        """
+        dc = CH9350Comm(mock_serial, state=0)
+
+        # First send: 'a' (0x04) with LSHIFT (0x02). hid sum = 0x01+0x02+0+0x04 = 7.
+        dc.send_scancode(bytes([0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        mock_serial.write.assert_called_once_with(
+            b"\x57\xab\x88\x0c\x13\x01\x02\x00\x04\x00\x00\x00\x00\x00\x00\x07"
+        )
+        mock_serial.write.reset_mock()
+
+        # Second send: same scancode, but CTR=1 → CTRSUM=(1+7)&0xFF=0x08.
+        dc.send_scancode(bytes([0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        mock_serial.write.assert_called_once_with(
+            b"\x57\xab\x88\x0c\x13\x01\x02\x00\x04\x00\x00\x00\x00\x00\x01\x08"
+        )
+
+    @patch("serial.Serial", MockSerial)
+    def test_state1_kbd_cmd_byte_only_difference(self, mock_serial):
+        """State 1 keyboard frames differ from state 0 only in the cmd byte
+        (0x83 vs 0x88) — payload, SER, CTR are unchanged."""
+        dc = CH9350Comm(mock_serial, state=0)
+        dc.state = CH9350Comm.STATE_1  # simulate post-handshake transition
+
+        dc.send_scancode(bytes([0x02, 0x00, 0x04, 0x00, 0x00, 0x00, 0x00, 0x00]))
+        mock_serial.write.assert_called_once_with(
+            b"\x57\xab\x83\x0c\x13\x01\x02\x00\x04\x00\x00\x00\x00\x00\x00\x07"
+        )
+
+    @patch("serial.Serial", MockSerial)
+    def test_state0_mouse_frame_format(self, mock_serial):
+        """
+        State 0 relative mouse frame:
+            HEADER + 0x88 + LEN + SER + RID + [btn dx dy wheel] + CTR + CTRSUM
+        """
+        dc = CH9350Comm(mock_serial, state=0)
+        dc.send_mouse_relative(0x01, 5, -3, 1)
+        # data sum: 0x01 + 0x01 + 0x05 + 0xFD + 0x01 = 0x105 & 0xFF = 0x05
+        mock_serial.write.assert_called_once_with(
+            b"\x57\xab\x88\x08\x22\x01\x01\x05\xfd\x01\x00\x05"
+        )
+
+    @patch("serial.Serial", MockSerial)
+    def test_device_connect_frame_format(self, mock_serial):
+        """0x81 frame: HEADER + 0x81 + PORT + LEN(LE) + DESC + PID + CHK."""
+        dc = CH9350Comm(mock_serial, state=0)
+        # CHK = (sum(desc) + sum(pid)) & 0xFF = (0xab + 0xcd + 0x01 + 0x02) & 0xFF = 0x7b
+        frame = dc._build_device_connect_frame(b"\xab\xcd", port_id=0x00, device_pid=b"\x01\x02")
+        assert frame == b"\x57\xab\x81\x00\x02\x00\xab\xcd\x01\x02\x7b"
+
+    @patch("serial.Serial", MockSerial)
+    def test_device_connect_frame_rejects_bad_pid(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=0)
+        with pytest.raises(ValueError):
+            dc._build_device_connect_frame(b"\xab", port_id=0x00, device_pid=b"\x01")
+
+    def test_parse_frames_basic(self):
+        """_parse_frames extracts complete (cmd, payload) tuples, leaves
+        partials in the buffer, and surfaces pre-header bytes as cmd=-1."""
+        # Single complete 0x12 keep-alive (8-byte payload).
+        buf = bytearray(HEADER + b"\x12" + b"\x40\x00\x03\x15\x00\x07\xac\x20")
+        frames, remaining = _parse_frames(buf)
+        assert frames == [(0x12, b"\x40\x00\x03\x15\x00\x07\xac\x20")]
+        assert remaining == bytearray()
+
+        # Pre-header noise + a 0x86 frame (no payload).
+        buf = bytearray(b"\xff\x00" + HEADER + b"\x86")
+        frames, remaining = _parse_frames(buf)
+        assert frames == [(-1, b"\xff\x00"), (0x86, b"")]
+        assert remaining == bytearray()
+
+        # 0x88 length-prefixed: payload[0]=LEN means total payload = 1+LEN.
+        buf = bytearray(HEADER + b"\x88\x04\xaa\xbb\xcc\xdd")
+        frames, remaining = _parse_frames(buf)
+        assert frames == [(0x88, b"\x04\xaa\xbb\xcc\xdd")]
+        assert remaining == bytearray()
+
+        # Partial frame: header + cmd + incomplete payload — leave in buffer.
+        buf = bytearray(HEADER + b"\x12\x40\x00")
+        frames, remaining = _parse_frames(buf)
+        assert frames == []
+        assert remaining == bytearray(HEADER + b"\x12\x40\x00")
+
+    @patch("serial.Serial", MockSerial)
+    def test_handle_frame_pid_ack_transitions_to_state1(self, mock_serial):
+        """When the UC's 0x12 reflects every announced PID, _handle_frame
+        moves state 0 → state 1 and sets _uc_seen."""
+        dc = CH9350Comm(mock_serial, state=0)
+        assert dc.state == CH9350Comm.STATE_0
+        assert not dc._uc_seen.is_set()
+
+        # Payload with both PIDs matching the defaults → all-acked.
+        payload = DEFAULT_MOUSE_PID + DEFAULT_KBD_PID + b"\x00\x07\xac\x20"
+        dc._handle_frame(0x12, payload)
+
+        assert dc._uc_seen.is_set()
+        assert dc.state == CH9350Comm.STATE_1
+        assert dc._uc_p1 == DEFAULT_MOUSE_PID
+        assert dc._uc_p2 == DEFAULT_KBD_PID
+
+    @patch("serial.Serial", MockSerial)
+    def test_handle_frame_pid_drop_triggers_reattach(self, mock_serial):
+        """In state 1, a 0x12 with cleared PIDs (target-side replug) drops
+        us back to state 0 and signals _reattach_needed."""
+        dc = CH9350Comm(mock_serial, state=0)
+        # Bring us up to state 1 with full ack.
+        dc._handle_frame(0x12, DEFAULT_MOUSE_PID + DEFAULT_KBD_PID + b"\x00\x07\xac\x20")
+        assert dc.state == CH9350Comm.STATE_1
+        assert not dc._reattach_needed.is_set()
+
+        # UC clears PIDs to 00 00 → STATUS drops → reattach.
+        dc._handle_frame(0x12, b"\x00\x00\x00\x00\x00\x04\xac\x20")
+        assert dc.state == CH9350Comm.STATE_0
+        assert dc._reattach_needed.is_set()
+
+    @patch("serial.Serial", MockSerial)
+    def test_handle_frame_ignores_short_or_irrelevant(self, mock_serial):
+        """Non-0x12 frames and short 0x12 payloads are ignored (no state
+        change, no exceptions)."""
+        dc = CH9350Comm(mock_serial, state=0)
+
+        dc._handle_frame(0x82, b"\xa3")  # heartbeat — ignored
+        dc._handle_frame(0x12, b"\x00\x00")  # too short for PIDs
+        assert dc.state == CH9350Comm.STATE_0
+        assert not dc._uc_seen.is_set()
+
+    @patch("serial.Serial", MockSerial)
+    def test_init_rejects_bad_pid_length(self, mock_serial):
+        """PIDs must be exactly 2 bytes."""
+        with pytest.raises(ValueError):
+            CH9350Comm(mock_serial, state=0, mouse_pid=b"\x40")
+        with pytest.raises(ValueError):
+            CH9350Comm(mock_serial, state=0, kbd_pid=b"\x03\x15\x00")
+
+    @patch("serial.Serial", MockSerial)
+    def test_start_stop_no_op_for_simple_states(self, mock_serial):
+        """States 2/3/4 don't need a handshake, so start()/stop() do nothing."""
+        for state in (2, 3, 4):
+            dc = CH9350Comm(mock_serial, state=state)
+            dc.start()  # no thread spawned
+            assert dc._rx_thread is None
+            assert dc._tx_thread is None
+            dc.stop()  # no-op
