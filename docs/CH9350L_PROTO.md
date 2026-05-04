@@ -70,7 +70,7 @@ The payload layout depends on `CMD`:
 ```
 
 - **LEN** — number of bytes following LEN, i.e. `SER(1) + report-bytes(n) + CTR(1) + CTR_SUM(1)`
-- **SER** — labeling byte; encodes device class, protocol, and port number (see §Labeling Byte)
+- **SER** — labelling byte; encodes device class, protocol, and port number (see §Labelling Byte)
 - **CTR** — monotonically increasing session counter, mod 256; separate per SER
 - **CTR_SUM** — checksum: `(CTR + sum(report-bytes)) mod 256`
   where `report-bytes` is everything between SER and CTR, exclusive
@@ -136,7 +136,7 @@ Two variants are produced depending on the USB device connected to the LC.
 | Field | Value | Notes |
 |-------|-------|-------|
 | LEN | `0x0C` (12) | |
-| SER | `0x13` | keyboard / HID / port 2 (see §Labeling Byte) |
+| SER | `0x13` | keyboard / HID / port 2 (see §Labelling Byte) |
 | RID | report ID byte | `0x01` for the captured keyboard descriptor |
 | `mod` | modifier byte | USB HID boot protocol modifier bitmask |
 | `rsvd` | `0x00` | reserved per HID boot keyboard |
@@ -346,7 +346,7 @@ State 0 (`0x88`) is the unpaired form; state 1 (`0x83`) is the paired form. The 
 
 ---
 
-## Labeling Byte (SER)
+## Labelling Byte (SER)
 
 `SER` (the byte after `LEN` in `0x83`/`0x88` frames) is a packed bitfield encoding device class, USB protocol mode, and port number. Per CH9350 datasheet §4.3:
 
@@ -393,7 +393,7 @@ The "BIOS keyboard" wording comes straight from the datasheet (§3.3 et seq.) an
 
 - **State 2 — legacy / pre-boot.** BIOS keyboard + *relative* mouse. This is the right choice for BIOS setup, boot menus, recovery consoles, and UEFI CSM environments, where the boot mouse protocol only understands relative motion. States 3 and 4 will not enumerate in those environments because their absolute-mouse / HID-Digitizers descriptors fall outside the boot protocol.
 - **State 3 — modern OS, no handshake, abs mouse.** BIOS keyboard + absolute mouse. Useful when the descriptor-exchange handshake of state 0/1 isn't available (e.g. minimal embedded LC firmware) but absolute-cursor positioning is wanted. Most modern OSes (Linux, macOS, Windows) accept the abs-mouse interface.
-- **State 4 — Windows multi-monitor.** **The defining feature of state 4 is that the UC identifies on the target USB bus as a HID Digitizer** (the same device class as a graphics tablet / pen input), not as a regular mouse. That's the entire point of state 4's existence: the chip exposes a different USB device class so the host OS routes pointer reports through its digitizer/pen pipeline rather than its mouse pipeline. The HID Digitizers class itself is widely supported (Linux `hid-multitouch`, macOS, Android, iOS, Windows all parse the descriptors), but **how the OS routes those reports is implementation-dependent.** On Windows 7+, digitizer abs-coords map cleanly to the full virtual desktop spanning multiple monitors — solving the limitation that a plain abs-mouse only addresses the primary monitor. On Linux, macOS, and other targets, a digitizer report may land in a tablet/pen input pipeline rather than driving the system cursor, depending on the desktop environment and its input stack. The datasheet's terse §3.5 caveat — *"some systems do not support HID Digitizers devices"* — is best read as "OS routing of digitizer events to the cursor varies; verify on your target" rather than as a strict OS allowlist. State 3 (UC identifies as a regular HID Mouse with absolute coords) is the safer default for plain cursor-positioning KVM use.
+- **State 4 — HID Digitizer.** The defining feature of state 4 is that the UC identifies on the target USB bus as a HID Digitizer (the same device class as a graphics tablet / pen input), not as a regular mouse. The chip exposes a different USB device class so the host OS routes pointer reports through its digitizer/pen pipeline rather than its mouse pipeline. The HID Digitizers class itself is widely supported (Linux `hid-multitouch`, macOS, Android, iOS, Windows all parse the descriptors), but **how the OS routes those reports is implementation-dependent.** On Windows 7+, digitizer abs-coords map cleanly to the full virtual desktop spanning multiple monitors — solving the limitation that a plain abs-mouse only addresses the primary monitor. On Linux, macOS, and other targets, a digitizer report may land in a tablet/pen input pipeline rather than driving the system cursor, depending on the desktop environment and its input stack. The datasheet's §3.5 caveat — *"some systems do not support HID Digitizers devices"* — is best read as "OS routing of digitizer events to the cursor varies; verify on your target" rather than as a strict OS allowlist. State 3 (UC identifies as a regular HID Mouse with absolute coords) is the safer default for plain cursor-positioning KVM use.
 
 ### LC → UC fixed-length frames
 
@@ -468,7 +468,7 @@ The CH9350 V2.3 datasheet is broadly accurate but in several places contradicts 
 - **Observed:** the UC sends `0x12` keep-alives starting ~30 ms after the second `0x80 0xFF`, well before any `0x81` has been sent — and continues sending them with `00 00` PIDs until each `0x81` is processed. The LC does not transition to state 1 (CMD `0x83`) until the UC's `0x12` reflects **every** PID the LC has announced via `0x81`. This was proven by bidirectional capture: with two devices announced, the LC stayed in state 0 until both `P1` and `P2` were populated in the UC's keep-alive.
 - **Interpretation (USB HID):** this is the natural ordering rule for a composite HID device — INPUT reports for any interface cannot be safely forwarded until *all* configured interfaces have completed enumeration on the target host. The PID-ack gate is the LC's mechanism for waiting on that.
 
-### Labeling byte: "Unknown" protocol bits are valid
+### Labelling byte: "Unknown" protocol bits are valid
 
 - **Datasheet (§4.3):** documents bits 2,1 as `01 = HID, 10 = BIOS, 00 = Unknown, 11 = reserved`, implying only HID/BIOS are usable.
 - **Observed:** SER values `0x11` (kbd / Unknown / port 2) and `0x20` (mouse / Unknown / port 1) are routinely sent by a real LC for keyboards and mice whose USB descriptors lack a `Report ID` item, and the UC forwards them correctly. The "Unknown" classification is a normal operating mode, not an error condition.
