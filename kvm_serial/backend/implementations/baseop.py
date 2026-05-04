@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Type
 from serial import Serial
-from kvm_serial.utils.communication import DataComm
+from kvm_serial.utils.communication import DataComm, CH9329Comm
 
 
 class BaseOp(ABC):
@@ -13,15 +14,25 @@ class BaseOp(ABC):
     hid_serial_out: DataComm
     layout: str
 
-    def __init__(self, serial_port: Serial, layout: str = "en_GB"):
+    def __init__(
+        self,
+        serial_port: Serial,
+        layout: str = "en_GB",
+        comm_cls: Type[DataComm] | None = None,
+    ):
         """
-        Initialize the operation with the given serial port, and
-        establish DataComm class for ch9329 communication
+        Initialise the operation with the given serial port, and
+        instantiate the protocol implementation that will encapsulate
+        HID events for the target chip family.
+
         :param serial_port: The serial port to communicate with.
         :param layout: Keyboard layout to use (default: 'en_GB')
+        :param comm_cls: DataComm subclass to use (default: CH9329Comm)
         """
         self.serial_port = serial_port
-        self.hid_serial_out = DataComm(self.serial_port)
+        if comm_cls is None:
+            comm_cls = CH9329Comm
+        self.hid_serial_out = comm_cls(self.serial_port)
         self.layout = layout
 
     @abstractmethod

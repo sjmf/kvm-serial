@@ -34,7 +34,7 @@ class TestMouse:
             from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "DataComm") as mock_datacomm:
+            with patch.object(baseop_mod, "CH9329Comm") as mock_datacomm:
                 MouseListener(mock_serial)
                 mock_datacomm.assert_called_once_with(mock_serial)
 
@@ -96,7 +96,7 @@ class TestMouse:
             from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "DataComm") as mock_comm:
+            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
                 # Set up a MouseListener with known screen size
                 listener = MouseListener(mock_serial)
                 listener.op.hid_serial_out = mock_comm
@@ -155,7 +155,7 @@ class TestMouse:
             from kvm_serial.backend.mouse import MouseListener
             from kvm_serial.backend.implementations.mouseop import MouseButton
 
-            with patch.object(baseop_mod, "DataComm") as mock_comm:
+            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
                 listener = MouseListener(mock_serial)
 
                 listener.op.hid_serial_out = mock_comm
@@ -208,7 +208,7 @@ class TestMouse:
             from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "DataComm") as mock_comm:
+            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
                 listener = MouseListener(mock_serial)
                 listener.op.hid_serial_out = mock_comm
                 listener._width = 1920

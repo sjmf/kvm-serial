@@ -1,17 +1,20 @@
 import pytest
 import termios
 from unittest.mock import patch
-from kvm_serial.utils.communication import DataComm, list_serial_ports
+from kvm_serial.utils.communication import CH9329Comm, list_serial_ports
 
 from tests._utilities import MockSerial, mock_serial
 
 
-class TestDataComm:
-    """Test Suite for DataComm class"""
+class TestCH9329Comm:
+    """Test suite for CH9329Comm — verifies CH9329 wire-level packet framing.
+
+    The abstract DataComm base has no behaviour of its own to exercise here.
+    """
 
     @patch("serial.Serial", MockSerial)
     def test_init(self, mock_serial):
-        """Test initialization and basic operations of DataComm.
+        """Test initialization and basic operations of CH9329Comm.
 
         Tests:
         1. Proper initialization with mock serial port
@@ -27,7 +30,7 @@ class TestDataComm:
         mock_serial.is_open = True
         mock_serial.baudrate = 9600
 
-        dc = DataComm(mock_serial)
+        dc = CH9329Comm(mock_serial)
 
         assert dc.port == mock_serial
 
@@ -64,7 +67,7 @@ class TestDataComm:
         1. Sending a scancode that's too short returns False
         2. No write operation is performed on the serial port
         """
-        dc = DataComm(mock_serial)
+        dc = CH9329Comm(mock_serial)
         result = dc.send_scancode(bytes([0x0, 0x0]))  # Too short
         assert result is False
         mock_serial.write.assert_not_called()
@@ -78,10 +81,10 @@ class TestDataComm:
             packet_size: Size of the packet to test (1, 8, 100, or 255 bytes)
             mock_serial: Mock serial port fixture
 
-        Verify that DataComm can handle various packet sizes up to 255 bytes.
+        Verify that CH9329Comm can handle various packet sizes up to 255 bytes.
         Larger sizes result in OverflowError.
         """
-        dc = DataComm(mock_serial)
+        dc = CH9329Comm(mock_serial)
         data = b"x" * packet_size
 
         if packet_size < 256:
@@ -161,13 +164,13 @@ class TestDataComm:
     @patch("serial.Serial", MockSerial)
     def test_packet_format_error(self, mock_serial):
         """Test ValueError is correctly raised on L40 when called with a bad header"""
-        dc = DataComm(mock_serial)
+        dc = CH9329Comm(mock_serial)
 
         # Error with packet format
         char_to_send = bytes((0x0))
         with pytest.raises(ValueError) as exc_info:
             dc.send(char_to_send, head=char_to_send)
-            assert "DataComm packet header MUST have" in str(exc_info.value)
+            assert "CH9329 packet header MUST have" in str(exc_info.value)
 
     # TODO: fix to correctly use mock.
     @pytest.mark.skip("Broken: serial.Serial imported; fix to use mock.")

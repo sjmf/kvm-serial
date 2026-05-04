@@ -1,5 +1,6 @@
 import sys
 import logging
+from abc import ABC, abstractmethod
 from serial import Serial, SerialException
 from serial.tools import list_ports
 
@@ -10,16 +11,39 @@ except ImportError:
     termios = None
 
 
-class DataComm:
+class DataComm(ABC):
     """
-    DataComm class based on beijixiaohu/ch9329Comm module; simplified and commented
-    Original: https://github.com/beijixiaohu/CH9329_COMM/ / https://pypi.org/project/ch9329Comm/
+    Abstract base for protocol implementations that drive a UART-to-USB-HID
+    bridge chip from kvm-serial. Subclasses implement the wire framing for a
+    specific chip family (CH9329, CH9350L, ...).
+
+    Callers interact through the high-level methods below; concrete subclasses
+    handle packet construction and any chip-specific state (pairing handshake,
+    descriptor announce, working-state selection, etc.).
     """
 
     SCANCODE_LENGTH = 8
 
     def __init__(self, port: Serial):
         self.port = port
+
+    @abstractmethod
+    def send_scancode(self, scancode: bytes) -> bool:
+        """Send an 8-byte USB HID boot-protocol keyboard report."""
+
+    @abstractmethod
+    def release(self) -> bool:
+        """Send an empty (all keys released) keyboard report."""
+
+
+class CH9329Comm(DataComm):
+    """
+    CH9329 UART-to-USB-HID bridge. Frame format:
+        header(2B: 0x57 0xAB) + addr(1B) + cmd(1B) + len(1B) + data + checksum(1B)
+
+    Originally derived from beijixiaohu/ch9329Comm:
+        https://github.com/beijixiaohu/CH9329_COMM/
+    """
 
     def send(
         self,
@@ -29,19 +53,19 @@ class DataComm:
         cmd: bytes = b"\x02",
     ) -> bool:
         """
-        Convert input to data packet and send command over serial.
+        Build a CH9329 data packet and write it to the serial port.
 
         Args:
-            data: data packet to encapsulate and send
-            head: Packet header
-            addr: Address
-            cmd: Data command (0x02 = Keyboard; 0x04 = Absolute mouse; 0x05 = Relative mouse)
+            data: payload bytes to encapsulate and send
+            head: Packet header (2 bytes)
+            addr: address byte
+            cmd: Data command byte (0x02 = Keyboard; 0x04 = Absolute mouse; 0x05 = Relative mouse) Returns:
         Returns:
             True if successful, otherwise throws an exception
         """
         # Check inputs
         if len(head) != 2 or len(addr) != 1 or len(cmd) != 1:
-            raise ValueError("DataComm packet header MUST have: header 2b; addr 1b; cmd 1b")
+            raise ValueError("CH9329 packet header MUST have: header 2b; addr 1b; cmd 1b")
 
         length = len(data).to_bytes(1, "little")
 
@@ -64,7 +88,7 @@ class DataComm:
 
     def send_scancode(self, scancode: bytes) -> bool:
         """
-        Send function for use with scancodes
+        Send an 8-byte HID keyboard scancode.
         Does additional length checking and returns False if long
 
         Args:
@@ -79,7 +103,7 @@ class DataComm:
 
     def release(self):
         """
-        Release the button.
+        Sends the all-zeros scancode (release all keys).
 
         Return:
             bool: True if successful

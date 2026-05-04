@@ -20,7 +20,7 @@ class TestBaseOpImplementation:
         with (
             # I don't know why this makes test_mouse work, but at this point I'm too tired to care.
             patch.dict("sys.modules", sys_modules_patch),
-            patch("kvm_serial.utils.communication.DataComm") as mock_datacomm,
+            patch("kvm_serial.backend.implementations.baseop.CH9329Comm") as mock_datacomm,
         ):
             from kvm_serial.backend.implementations.baseop import BaseOp
 
