@@ -71,84 +71,29 @@ class TestMouse:
 
     def test_on_move(self, mock_serial, sys_modules_patch):
         """
-        Test MouseListener.on_move sends the correct data to comm.send and returns True.
-        Mocks:
-            - DataComm: To track send calls
-        Asserts:
-            - comm.send is called with the expected data and cmd
-            - on_move returns True
+        Test MouseListener.on_move forwards positional events to
+        send_mouse_absolute with the listener's screen dimensions and returns
+        True. Wire-level scaling and negative-coordinate wrapping live in
+        CH9329Comm — verified in tests/utils/test_communication.py.
         """
-
-        # Calculate expected dx, dy in a helper function
-        def calculate_expected_data(x, y, width, height):
-            dx = int((4096 * x) // width)
-            dy = int((4096 * y) // height)
-            if dx < 0:
-                dx = abs(4096 + dx)
-            if dy < 0:
-                dy = abs(4096 + dy)
-            expected_data = bytearray(b"\x02\x00")
-            expected_data += dx.to_bytes(2, "little")
-            expected_data += dy.to_bytes(2, "little")
-            return expected_data[:7] if len(expected_data) > 7 else expected_data.ljust(7, b"\x00")
-
         with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
             with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
-                # Set up a MouseListener with known screen size
                 listener = MouseListener(mock_serial)
                 listener.op.hid_serial_out = mock_comm
                 listener._width = 1920
                 listener._height = 1080
 
-                # Case 1: Center of the screen (positive dx/dy)
-                x, y = 960, 540
-                result = listener.on_move(x, y)
-                expected_data = calculate_expected_data(x, y, listener._width, listener._height)
-                mock_comm.send.assert_called_once_with(expected_data, cmd=b"\x04")
+                result = listener.on_move(960, 540)
+                mock_comm.send_mouse_absolute.assert_called_once_with(0, 960, 540, 1920, 1080)
                 assert result is True
-                mock_comm.send.reset_mock()
-
-                # Case 2: Negative dx (monitor to the left)
-                x_neg, y_neg = -100, 540
-                result_neg = listener.on_move(x_neg, y_neg)
-                expected_data_neg = calculate_expected_data(
-                    x_neg, y_neg, listener._width, listener._height
-                )
-                mock_comm.send.assert_called_once_with(expected_data_neg, cmd=b"\x04")
-                assert result_neg is True
-                mock_comm.send.reset_mock()
-
-                # Case 3: Negative dy (monitor above)
-                x_neg2, y_neg2 = 960, -100
-                result_neg2 = listener.on_move(x_neg2, y_neg2)
-                expected_data_neg2 = calculate_expected_data(
-                    x_neg2, y_neg2, listener._width, listener._height
-                )
-                mock_comm.send.assert_called_once_with(expected_data_neg2, cmd=b"\x04")
-                assert result_neg2 is True
-                mock_comm.send.reset_mock()
-
-                # Case 4: Both dx and dy negative (monitor above and left)
-                x_neg3, y_neg3 = -100, -100
-                result_neg3 = listener.on_move(x_neg3, y_neg3)
-                expected_data_neg3 = calculate_expected_data(
-                    x_neg3, y_neg3, listener._width, listener._height
-                )
-                mock_comm.send.assert_called_once_with(expected_data_neg3, cmd=b"\x04")
-                assert result_neg3 is True
-                mock_comm.send.reset_mock()
 
     def test_on_click(self, mock_serial, sys_modules_patch):
         """
-        Test MouseListener.on_click sends correct data for button press/release and returns True.
-        Mocks:
-            - DataComm: To track send calls
-        Asserts:
-            - comm.send is called with expected data and cmd for press and release
-            - on_click returns True
+        Test MouseListener.on_click forwards press/release events to
+        send_mouse_relative with the right button mask and zero motion.
         """
         with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations import baseop as baseop_mod
@@ -157,52 +102,35 @@ class TestMouse:
 
             with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
                 listener = MouseListener(mock_serial)
-
                 listener.op.hid_serial_out = mock_comm
                 listener._width = 1920
                 listener._height = 1080
 
-                # Mock button values
                 left_button = MagicMock()
                 right_button = MagicMock()
-                # Patch control_chars to accept our mock buttons
                 listener.pynput_button_mapping = {  # type: ignore
                     left_button: MouseButton.LEFT,
                     right_button: MouseButton.RIGHT,
                 }
-                # Test left button press
-                result_press = listener.on_click(100, 200, left_button, True)
-                expected_data_press = bytearray(b"\x01\x01\x00\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_press, cmd=b"\x05")
-                assert result_press is True
-                mock_comm.send.reset_mock()
-                # Test left button release
-                result_release = listener.on_click(100, 200, left_button, False)
-                expected_data_release = bytearray(b"\x01\x00\x00\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_release, cmd=b"\x05")
-                assert result_release is True
-                mock_comm.send.reset_mock()
-                # Test right button press
-                result_press_r = listener.on_click(100, 200, right_button, True)
-                expected_data_press_r = bytearray(b"\x01\x02\x00\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_press_r, cmd=b"\x05")
-                assert result_press_r is True
-                mock_comm.send.reset_mock()
-                # Test right button release
-                result_release_r = listener.on_click(100, 200, right_button, False)
-                expected_data_release_r = bytearray(b"\x01\x00\x00\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_release_r, cmd=b"\x05")
-                assert result_release_r is True
-                mock_comm.send.reset_mock()
+
+                # (button, down, expected_button_byte)
+                cases = [
+                    (left_button, True, 0x01),
+                    (left_button, False, 0x00),
+                    (right_button, True, 0x02),
+                    (right_button, False, 0x00),
+                ]
+                for button, down, expected_byte in cases:
+                    result = listener.on_click(100, 200, button, down)
+                    mock_comm.send_mouse_relative.assert_called_once_with(expected_byte, 0, 0, 0)
+                    assert result is True
+                    mock_comm.send_mouse_relative.reset_mock()
 
     def test_on_scroll(self, mock_serial, sys_modules_patch):
         """
-        Test MouseListener.on_scroll sends correct data for scroll events and returns True.
-        Mocks:
-            - DataComm: To track send calls
-        Asserts:
-            - comm.send is called with expected data and cmd for scroll up/down/left/right
-            - on_scroll returns True
+        Test MouseListener.on_scroll forwards vertical scroll deltas as the
+        wheel argument to send_mouse_relative; horizontal dx is dropped
+        (CH9329's relative-mouse frame has no horizontal wheel axis).
         """
         with patch.dict("sys.modules", sys_modules_patch):
             from kvm_serial.backend.implementations import baseop as baseop_mod
@@ -214,30 +142,18 @@ class TestMouse:
                 listener._width = 1920
                 listener._height = 1080
 
-                # Test scroll up
-                result_up = listener.on_scroll(100, 200, 0, 1)
-                expected_data_up = bytearray(b"\x01\x00\x00\x00\x01")
-                mock_comm.send.assert_called_once_with(expected_data_up, cmd=b"\x05")
-                assert result_up is True
-                mock_comm.send.reset_mock()
-                # Test scroll down
-                result_down = listener.on_scroll(100, 200, 0, -1)
-                expected_data_down = bytearray(b"\x01\x00\x00\xff\xff")
-                mock_comm.send.assert_called_once_with(expected_data_down, cmd=b"\x05")
-                assert result_down is True
-                mock_comm.send.reset_mock()
-                # Test scroll right
-                result_right = listener.on_scroll(100, 200, 1, 0)
-                expected_data_right = bytearray(b"\x01\x00\x01\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_right, cmd=b"\x05")
-                assert result_right is True
-                mock_comm.send.reset_mock()
-                # Test scroll left
-                result_left = listener.on_scroll(100, 200, -1, 0)
-                expected_data_left = bytearray(b"\x01\xff\xff\x00\x00")
-                mock_comm.send.assert_called_once_with(expected_data_left, cmd=b"\x05")
-                assert result_left is True
-                mock_comm.send.reset_mock()
+                # (dx, dy, expected_wheel) — dx is intentionally discarded.
+                cases = [
+                    (0, 1, 1),
+                    (0, -1, -1),
+                    (1, 0, 0),
+                    (-1, 0, 0),
+                ]
+                for dx, dy, expected_wheel in cases:
+                    result = listener.on_scroll(100, 200, dx, dy)
+                    mock_comm.send_mouse_relative.assert_called_once_with(0, 0, 0, expected_wheel)
+                    assert result is True
+                    mock_comm.send_mouse_relative.reset_mock()
 
 
 # ---

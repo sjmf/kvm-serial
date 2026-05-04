@@ -35,6 +35,25 @@ class DataComm(ABC):
     def release(self) -> bool:
         """Send an empty (all keys released) keyboard report."""
 
+    @abstractmethod
+    def send_mouse_absolute(
+        self, buttons: int, x: int, y: int, width: int, height: int, wheel: int = 0
+    ) -> bool:
+        """Send an absolute-positioning mouse report.
+
+        x, y are in source pixel coordinates; width, height bound the source
+        surface so subclasses can scale into the chip's native coordinate
+        space (CH9329: 0..4095; CH9350 state 3/4: 0..0xFFFF).
+        """
+
+    @abstractmethod
+    def send_mouse_relative(self, buttons: int, dx: int, dy: int, wheel: int = 0) -> bool:
+        """Send a relative-motion mouse report.
+
+        dx, dy, wheel are signed 8-bit deltas (-127..+127); callers pass 0 for
+        unused fields (e.g. button-only events or pure scroll events).
+        """
+
 
 class CH9329Comm(DataComm):
     """
@@ -109,6 +128,52 @@ class CH9329Comm(DataComm):
             bool: True if successful
         """
         return self.send(b"\x00" * self.SCANCODE_LENGTH)
+
+    def send_mouse_absolute(
+        self, buttons: int, x: int, y: int, width: int, height: int, wheel: int = 0
+    ) -> bool:
+        """
+        Build and send a CH9329 absolute mouse report (cmd=0x04).
+        Wire payload (7 bytes): direction(0x02) + buttons + xL xH + yL yH + wheel.
+        Source x/y are scaled into the chip's 12-bit absolute space (0..4095).
+        """
+        # Scale source coordinates into CH9329's 12-bit absolute space.
+        dx = int((4096 * x) // max(1, width))
+        dy = int((4096 * y) // max(1, height))
+
+        # Wrap negatives (e.g. multi-monitor setups where x or y can be < 0).
+        if dx < 0:
+            dx = abs(4096 + dx)
+        if dy < 0:
+            dy = abs(4096 + dy)
+
+        data = bytearray(b"\x02")  # absolute-coordinate marker
+        data += bytes([buttons & 0xFF])
+
+        data += dx.to_bytes(2, "little")
+        data += dy.to_bytes(2, "little")
+
+        data += _signed_byte(wheel)
+        return self.send(bytes(data), cmd=b"\x04")
+
+    def send_mouse_relative(self, buttons: int, dx: int, dy: int, wheel: int = 0) -> bool:
+        """
+        Build and send a CH9329 relative mouse report (cmd=0x05).
+        Wire payload (5 bytes): direction(0x01) + buttons + dx + dy + wheel.
+        dx, dy, wheel are 1-byte signed values (-127..+127).
+        """
+        data = bytearray(b"\x01")  # relative-coordinate marker
+        data += bytes([buttons & 0xFF])
+        data += _signed_byte(dx)
+        data += _signed_byte(dy)
+        data += _signed_byte(wheel)
+        return self.send(bytes(data), cmd=b"\x05")
+
+
+def _signed_byte(value: int) -> bytes:
+    """Clamp an int to the signed 8-bit range and return its 1-byte encoding."""
+    clamped = max(-127, min(127, value))
+    return clamped.to_bytes(1, "big", signed=True)
 
 
 def list_serial_ports():

@@ -94,6 +94,49 @@ class TestCH9329Comm:
             with pytest.raises(OverflowError):
                 dc.send(data)
 
+    @patch("serial.Serial", MockSerial)
+    def test_send_mouse_absolute(self, mock_serial):
+        """Verify the wire format for absolute mouse reports (cmd=0x04).
+
+        Payload is 7 bytes: marker(0x02) + buttons + xL xH + yL yH + wheel.
+        Source x/y are scaled into the chip's 12-bit absolute space (0..4095);
+        negative source coordinates (multi-monitor setups) wrap via 4096+dx.
+        """
+        dc = CH9329Comm(mock_serial)
+
+        # All four cases use a 1920x1080 source surface. Scaling: dx maps to
+        # 0x800 at x=960, wraps to 0x0F2A at x=-100. dy maps to 0x800 at y=540,
+        # wraps to 0x0E84 at y=-100.
+        cases = [
+            # (x, y, expected wire bytes)
+            (960, 540, b"\x57\xab\x00\x04\x07\x02\x00\x00\x08\x00\x08\x00\x1f"),
+            (-100, 540, b"\x57\xab\x00\x04\x07\x02\x00\x2a\x0f\x00\x08\x00\x50"),
+            (960, -100, b"\x57\xab\x00\x04\x07\x02\x00\x00\x08\x84\x0e\x00\xa9"),
+            (-100, -100, b"\x57\xab\x00\x04\x07\x02\x00\x2a\x0f\x84\x0e\x00\xda"),
+        ]
+        for x, y, expected in cases:
+            dc.send_mouse_absolute(0, x, y, 1920, 1080)
+            mock_serial.write.assert_called_once_with(expected)
+            mock_serial.write.reset_mock()
+
+    @patch("serial.Serial", MockSerial)
+    def test_send_mouse_relative(self, mock_serial):
+        """Verify the wire format for relative mouse reports (cmd=0x05).
+
+        Payload is 5 bytes: marker(0x01) + buttons + dx + dy + wheel,
+        with dx/dy/wheel as 1-byte signed values (-127..+127).
+        """
+        dc = CH9329Comm(mock_serial)
+
+        # Left button down, +5 right, -3 up, wheel +1.
+        dc.send_mouse_relative(0x01, 5, -3, 1)
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x00\x05\x05\x01\x01\x05\xfd\x01\x11")
+        mock_serial.write.reset_mock()
+
+        # Out-of-range deltas clamp to the signed-byte limits (±127), not wrap.
+        dc.send_mouse_relative(0, 200, -200, 200)
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x00\x05\x05\x01\x00\x7f\x81\x7f\x8c")
+
     # TODO: fix to correctly use mock.
     @pytest.mark.skip("Broken: serial.Serial imported; fix to use mock.")
     @patch("kvm_serial.utils.communication.glob.glob")
