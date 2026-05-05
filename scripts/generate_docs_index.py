@@ -1,0 +1,32 @@
+from pathlib import Path
+import re
+
+ROOT = Path(__file__).resolve().parents[1]
+README = ROOT / "README.md"
+DOCS_INDEX = ROOT / "docs" / "index.md"
+URL = "https://github.com/sjmf/kvm-serial"
+
+
+def main() -> None:
+    content = README.read_text(encoding="utf-8")
+
+    # Strip docs/ prefix from all markdown link paths: (docs/X) -> (X)
+    content = re.sub(r"\(docs/([^\)]+)\)", r"(\1)", content)
+    # Also handle ./docs/ paths: (./docs/X) -> (X)
+    content = re.sub(r"\(\./docs/([^\)]+)\)", r"(\1)", content)
+
+    # External root-level docs need GitHub URLs
+    content = content.replace("(LICENSE.md)", f"({URL}/blob/main/LICENSE.md)")
+    content = content.replace("(CONTRIBUTING.md)", f"({URL}/blob/main/CONTRIBUTING.md)")
+
+    # Asset URLs need to be absolute for docs site
+    content = content.replace(
+        'src="assets/icon.png"',
+        'src="https://raw.githubusercontent.com/sjmf/kvm-serial/main/assets/icon.png"',
+    )
+
+    DOCS_INDEX.write_text(content, encoding="utf-8")
+
+
+if __name__ == "__main__":
+    main()

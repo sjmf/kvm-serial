@@ -24,6 +24,7 @@ theme:
 nav:
   - Home: index.md
   - Installation: INSTALLATION.md
+  - Supported Devices: SUPPORTED_DEVICES.md
   - Keyboard Modes: MODES.md
   - Building: BUILD.md
   - Testing: TESTING.md

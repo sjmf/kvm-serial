@@ -23,6 +23,7 @@ uv.lock
 
 # MkDocs build output
 site/
+docs/index.md
 
 # Icon generation intermediate files
 assets/icon.iconset/
