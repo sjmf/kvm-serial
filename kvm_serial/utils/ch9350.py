@@ -45,16 +45,40 @@ HEARTBEAT_FRAME = HEADER + bytes([0x82, 0xA3])
 # descriptor has been processed; the LC waits for that ack before
 # transitioning state 0 -> state 1.
 DEFAULT_MOUSE_DESC = bytes.fromhex(
-    "05010902a10185010901a1000509190129031500250175019503810275059501"
-    "810105010930093109381581257f750895038106c005ff09021500250175019501"
-    "b12275079501b101c0"
+    # Relative mouse application
+    "05010902a101"  # Usage Page (Generic Desktop), Usage (Mouse), Collection (Application)
+    "8501"  # Report ID 1
+    "0901a100"  # Usage (Pointer), Collection (Physical)
+    "0509190129031500250175019503810275059501"  # 5 buttons + X/Y relative + wheel
+    "810105010930093109381581257f750895038106c0"  # Extended features
+    "05ff09021500250175019501b12275079501b101c0"  # Vendor-specific
+)
+COMPOSITE_MOUSE_DESC = bytes.fromhex(
+    # A mouse presenting both relative and absolute reports
+    # ---- Report ID 1: Relative mouse ----
+    "05010902A1010901A100"  # Generic Desktop / Mouse / Application
+    "8501"  # Report ID 1
+    "0509190129031500250175019503810275059501810305010930093115812"  # Buttons + relative X/Y
+    "57F750895028106C0C0"
+    # ---- Report ID 2: Absolute mouse ----
+    "05010902A1010901A100"  # Generic Desktop / Mouse / Application
+    "8502"  # Report ID 2
+    "050919012903150025017501950381027505950181030501093009311500"  # Buttons
+    "26FF7F751095028102C0C0"  # Absolute X/Y (16-bit, 0-4095)
 )
 DEFAULT_MOUSE_PID = bytes.fromhex("4000")
 DEFAULT_KBD_DESC = bytes.fromhex(
-    "05010906a1018501050719e029e7150025017501950881029501750881019503"
-    "750105081901290391029505750191019506750826ff000507190029918100c0"
-    "05010980a10185021981298315002501950375018102950175058101c0050c09"
-    "01a10185031500250109e909ea09e209cd19b529b87501950881020a8a010a21"
+    # ---- Keyboard application ----
+    "05010906a101"  # Generic Desktop / Keyboard
+    "8501050719e029e7150025017501950881029501750881019503750105081901"  # Report ID 1: modifiers + keycodes
+    "2903910295017505910195067508150026ff000507190029918100c0"
+    # ---- System Control application ----
+    "05010980a101"  # Generic Desktop / System Control
+    "850219812983150025019503750181029501750581"
+    "01c0"
+    # ---- Consumer Control application ----
+    "050c0901a101"  # Consumer / Consumer Control
+    "85031500250109e909ea09e209cd19b529b87501950881020a8a010a21"
     "020a2a021a23022a270281020a83010a96010a92010a9e010a94010a060209b2"
     "09b48102c0"
 )
@@ -186,8 +210,10 @@ class CH9350Comm(DataComm):
     # 0x83/0x88 payload.
     KB_SER = 0x13  # keyboard / HID / port 2
     KB_RID = 0x01  # 8-byte boot keyboard report follows
-    MOU_SER = 0x22  # mouse / HID / port 1
-    MOU_RID = 0x01  # 4-byte relative mouse report follows
+    MOU_SER = 0x22  # mouse / HID / port 1 (relative)
+    MOU_RID = 0x01  # relative mouse report ID
+    MOU_ABS_SER = 0x23  # mouse / HID / port 2 (absolute, composite)
+    MOU_ABS_RID = 0x02  # absolute mouse report ID (use composite descriptor!!)
 
     # How long to wait between 0x81 retransmits while a PID remains un-acked.
     _ANNOUNCE_RETRY_INTERVAL = 2.0
@@ -361,8 +387,35 @@ class CH9350Comm(DataComm):
             frame = HEADER + bytes([0x02, buttons & 0xFF, dx_b, dy_b, wh_b])
         return self._send_locked(frame)
 
+    def _send_state01_absolute_frame(self, buttons: int, x: int, y: int, wheel: int) -> bool:
+        """
+        State-0/1 absolute mouse frame (CH9329):
+            HEADER + cmd + LEN + SER + RID + [btn xL xH yL yH wheel] + CTR + CTRSUM
+        cmd is 0x88 (state 0) or 0x83 (state 1). LEN = 0x0A (10 bytes).
+        """
+        cmd = 0x83 if self.state == self.STATE_1 else 0x88
+        wh_b = max(-127, min(127, wheel)) & 0xFF
+        data = bytes(
+            [
+                self.MOU_ABS_RID,
+                buttons & 0xFF,
+                x & 0xFF,
+                (x >> 8) & 0xFF,
+                y & 0xFF,
+                (y >> 8) & 0xFF,
+                wh_b,
+            ]
+        )
+        ctr = self._mou_counter & 0xFF
+        self._mou_counter += 1
+        ctr_sum = (ctr + sum(data)) & 0xFF
+        plen = 1 + len(data) + 2  # SER + data + CTR + CTRSUM
+        return self._send_locked(
+            HEADER + bytes([cmd, plen, self.MOU_ABS_SER]) + data + bytes([ctr, ctr_sum])
+        )
+
     def _send_absolute_frame(self, buttons: int, x: int, y: int, wheel: int) -> bool:
-        # x and y are unsigned 16-bit; the leading 0x01 after the cmd byte is
+        # States 3/4: x and y are unsigned 16-bit; the leading 0x01 after the cmd byte is
         # a fixed report-ID prefix matching empirical captures from real LCs.
         wh_b = max(-127, min(127, wheel)) & 0xFF
         frame = HEADER + bytes(

@@ -41,10 +41,14 @@ def _build_comm_cls(args):
     Defaults to CH9329Comm (the class itself, which is callable).
     """
     if args.ch9350:
-        from kvm_serial.utils.ch9350 import CH9350Comm
+        from kvm_serial.utils.ch9350 import CH9350Comm, COMPOSITE_MOUSE_DESC
 
         state = args.ch9350_state
-        return lambda port: CH9350Comm(port, state=state)
+        return lambda port: CH9350Comm(
+            port,
+            state=state,
+            mouse_desc=COMPOSITE_MOUSE_DESC,
+        )
     from kvm_serial.utils.ch9329 import CH9329Comm
 
     return CH9329Comm
