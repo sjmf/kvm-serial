@@ -171,6 +171,8 @@ class TestKVMSettingsPersistence(
             "verbose": "True",
             "hide_mouse": "True",
             "keyboard_layout": "en_GB",
+            "protocol": "ch9329",
+            "ch9350_state": "2",
         }
 
         with (
@@ -426,12 +428,86 @@ class TestKVMSettingsPersistence(
         app.baud_rate_menu = MagicMock()
         app.video_device_menu = MagicMock()
         app.keyboard_layout_menu = MagicMock()
+        app.protocol_menu = MagicMock()
 
         # Default empty actions
         app.serial_port_menu.actions.return_value = []
         app.baud_rate_menu.actions.return_value = []
         app.video_device_menu.actions.return_value = []
         app.keyboard_layout_menu.actions.return_value = []
+        app.protocol_menu.actions.return_value = []
+
+    def test_build_comm_cls_default_is_ch9329(self):
+        """_build_comm_cls returns CH9329Comm when protocol_var is 'ch9329'."""
+        from kvm_serial.utils.ch9329 import CH9329Comm
+
+        app = self.create_kvm_app()
+        app.protocol_var = "ch9329"
+        assert app._build_comm_cls() is CH9329Comm
+
+    def test_build_comm_cls_ch9350_binds_state(self):
+        """_build_comm_cls returns a callable that constructs CH9350Comm
+        with the chosen state."""
+        from kvm_serial.utils.ch9350 import CH9350Comm
+        from tests._utilities import MockSerial
+
+        app = self.create_kvm_app()
+        app.protocol_var = "ch9350"
+        app.ch9350_state_var = 3
+
+        cls = app._build_comm_cls()
+        comm = cls(MockSerial())
+        assert isinstance(comm, CH9350Comm)
+        assert comm.state == 3
+
+    def test_load_protocol_default_is_ch9329(self):
+        """Settings without a protocol entry default to CH9329."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        settings = self.create_test_settings({})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            self.assertEqual(app.protocol_var, "ch9329")
+
+    def test_load_protocol_ch9350_state(self):
+        """Saved CH9350 protocol with state restores both fields."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        settings = self.create_test_settings({"protocol": "ch9350", "ch9350_state": "3"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            self.assertEqual(app.protocol_var, "ch9350")
+            self.assertEqual(app.ch9350_state_var, 3)
+
+    def test_load_protocol_invalid_state_falls_back(self):
+        """An out-of-range ch9350_state falls back to CH9329 with a warning."""
+        app = self.create_kvm_app()
+        app.baud_rates = self.get_default_baud_rates()
+        self._setup_mock_menus(app)
+
+        settings = self.create_test_settings({"protocol": "ch9350", "ch9350_state": "99"})
+
+        with (
+            patch("kvm_serial.kvm.settings_util.load_settings", return_value=settings),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial"),
+        ):
+            app._load_settings("test_config.ini")
+
+            self.assertEqual(app.protocol_var, "ch9329")
 
     def test_load_keyboard_layout_from_settings(self):
         """Test loading keyboard layout from saved settings."""

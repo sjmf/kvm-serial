@@ -147,6 +147,11 @@ class KVMQtGui(QMainWindow):
     video_device_var: str = "Loading cameras..."
     keyboard_layout_var: str = "en_GB"
     resolution_var: str = ""  # "WIDTHxHEIGHT", empty means auto (from camera enumeration)
+    # Protocol selection: "ch9329" (default) or "ch9350" with a working state
+    # in {0, 2, 3, 4}. State 0 enters paired mode (descriptor handshake);
+    # 2/3/4 are the dipswitch-fixed simple modes.
+    protocol_var: str = "ch9329"
+    ch9350_state_var: int = 2
 
     window_var: bool = False
     show_status_var: bool = True
@@ -166,6 +171,9 @@ class KVMQtGui(QMainWindow):
     serial_port: Serial | None = None
     keyboard_op: QtOp | None = None
     mouse_op: MouseOp | None = None
+    # The DataCommManager owning the active comm + its lifecycle. Reset
+    # alongside the serial port whenever __init_serial reopens the link.
+    comm_manager: object | None = None
 
     # Dimensions
     window_default_width: int = 1280
@@ -285,12 +293,13 @@ class KVMQtGui(QMainWindow):
         options_menu = menubar.addMenu("Options")
         options_menu = cast(QMenu, options_menu)  # hush PyLance
 
-        # Serial Port, Baud, Video, Resolution, and Keyboard Layout submenus
+        # Serial Port, Baud, Video, Resolution, Keyboard Layout, Protocol submenus
         self.serial_port_menu = options_menu.addMenu("Serial Port")
         self.baud_rate_menu = options_menu.addMenu("Baud Rate")
         self.video_device_menu = options_menu.addMenu("Video Device")
         self.resolution_menu = options_menu.addMenu("Resolution")
         self.keyboard_layout_menu = options_menu.addMenu("Keyboard Layout")
+        self.protocol_menu = options_menu.addMenu("Protocol")
 
         options_menu.addSeparator()
 
@@ -469,6 +478,7 @@ class KVMQtGui(QMainWindow):
         self._populate_baud_rates()
         self._populate_video_devices()
         self._populate_keyboard_layouts()
+        self._populate_protocol_menu()
         QTimer.singleShot(10, lambda: self._load_settings(self.CONFIG_FILE))
 
     def _update_status_bar(self):
@@ -596,6 +606,29 @@ class KVMQtGui(QMainWindow):
             self.keyboard_layout_var = self._detect_system_keyboard_layout()
             logging.info(f"Auto-detected keyboard layout: {self.keyboard_layout_var}")
 
+        # Load protocol selection (default CH9329 if missing or invalid)
+        saved_protocol = kvm.get("protocol", "ch9329")
+        if saved_protocol == "ch9350":
+            try:
+                saved_state = int(kvm.get("ch9350_state", "2"))
+            except ValueError:
+                saved_state = 2
+            if saved_state in (0, 2, 3, 4):
+                self.protocol_var = "ch9350"
+                self.ch9350_state_var = saved_state
+            else:
+                logging.warning(
+                    f"Invalid ch9350_state in settings: {kvm.get('ch9350_state')}; "
+                    "falling back to CH9329"
+                )
+                self.protocol_var = "ch9329"
+        else:
+            self.protocol_var = "ch9329"
+        if hasattr(self, "protocol_menu") and self.protocol_menu is not None:
+            target = self._protocol_label(self.protocol_var, self.ch9350_state_var)
+            for action in self.protocol_menu.actions():
+                action.setChecked(action.text() == target)
+
         # Apply mouse cursor state if needed
         if hasattr(self, "video_view"):
             if self.hide_mouse_var:
@@ -689,6 +722,8 @@ class KVMQtGui(QMainWindow):
             "verbose": str(self.verbose_var),
             "hide_mouse": str(self.hide_mouse_var),
             "keyboard_layout": str(self.keyboard_layout_var),
+            "protocol": self.protocol_var,
+            "ch9350_state": str(self.ch9350_state_var),
         }
         settings_util.save_settings(self.CONFIG_FILE, "KVM", settings_dict)
         logging.info("Settings saved to INI file.")
@@ -814,6 +849,58 @@ class KVMQtGui(QMainWindow):
             if layout == self.keyboard_layout_var:
                 action.setChecked(True)
 
+    # The full set of options the Protocol submenu offers. Each entry is
+    # (label, protocol, ch9350_state). State is unused for CH9329 but kept
+    # here for menu uniformity.
+    _PROTOCOL_OPTIONS = [
+        ("CH9329", "ch9329", 0),
+        ("CH9350L (state 0/1, paired)", "ch9350", 0),
+        ("CH9350L (state 2, BIOS)", "ch9350", 2),
+        ("CH9350L (state 3, abs mouse)", "ch9350", 3),
+        ("CH9350L (state 4, Digitizers)", "ch9350", 4),
+    ]
+
+    def _protocol_label(self, protocol: str, state: int) -> str:
+        """Return the menu label corresponding to (protocol, state)."""
+        for label, p, s in self._PROTOCOL_OPTIONS:
+            if p == protocol and (p == "ch9329" or s == state):
+                return label
+        return self._PROTOCOL_OPTIONS[0][0]  # fall back to CH9329
+
+    def _populate_protocol_menu(self):
+        """
+        Populate the Protocol submenu with checkable items for CH9329 and
+        the four CH9350L working modes.
+        """
+        if self.protocol_menu is None:
+            raise TypeError("Initialise protocol_menu before calling _populate_protocol_menu()")
+
+        self.protocol_menu.clear()
+        current = self._protocol_label(self.protocol_var, self.ch9350_state_var)
+        for label, protocol, state in self._PROTOCOL_OPTIONS:
+            action = QAction(label, self)
+            action.setCheckable(True)
+            action.triggered.connect(
+                lambda checked, p=protocol, s=state: self._on_protocol_selected(p, s)
+            )
+            self.protocol_menu.addAction(action)
+            if label == current:
+                action.setChecked(True)
+
+    def _on_protocol_selected(self, protocol: str, state: int):
+        """Handle selection of a protocol/state from the Protocol submenu."""
+        if self.protocol_menu is None:
+            raise TypeError("Initialise protocol_menu before calling _on_protocol_selected()")
+
+        target_label = self._protocol_label(protocol, state)
+        for action in self.protocol_menu.actions():
+            action.setChecked(action.text() == target_label)
+
+        self.protocol_var = protocol
+        self.ch9350_state_var = state
+        logging.info(f"Selected protocol: {target_label}")
+        self.__init_serial()
+
     def _on_keyboard_layout_selected(self, layout):
         """
         Handle selection of a keyboard layout.
@@ -831,11 +918,41 @@ class KVMQtGui(QMainWindow):
         logging.info(f"Selected keyboard layout: {layout}")
         self.__init_serial()
 
+    def _build_comm_cls(self):
+        """
+        Resolve the active protocol/state into a DataComm-producing callable
+        for DataCommManager to instantiate. CH9329Comm is callable directly;
+        CH9350Comm needs the chosen state bound via a lambda.
+        """
+        if self.protocol_var == "ch9350":
+            from kvm_serial.utils.ch9350 import CH9350Comm
+
+            state = self.ch9350_state_var
+            return lambda port: CH9350Comm(port, state=state)
+
+        from kvm_serial.utils.ch9329 import CH9329Comm
+
+        return CH9329Comm
+
+    def _stop_comm_manager(self):
+        """Stop and discard the active DataCommManager, if any."""
+        from kvm_serial.backend.manager import DataCommManager
+
+        if self.comm_manager is not None:
+            try:
+                self.comm_manager.stop()  # type: ignore[attr-defined]
+            except Exception as e:
+                logging.error(f"Error stopping DataCommManager: {e}")
+            self.comm_manager = None
+        DataCommManager.reset()
+
     def __init_serial(self):
         """
-        Initialise or reinitialise serial port and keyboard/mouse operations.
+        Initialise or reinitialise serial port, DataCommManager, and the
+        keyboard/mouse operations bound to the shared comm.
         """
-        # Close existing serial connection if open
+        # Stop the active manager (if any) before closing the underlying port.
+        self._stop_comm_manager()
         self._close_serial_port()
 
         # Clear existing operations
@@ -856,6 +973,20 @@ class KVMQtGui(QMainWindow):
                     f"Opened serial port {self.serial_port_var} at {self.baud_rate_var} baud"
                 )
 
+                # Construct the DataCommManager for this port. Ops fetch the
+                # shared comm via DataCommManager.get(); the manager owns
+                # comm lifecycle (start/stop) so individual ops don't.
+                from kvm_serial.backend.manager import DataCommManager
+
+                self.comm_manager = DataCommManager(
+                    self.serial_port, comm_cls=self._build_comm_cls()
+                )
+                self.comm_manager.start()
+                logging.info(
+                    f"DataCommManager started: protocol={self.protocol_var}"
+                    + (f" (state {self.ch9350_state_var})" if self.protocol_var == "ch9350" else "")
+                )
+
                 # Initialise keyboard and mouse operations
                 self.keyboard_op = QtOp(self.serial_port, layout=self.keyboard_layout_var)
                 self.mouse_op = MouseOp(self.serial_port)
@@ -867,6 +998,7 @@ class KVMQtGui(QMainWindow):
                     self, "Serial Error", f"Failed to open serial port {self.serial_port_var}:\n{e}"
                 )
                 # Reset to None if initialisation failed
+                self._stop_comm_manager()
                 self.serial_port = None
                 self.keyboard_op = None
                 self.mouse_op = None
@@ -1669,6 +1801,10 @@ class KVMQtGui(QMainWindow):
             except Exception as e:
                 logging.debug(f"Error stopping QCamera on close: {e}")
             self.qcamera = None
+
+        # Stop the DataCommManager (background threads, descriptor handshake
+        # for CH9350 state 0/1) before closing the underlying port.
+        self._stop_comm_manager()
 
         # Close serial port if open
         self._close_serial_port()
