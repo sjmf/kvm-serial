@@ -1,4 +1,4 @@
-# Serial KVM Controller (CH9329)
+# Serial KVM Controller (CH9329 and CH9350L)
 
 [![PyPI](https://img.shields.io/pypi/v/kvm-serial)](https://pypi.org/project/kvm-serial/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE.md)
@@ -6,17 +6,17 @@
 [![Run Tests](https://img.shields.io/github/actions/workflow/status/sjmf/kvm-serial/test.yml?label=Unit%20Tests)](https://github.com/sjmf/kvm-serial/actions/workflows/test.yml)
 [![codecov](https://img.shields.io/codecov/c/gh/sjmf/kvm-serial)](https://codecov.io/gh/sjmf/kvm-serial)
 
-A Software KVM, using the CH9329 UART Serial to USB HID controller.
+A Software KVM for UART-to-USB-HID bridge chips (CH9329 and CH9350L).
 
 Control your computers using an emulated keyboard and mouse!
 
-This app and python module allows you to control to a second device using a CH9329 module (or cable)
-and a video capture device. You can find these from vendors on eBay and AliExpress for a low price.
-However, there is very little software support available for these modules, and CH9329
-protocol documentation is sparse.
+This app and python module allows you to control a second device using a UART-to-USB-HID bridge chip
+(CH9329 or CH9350L) and a video capture device. You can find these from vendors on eBay and AliExpress
+for a low price. However, there is very little software support available for these modules, and protocol
+documentation is sparse.
 
 This software captures keyboard and mouse inputs from the local computer, sending these over a 
-serial UART connection to the CH9329 USB HID module, which will output USB HID mouse and keyboard 
+serial UART connection to the bridge chip, which will output USB HID mouse and keyboard 
 movements and scan codes to the remote computer.
 
 The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
@@ -44,36 +44,40 @@ The GUI app will do a lot of the work for you: it will enumerate video devices a
 and give you a window to interact with the guest in. Application settings can be changed from the 
 menus (File, Options, View), for example if the app doesn't select the correct devices by default.
 
+kvm-serial supports both CH9329 and CH9350L bridge hardware. See [SUPPORTED_DEVICES.md](docs/SUPPORTED_DEVICES.md) for the protocol and hardware differences.
+
 ## Kit List
 
 This module requires a little bit of hardware to get going. You will need:
 
-* CH9329 module or cable
+* A UART-to-USB-HID bridge chip (CH9329 or CH9350L) — optionally with an assembled cable or module
 * Video capture card (e.g. HDMI)
 
 You can likely get everything you need for under £30, which is incredible when compared to the 
 price of a KVM crash cart adapter.
 
-### CH9329 module/cable assembled as cables
+### Bridge Module/Cable
 
-_PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling CH9329 hardware._  
+_PLEASE NOTE: I am a hobbyist. I have no affiliation with any manufacturer developing or selling bridge hardware._  
 
 [![Home-made serial KVM module](https://wp.finnigan.dev/wp-content/uploads/2023/11/mini-uart.jpg)](https://wp.finnigan.dev/?p=682)
 *A home-made serial KVM module: CH9329 module soldered to SILabs CP2102. CH340 works, too.*
 
-So, I don't have a specific vendor to recommend, but if you put "*CH9329 cable usb*" into a search 
-engine, you will find the right thing. Just make sure what you buy has "CH9329" in the name: a USB-A 
-to USB-A cable won't do, and can damage your machine.
+Pre-assembled cables and modules are available from eBay and AliExpress:
 
-The modules have a USB-A male connector on one end, and serial connector on the other. The cables 
-have USB-A both ends, as they are already put together and should pretty much be plug-and-play: just 
-make sure it's the right way around. I just soldered a CH9329 module to a UART transceiver chip 
-myself, as above.
+- **CH9329 cables:** Search for "*CH9329 cable usb*". Just make sure it has "CH9329" in the name:
+  a USB-A to USB-A cable won't do and can damage your machine. The modules have a USB-A male
+  connector on one end and a serial connector on the other. Cables have USB-A both ends and should
+  be pretty much plug-and-play — just make sure it's the right way around.
+- **CH9350L modules:** Less common than CH9329 but available; typically come as breakout boards
+  with serial connector and dipswitches.
 
-### Video capture card
+You can also build your own by soldering a bridge chip to a UART transceiver chip (e.g. SILabs CP2102 or CH340).
 
-You also need a capture card that takes the display output from your remote machine, and presents it 
-as a USB device to your local system. I found the "*UGREEN Video Capture Card HDMI to USB C Capture 
+### Video Capture Card
+
+You also need a capture card that takes the display output from your remote machine and presents it 
+as a USB device to your local system. The "*UGREEN Video Capture Card HDMI to USB C Capture 
 Device*" was a good balance of price versus value. The more you spend on a capture device, the more
 responsive your video feed will likely be (to a point). HDMI and VGA hardware is available.
 
@@ -134,15 +138,21 @@ sudo python control.py --mode usb /dev/tty.usbserial0
 
 # Increase logging using --verbose (or -v), and use COM1 serial port (Windows)
 python control.py --verbose COM1
+
+# Use CH9350L in state 2 (default BIOS keyboard + relative mouse)
+python control.py --ch9350 /dev/cu.usbserial-XXXX
+
+# Use CH9350L in state 0 (full descriptor handshake)
+python control.py --ch9350 --ch9350-state 0 /dev/cu.usbserial-XXXX
 ```
 
-Use `python control.py --help` to view all available options. Keyboard capture and transmission is the default functionality of control.py: a couple of extra parameters are used to enable mouse and video. For most purposes, the default capture mode will suffice.
+Use `python control.py --help` to view all available options. Keyboard capture and transmission is the default functionality of control.py: a couple of extra parameters are used to enable mouse and video. For most purposes, the default capture mode will suffice. By default, the CH9329 protocol is used; pass `--ch9350` to switch to CH9350L protocol.
 
 Mouse capture is provided using the parameter `--mouse` (`-e`). It uses pynput for capturing mouse input and transmits this over the serial link simultaneously to keyboard input. Appropriate system permissions (Privacy and Security) may be required to use mouse capture.
 
 Video capture is provided using the parameter `--video` (`-x`). It uses OpenCV for capturing frames from the camera device. Again, system permissions for webcam access may need to be granted.
 
-See [MODES.md](./docs/MODES.MD) for more information on the various other options to the script.
+See [MODES.md](docs/MODES.md) for more information on the various other options to the script.
 Implementations are provided for all the main python input capture methods.
 
 ## Troubleshooting
