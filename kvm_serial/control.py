@@ -21,9 +21,8 @@ from serial import Serial
 
 logger = logging.getLogger(__name__)
 
-# Globally visible listener objects for thread stop
-ml = None
-keeb = None
+# The single DataCommManager for this run; stop_threads() joins it.
+mgr = None
 
 
 # Provide different options for handling SIGINT so Ctrl+C can be passed to controller
@@ -40,69 +39,63 @@ def signal_handler_ignore(sig, frame):
 
 def _build_comm_cls(args):
     """
-    Resolve --ch9350 / --ch9350-state into a DataComm implementation;
-    None preserves the existing CH9329Comm path inside BaseOp.
+    Resolve --ch9350 / --ch9350-state into a DataComm-producing callable.
+    Defaults to CH9329Comm (the class itself, which is callable).
     """
-    if not args.ch9350:
-        return None
-    from kvm_serial.utils.ch9350 import CH9350Comm
+    if args.ch9350:
+        from kvm_serial.utils.ch9350 import CH9350Comm
 
-    state = args.ch9350_state
-    return lambda port: CH9350Comm(port, state=state)
+        state = args.ch9350_state
+        return lambda port: CH9350Comm(port, state=state)
+    from kvm_serial.utils.ch9329 import CH9329Comm
+
+    return CH9329Comm
 
 
 def start_threads(args, serial_port):
-    """Start handler threads based on command line arguments.
+    """Construct the DataCommManager, attach listeners per CLI flags, and
+    start everything.
 
     Args:
         args: Parsed command line arguments.
         serial_port: Serial port object for communication.
     """
-    global ml, keeb
+    global mgr
+    from kvm_serial.backend.manager import DataCommManager
 
-    comm_cls = _build_comm_cls(args)
+    mgr = DataCommManager(serial_port, comm_cls=_build_comm_cls(args))
 
-    # Start mouse listner on --mouse (-e)
+    # Start mouse listener on --mouse (-e)
     if args.mouse:
         from kvm_serial.backend.mouse import MouseListener
 
-        ml = MouseListener(serial_port, comm_cls=comm_cls)
-        ml.start()
+        mgr.attach(MouseListener(serial_port))
 
     # Do not capture keyboard with --no-keyboard (-n)
     if not args.no_keyboard:
         from kvm_serial.backend.keyboard import KeyboardListener
 
-        keeb = KeyboardListener(
-            serial_port,
-            mode=args.mode,
-            layout=args.keyboard_layout,
-            comm_cls=comm_cls,
-        )
-        keeb.start()
+        mgr.attach(KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout))
+
+    mgr.start()
 
 
-def join_threads(args):
-    global ml, keeb
-
-    # Wait for threads to finish. The main thread depends on which inputs are active.
-    if (args.mode == "none" or args.no_keyboard) and ml is not None:
-        # Mouse-only: Ctrl+C raises KeyboardInterrupt and exits.
-        logging.info("Waiting for mouse listener...")
-        ml.thread.join()
-    elif not args.no_keyboard and keeb is not None:
-        # Keyboard listener owns the exit key (e.g. Ctrl+ESC).
-        logging.info("Waiting for keyboard listener...")
-        keeb.thread.join()
+def join_threads():
+    if mgr is not None:
+        mgr.join()
 
 
 def stop_threads():
-    global ml, keeb
-    if ml is not None and ml.thread.is_alive():
-        ml.stop()
+    global mgr
+    if mgr is not None:
+        mgr.stop()
+        # Drop the singleton so a subsequent run (e.g. from tests) can
+        # build a fresh manager without tripping the "already initialised"
+        # guard.
+        from kvm_serial.backend.manager import DataCommManager
 
-    if keeb is not None and keeb.thread.is_alive():
-        keeb.stop()
+        DataCommManager.reset()
+        mgr = None
 
 
 def parse_args():
@@ -235,7 +228,7 @@ def main():
 
     try:
         start_threads(args, serial_port)
-        join_threads(args)
+        join_threads()
     except KeyboardInterrupt:
         logging.warning("^C caught. Cleaning up!")
     except Exception as e:

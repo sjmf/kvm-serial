@@ -11,8 +11,8 @@ logger = logging.getLogger(__name__)
 
 
 class MouseListener(InputHandler):
-    def __init__(self, serial, block=True, comm_cls=None):
-        self.op = MouseOp(serial, comm_cls=comm_cls)
+    def __init__(self, serial, block=True):
+        self.op = MouseOp(serial)
 
         self.thread = Listener(
             on_move=self.on_move,
@@ -59,7 +59,6 @@ class MouseListener(InputHandler):
     def stop(self):
         self.thread.stop()
         self.thread.join()
-        self.op.cleanup()
 
     def on_move(self, x, y):
         return self.op.on_move(x, y, self._width, self._height)

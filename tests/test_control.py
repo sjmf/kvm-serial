@@ -49,21 +49,23 @@ class TestControl:
         assert args.ch9350_state == 2
 
     @patch("sys.argv", ["control.py", "/dev/ttyUSB0"])
-    def test_build_comm_cls_default_is_none(self):
-        """Without --ch9350, the factory is None so BaseOp falls back to CH9329."""
+    def test_build_comm_cls_defaults_to_ch9329(self):
+        """Without --ch9350, the comm class defaults to CH9329Comm."""
         from kvm_serial.control import _build_comm_cls, parse_args
+        from kvm_serial.utils.ch9329 import CH9329Comm
 
-        assert _build_comm_cls(parse_args()) is None
+        assert _build_comm_cls(parse_args()) is CH9329Comm
 
     @patch("sys.argv", ["control.py", "/dev/ttyUSB0", "--ch9329"])
-    def test_explicit_ch9329_flag_is_a_no_op(self):
-        """--ch9329 declares the default explicitly; factory is still None."""
+    def test_explicit_ch9329_flag_yields_ch9329(self):
+        """--ch9329 declares the default explicitly; same class, same behaviour."""
         from kvm_serial.control import _build_comm_cls, parse_args
+        from kvm_serial.utils.ch9329 import CH9329Comm
 
         args = parse_args()
         assert args.ch9329
         assert not args.ch9350
-        assert _build_comm_cls(args) is None
+        assert _build_comm_cls(args) is CH9329Comm
 
     @patch("sys.argv", ["control.py", "/dev/ttyUSB0", "--ch9329", "--ch9350"])
     def test_protocol_flags_are_mutually_exclusive(self):

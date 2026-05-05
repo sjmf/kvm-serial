@@ -27,18 +27,17 @@ def sys_modules_patch():
 @patch("serial.Serial", MockSerial)
 class TestMouse:
 
-    def test_mouse_listener(self, mock_serial, sys_modules_patch):
-        """Test basic MouseListener initialization"""
+    def test_mouse_listener(self, mock_serial, sys_modules_patch, _datacomm_manager):
+        """MouseListener constructs a MouseOp that fetches the shared
+        comm from the active DataCommManager."""
 
         with patch.dict("sys.modules", sys_modules_patch):
-            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "CH9329Comm") as mock_datacomm:
-                MouseListener(mock_serial)
-                mock_datacomm.assert_called_once_with(mock_serial)
+            listener = MouseListener(mock_serial)
+            assert listener.op.hid_serial_out is _datacomm_manager.comm
 
-    def test_thread_calls(self, mock_serial, sys_modules_patch):
+    def test_thread_calls(self, mock_serial, sys_modules_patch, _datacomm_manager):
         """
         Test that MouseListener.run(), start(), and stop() call correct Listener thread methods.
         Mocks:
@@ -69,91 +68,85 @@ class TestMouse:
             mock_thread.join.assert_called_once()
             mock_thread.reset_mock()
 
-    def test_on_move(self, mock_serial, sys_modules_patch):
+    def test_on_move(self, mock_serial, sys_modules_patch, _datacomm_manager):
         """
         Test MouseListener.on_move forwards positional events to
         send_mouse_absolute with the listener's screen dimensions and returns
         True. Wire-level scaling and negative-coordinate wrapping live in
-        CH9329Comm — verified in tests/utils/test_communication.py.
+        CH9329Comm — verified in tests/utils/test_ch9329.py.
         """
         with patch.dict("sys.modules", sys_modules_patch):
-            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
-                listener = MouseListener(mock_serial)
-                listener.op.hid_serial_out = mock_comm
-                listener._width = 1920
-                listener._height = 1080
+            mock_comm = _datacomm_manager.comm
+            listener = MouseListener(mock_serial)
+            listener._width = 1920
+            listener._height = 1080
 
-                result = listener.on_move(960, 540)
-                mock_comm.send_mouse_absolute.assert_called_once_with(0, 960, 540, 1920, 1080)
-                assert result is True
+            result = listener.on_move(960, 540)
+            mock_comm.send_mouse_absolute.assert_called_once_with(0, 960, 540, 1920, 1080)
+            assert result is True
 
-    def test_on_click(self, mock_serial, sys_modules_patch):
+    def test_on_click(self, mock_serial, sys_modules_patch, _datacomm_manager):
         """
         Test MouseListener.on_click forwards press/release events to
         send_mouse_relative with the right button mask and zero motion.
         """
         with patch.dict("sys.modules", sys_modules_patch):
-            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
             from kvm_serial.backend.implementations.mouseop import MouseButton
 
-            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
-                listener = MouseListener(mock_serial)
-                listener.op.hid_serial_out = mock_comm
-                listener._width = 1920
-                listener._height = 1080
+            mock_comm = _datacomm_manager.comm
+            listener = MouseListener(mock_serial)
+            listener._width = 1920
+            listener._height = 1080
 
-                left_button = MagicMock()
-                right_button = MagicMock()
-                listener.pynput_button_mapping = {  # type: ignore
-                    left_button: MouseButton.LEFT,
-                    right_button: MouseButton.RIGHT,
-                }
+            left_button = MagicMock()
+            right_button = MagicMock()
+            listener.pynput_button_mapping = {  # type: ignore
+                left_button: MouseButton.LEFT,
+                right_button: MouseButton.RIGHT,
+            }
 
-                # (button, down, expected_button_byte)
-                cases = [
-                    (left_button, True, 0x01),
-                    (left_button, False, 0x00),
-                    (right_button, True, 0x02),
-                    (right_button, False, 0x00),
-                ]
-                for button, down, expected_byte in cases:
-                    result = listener.on_click(100, 200, button, down)
-                    mock_comm.send_mouse_relative.assert_called_once_with(expected_byte, 0, 0, 0)
-                    assert result is True
-                    mock_comm.send_mouse_relative.reset_mock()
+            # (button, down, expected_button_byte)
+            cases = [
+                (left_button, True, 0x01),
+                (left_button, False, 0x00),
+                (right_button, True, 0x02),
+                (right_button, False, 0x00),
+            ]
+            for button, down, expected_byte in cases:
+                result = listener.on_click(100, 200, button, down)
+                mock_comm.send_mouse_relative.assert_called_once_with(expected_byte, 0, 0, 0)
+                assert result is True
+                mock_comm.send_mouse_relative.reset_mock()
 
-    def test_on_scroll(self, mock_serial, sys_modules_patch):
+    def test_on_scroll(self, mock_serial, sys_modules_patch, _datacomm_manager):
         """
         Test MouseListener.on_scroll forwards vertical scroll deltas as the
         wheel argument to send_mouse_relative; horizontal dx is dropped
         (CH9329's relative-mouse frame has no horizontal wheel axis).
         """
         with patch.dict("sys.modules", sys_modules_patch):
-            from kvm_serial.backend.implementations import baseop as baseop_mod
             from kvm_serial.backend.mouse import MouseListener
 
-            with patch.object(baseop_mod, "CH9329Comm") as mock_comm:
-                listener = MouseListener(mock_serial)
-                listener.op.hid_serial_out = mock_comm
-                listener._width = 1920
-                listener._height = 1080
+            mock_comm = _datacomm_manager.comm
+            listener = MouseListener(mock_serial)
+            listener._width = 1920
+            listener._height = 1080
 
-                # (dx, dy, expected_wheel) — dx is intentionally discarded.
-                cases = [
-                    (0, 1, 1),
-                    (0, -1, -1),
-                    (1, 0, 0),
-                    (-1, 0, 0),
-                ]
-                for dx, dy, expected_wheel in cases:
-                    result = listener.on_scroll(100, 200, dx, dy)
-                    mock_comm.send_mouse_relative.assert_called_once_with(0, 0, 0, expected_wheel)
-                    assert result is True
-                    mock_comm.send_mouse_relative.reset_mock()
+            # (dx, dy, expected_wheel) — dx is intentionally discarded.
+            cases = [
+                (0, 1, 1),
+                (0, -1, -1),
+                (1, 0, 0),
+                (-1, 0, 0),
+            ]
+            for dx, dy, expected_wheel in cases:
+                result = listener.on_scroll(100, 200, dx, dy)
+                mock_comm.send_mouse_relative.assert_called_once_with(0, 0, 0, expected_wheel)
+                assert result is True
+                mock_comm.send_mouse_relative.reset_mock()
 
 
 # ---
