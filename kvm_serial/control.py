@@ -7,15 +7,13 @@ import logging
 import platform
 
 # Allow running as a script directly (python kvm_serial/control.py) by ensuring
-# the project root is on sys.path so that `kvm_serial.*` imports resolve.
-try:
-    from importlib import import_module
-
-    import_module("kvm_serial.backend")
-except ModuleNotFoundError:
+# the project root is first on sys.path so local `kvm_serial.*` imports resolve.
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     import os
 
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
 from serial import Serial
 

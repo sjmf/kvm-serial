@@ -5,6 +5,14 @@ import logging
 import time
 import math
 from typing import cast, Optional
+
+# Allow running as a script directly (python kvm_serial/kvm.py) by ensuring
+# the project root is first on sys.path so local `kvm_serial.*` imports resolve.
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
+
 from serial import Serial, SerialException
 from PyQt5.QtCore import Qt, QTimer, QSizeF, QRectF, QEvent, QLocale, pyqtSignal
 from PyQt5.QtGui import (
@@ -34,23 +42,12 @@ from PyQt5.QtWidgets import (
     QSizePolicy,
 )
 
-try:
-    import kvm_serial.utils.settings as settings_util
-    from kvm_serial.utils.communication import list_serial_ports
-    from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
-    from kvm_serial.backend.video import CameraProperties, enumerate_cameras
-    from kvm_serial.backend.implementations.qtop import QtOp
-    from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
-
-except ModuleNotFoundError:
-    # Allow running as a script directly
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
-    import utils.settings as settings_util
-    from utils.communication import list_serial_ports
-    from utils import scancode_to_ascii, string_to_scancodes
-    from backend.video import CameraProperties, enumerate_cameras
-    from backend.implementations.qtop import QtOp
-    from backend.implementations.mouseop import MouseOp, MouseButton
+import kvm_serial.utils.settings as settings_util
+from kvm_serial.utils.communication import list_serial_ports
+from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
+from kvm_serial.backend.video import CameraProperties, enumerate_cameras
+from kvm_serial.backend.implementations.qtop import QtOp
+from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
 
 
 # Subclass QGraphicsView so clicks inside the view can receive focus and
