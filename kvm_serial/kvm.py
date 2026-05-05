@@ -124,7 +124,8 @@ class KVMQtGui(QMainWindow):
     """
     Main GUI class for the Serial KVM application (Qt version).
 
-    A graphical user interface (GUI) for controlling a CH9329-based software KVM (Keyboard, Video, Mouse) switch.
+    A graphical user interface (GUI) for controlling software KVM (Keyboard, Video, Mouse) switches
+    using CH9329 or CH9350L UART-to-USB-HID bridge chips.
 
     Provides a PyQt5-based interface for configuring and controlling serial, video, keyboard,
     and mouse devices. Handles device selection, status display, event processing, and persistent

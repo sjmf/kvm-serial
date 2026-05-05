@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# CH9329 keyboard controller
+# Serial KVM controller for USB HID Serial Bridges (CH9329, CH9350L)
 import signal
 import sys
 import argparse
@@ -102,9 +102,9 @@ def parse_args():
     # Parse arguments using argparse module. Example call:
     # python control.py /dev/cu.usbserial --verbose --mode usb
     parser = argparse.ArgumentParser(
-        prog="CH9329 Control Script",
-        description="Use a serial terminal as a USB keyboard!",
-        epilog="(c) 2023 Samantha Finnigan. MIT License",
+        prog="Serial KVM Control Script",
+        description="Use a serial terminal as a USB keyboard and mouse!",
+        epilog="(c) 2023-25 Samantha Finnigan and contributors. MIT License",
     )
 
     parser.add_argument("-v", "--verbose", action="store_true")
