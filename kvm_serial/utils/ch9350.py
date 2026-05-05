@@ -320,8 +320,8 @@ class CH9350Comm(DataComm):
         gap in practice.
         """
         if self.state in (self.STATE_0, self.STATE_1, self.STATE_2):
-            dx = x - self._last_x
-            dy = y - self._last_y
+            dx = int(x - self._last_x)
+            dy = int(y - self._last_y)
             self._last_x, self._last_y = x, y
             self._last_width, self._last_height = width, height
             return self._send_relative_frame(buttons, dx, dy, wheel)
@@ -355,9 +355,9 @@ class CH9350Comm(DataComm):
             frame = self._build_state01_mou_frame(buttons, dx, dy, wheel)
         else:
             # State 2 simple frame: 7 bytes total.
-            dx_b = max(-127, min(127, dx)) & 0xFF
-            dy_b = max(-127, min(127, dy)) & 0xFF
-            wh_b = max(-127, min(127, wheel)) & 0xFF
+            dx_b = max(-127, min(127, int(dx))) & 0xFF
+            dy_b = max(-127, min(127, int(dy))) & 0xFF
+            wh_b = max(-127, min(127, int(wheel))) & 0xFF
             frame = HEADER + bytes([0x02, buttons & 0xFF, dx_b, dy_b, wh_b])
         return self._send_locked(frame)
 
@@ -402,8 +402,8 @@ class CH9350Comm(DataComm):
         cmd is 0x88 (state 0) or 0x83 (state 1). dx/dy clamp to ±127.
         """
         cmd = 0x83 if self.state == self.STATE_1 else 0x88
-        dx_b = max(-127, min(127, dx)) & 0xFF
-        dy_b = max(-127, min(127, dy)) & 0xFF
+        dx_b = max(-127, min(127, int(dx))) & 0xFF
+        dy_b = max(-127, min(127, int(dy))) & 0xFF
         data = bytes([self.MOU_RID, btn & 0xFF, dx_b, dy_b, wheel & 0xFF])
         ctr = self._mou_counter & 0xFF
         self._mou_counter += 1
