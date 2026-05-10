@@ -63,11 +63,14 @@ If that's you, read on!
 
 1. Fork the repository on GitHub
 2. Clone your fork locally:
+
    ```bash
    git clone https://github.com/your-username/kvm-serial.git
    cd kvm-serial
    ```
+
 3. Add the canonical repository to pull upstream changes:
+
    ```bash
    git remote add upstream https://github.com/sjmf/kvm-serial.git
    ```
@@ -78,11 +81,14 @@ To develop the code, there's a few steps to get set up:
 
 1. **Python Environment**: Ensure you have Python 3.8+ installed
 2. **Install Dependencies and Dev Dependencies**:
+
    ```bash
    pip install -e .
    pip install '.[dev]'
    ```
-3. **Install Pre-commit Hooks**: 
+
+3. **Install Pre-commit Hooks**:
+
    ```bash
    pre-commit install
    pre-commit run --all-files  # Run pre-commit on all files (optional)
@@ -115,6 +121,7 @@ Open a [new issue](../../issues/new) with a clear, descriptive title that summar
 1. **Create an Issue First**: For significant changes, create an issue to discuss the approach
 2. **Fork and Branch**: Create a feature branch from `main`
 3. **Stay Updated**: Regularly sync with upstream:
+
    ```bash
    git fetch upstream
    git rebase upstream/main

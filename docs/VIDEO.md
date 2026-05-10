@@ -22,7 +22,7 @@ Relevant code:
 
 ## Architecture
 
-```
+```text
 QCameraInfo.availableCameras()  ─┐
     (device list)                │
                                  ├─►  kvm_serial/backend/video.py

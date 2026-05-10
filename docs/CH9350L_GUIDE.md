@@ -104,7 +104,7 @@ and which UART frame format is used.
 > **BIOS/UEFI tip:** If you need to access the BIOS on the target machine, temporarily
 > switch to state 2 (change S0/S1 and power-cycle the board). You can switch back to state 3
 > after booting into the OS.
-
+>
 > **Important:** Set S0/S1 on the **UC board only**. When using kvm-serial as the software LC,
 > only the UC board's dipswitches matter. If you purchased a pair of modules, keep the unused
 > LC board aside as a spare.
@@ -130,7 +130,7 @@ in the `baud` menu in kvm-serial.
 3. Connect the UC module's serial/UART header to your **host machine** via a 3.3 V USB-to-UART
    adapter (e.g. CP2102, CH340):
 
-   ```
+   ```text
    Host PC (USB) ──► USB-to-UART adapter (3.3 V TTL)
                      │
                      │ TX ──► RX  ┐
@@ -195,9 +195,9 @@ For most users, **TTL UART is sufficient and requires no additional hardware**.
 ## GUI Usage
 
 1. Launch the GUI (`python -m kvm_serial` or the packaged executable).
-2. Open **Options → Protocol** and select a CH9350L option. 
-  * **CH9350L (state 3, absolute mouse)** is recommended for GUI usage. 
-  * Ensure the dipswitches on your hardware match the selected option.
+2. Open **Options → Protocol** and select a CH9350L option.
+   * **CH9350L (state 3, absolute mouse)** is recommended for GUI usage.
+   * Ensure the dipswitches on your hardware match the selected option.
 3. Open **Options → Baud** and select **115200** as the default for this chip.
 4. kvm-serial will automatically perform any startup handshake and begin forwarding keyboard and mouse input.
 5. Open **File → Save Configuration** to persist this configuration across restarts.

@@ -40,7 +40,7 @@ Note: 115200 bps is not supported when the chip operates at 3.3 V.
 
 Every command is a single self-contained packet with the following layout:
 
-```
+```text
 [HEAD_HI] [HEAD_LO] [ADDR] [CMD] [LEN] [DATA...] [SUM]
   0x57      0xAB     1B     1B    1B    LEN bytes   1B
 ```
@@ -61,7 +61,7 @@ Maximum `LEN` is 255; a payload of 256 or more bytes causes an `OverflowError` i
 
 Keyboard frame for 'a' (`scancode = 0x04`):
 
-```
+```text
 57 AB 00 02 08 00 00 04 00 00 00 00 00 10
 ```
 
@@ -77,7 +77,7 @@ Keyboard frame for 'a' (`scancode = 0x04`):
 
 Sends an 8-byte USB HID boot-protocol keyboard report directly to the chip.
 
-```
+```text
 57 AB [ADDR] 02 08 [mod] [rsvd] [k0] [k1] [k2] [k3] [k4] [k5] [SUM]
 ```
 
@@ -105,7 +105,7 @@ Sending `00 00 00 00 00 00 00 00` releases all keys (the `release()` call).
 
 ### Absolute Mouse — CMD `0x04`
 
-```
+```text
 57 AB [ADDR] 04 07 02 [btn] [XL] [XH] [YL] [YH] [wheel] [SUM]
 ```
 
@@ -128,7 +128,7 @@ across monitor boundaries.
 
 ### Relative Mouse — CMD `0x05`
 
-```
+```text
 57 AB [ADDR] 05 05 01 [btn] [dx] [dy] [wheel] [SUM]
 ```
 
@@ -165,9 +165,9 @@ to keep encoding unambiguous). Python's `int.to_bytes(1, signed=True)` encodes t
 
 The `ADDR` byte allows multiple CH9329 chips to share a single UART bus. Each chip can be
 configured with a non-zero address; a frame is only acted on by the chip whose address matches.
-`0x00` is the factory default and the value used by kvm-serial in all frames. 
+`0x00` is the factory default and the value used by kvm-serial in all frames.
 
-> **Note:** Multi-chip addressing on the same serial bus is not available in kvm-serial. Users 
+> **Note:** Multi-chip addressing on the same serial bus is not available in kvm-serial. Users
 > requiring multiple device control can use multiple serial devices to interface to multiple chips.
 
 ---

@@ -11,8 +11,8 @@
 >
 > **Manufacturer datasheet:** WCH CH9350 V2.3 — [wch-ic.com/downloads/CH9350DS_PDF.html](https://www.wch-ic.com/downloads/CH9350DS_PDF.html). Section references in this document refer to that datasheet. See [§Divergences from the datasheet](#divergences-from-the-datasheet) for the places where on-the-wire behaviour differs from what the datasheet documents.
 >
-> **Reference implementation:** `ch9350_poc.py` (repo root) and the Gist at
-> https://gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a
+> **Reference implementation:** `ch9350_poc.py` (repo root) and the
+> [Gist at gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a](https://gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a)
 
 ---
 
@@ -45,7 +45,7 @@ Each module has three relevant dipswitches: `SEL` selects the chip's role (`SEL=
 
 All frames share the same two-byte magic header:
 
-```
+```text
 57 AB [CMD] [payload...]
 ```
 
@@ -65,7 +65,7 @@ The payload layout depends on `CMD`:
 
 ### Length-prefixed key/mouse frames (CMD `0x83` / `0x88`)
 
-```
+```text
 57 AB [CMD] [LEN] [SER] [report-bytes...] [CTR] [CTR_SUM]
 ```
 
@@ -85,7 +85,7 @@ The CMD byte selects state 0 (`0x88`) vs state 1 (`0x83`); the payload format is
 
 Sent by the LC at ~1 s cadence when idle. During active key/mouse traffic the cadence becomes denser — heartbeats are interleaved with `0x83`/`0x88` frames, sometimes only ~50 ms apart. The ~1 s figure is the *minimum-frequency* idle baseline, not a strict period.
 
-```
+```text
 57 AB 82 [IO]
 ```
 
@@ -95,7 +95,7 @@ Sent by the LC at ~1 s cadence when idle. During active key/mouse traffic the ca
 
 ### Status Announce — CMD `0x89`
 
-```
+```text
 57 AB 89
 ```
 
@@ -105,7 +105,7 @@ No payload. In state 0/1 captures the LC emits 3 instances at ~2 s intervals sta
 
 Sent by the LC at attach time, once per connected USB device. Carries the device's HID Report Descriptor; the UC uses these to construct matching HID descriptors that it will advertise to the target PC over USB. **Without `0x81` frames in state 0/1 the LC's subsequent `0x83`/`0x88` input frames produce no effect on the target host** — observed empirically. The likely mechanism is that the UC has no descriptor to advertise so its target-side endpoints either fail to enumerate or enumerate with mismatched report IDs; the LC has no way to detect this from its side.
 
-```
+```text
 57 AB 81 [PORT] [LEN_LO] [LEN_HI] [DESCRIPTOR...] [PID_LO] [PID_HI] [CHK]
 ```
 
@@ -129,7 +129,7 @@ Two variants are produced depending on the USB device connected to the LC.
 
 #### CH9329 / report-ID-prefixed keyboard, LEN = `0x0C`
 
-```
+```text
 57 AB [CMD] 0C [SER] [RID] [mod] [rsvd=00] [k0] [k1] [k2] [k3] [k4] [k5] [CTR] [CTR_SUM]
 ```
 
@@ -146,7 +146,7 @@ Two variants are produced depending on the USB device connected to the LC.
 
 Produced by a real keyboard whose descriptor contains no Report ID item.
 
-```
+```text
 57 AB [CMD] 0B [SER=0x11] [mod] [rsvd=00] [k0] [k1] [k2] [k3] [k4] [k5] [CTR] [CTR_SUM]
 ```
 
@@ -176,7 +176,7 @@ Three variants observed, distinguished by LEN and SER. The LEN=`0x08` form is no
 
 Wire format produced by a CH9329 bridge, which presents both relative (RID `0x04`) and absolute (RID `0x05`) mouse reports as part of its composite USB descriptor. Documented in datasheet §4.3 as a valid LC→UC frame.
 
-```
+```text
 57 AB [CMD] 0A [SER=0x23] [RID=05] [btn] [XL] [XH] [YL] [YH] [wheel] [CTR] [CTR_SUM]
 ```
 
@@ -195,7 +195,7 @@ Wire format produced by a CH9329 bridge, which presents both relative (RID `0x04
 
 Produced by a real mouse on **port 1** whose descriptor contains a Report ID.
 
-```
+```text
 57 AB [CMD] 08 [SER=0x22] [RID] [btn] [dx] [dy] [wheel] [CTR] [CTR_SUM]
 ```
 
@@ -209,7 +209,7 @@ Produced by a real mouse on **port 1** whose descriptor contains a Report ID.
 
 Produced by a real mouse whose descriptor contains no Report ID.
 
-```
+```text
 57 AB [CMD] 07 [SER=0x20] [btn] [dx] [dy] [wheel] [CTR] [CTR_SUM]
 ```
 
@@ -226,7 +226,7 @@ Keyboard frame `57 AB 83 0C 13 01 00 00 14 00 00 00 00 00 00 15`:
 
 ### Device Notify — CMD `0x86`
 
-```
+```text
 57 AB 86
 ```
 
@@ -234,7 +234,7 @@ Emitted by the LC on USB device events. The same opcode is used for both **attac
 
 ### Status / LED — CMD `0x80`
 
-```
+```text
 57 AB 80 [VAL]
 ```
 
@@ -251,7 +251,7 @@ Single-byte payload, dual-purpose:
 
 Sent by the UC approximately every 1 second.
 
-```
+```text
 57 AB 12 [P1_LO] [P1_HI] [P2_LO] [P2_HI] [LED] [STATUS] [VERSION_HI] [VERSION_LO]
 ```
 
@@ -289,7 +289,7 @@ The `P1`/`P2` fields start at `00 00` after power-on and populate as the UC proc
 
 LC→UC and UC→LC frames from a bidirectional state-0/1 capture ([gist](https://gist.github.com/sjmf/c1412b40e38f44738278c52416d5c0a9)), expressed as deltas from the first `0x86`. Times are observational and will vary between runs.
 
-```
+```text
 t=0.000   LC → UC   57 AB 86                         attach
 t=0.260   LC → UC   57 AB 80 FF                      startup status (1/2)
 t=0.470   LC → UC   57 AB 80 FF                      startup status (2/2)
@@ -312,7 +312,7 @@ After both `P1` and `P2` in the UC's keep-alive match the `PID` values the LC se
 
 When a USB device is unplugged from the LC mid-session, only a single bare `0x86` is emitted; no other frames accompany it. Heartbeats continue at their normal cadence. From a capture with the mouse unplugged first and the keyboard ~2 s later:
 
-```
+```text
 ... key/mouse frames, then idle ...
 LC → UC   57 AB 82 A3        heartbeat (1 s cadence)
 LC → UC   57 AB 86            ← mouse unplugged (no follow-up frames)
@@ -334,7 +334,7 @@ To get `STATUS` back to `0x07` (i.e. devices re-enumerated on the target host), 
 
 ## State Machine
 
-```
+```text
   USB device attached on LC
          │
          ▼

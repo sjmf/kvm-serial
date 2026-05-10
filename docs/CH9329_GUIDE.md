@@ -41,7 +41,7 @@ Note: this photo shows the 5 V pins connected — see the warning below before r
 
 You can build your own module by wiring a CH9329 chip to a USB-to-UART adapter:
 
-```
+```text
 Host PC (USB) ──► USB-to-UART adapter (e.g. CP2102 / CH340)
                         │
                         │ TX ──► RX  ┐
@@ -58,9 +58,9 @@ The CH9329 operates at 3.3 V or 5 V TTL. Default baud rate is **9600 bps**; the 
 
 > **⚠ Warning — do not connect the 5 V power pins together.**  
 > The CH9329 module is already powered by the target machine's USB port. If you also connect
-> the 5 V output of the USB-to-UART adapter to the CH9329's VCC pin (as per the image above), 
-> you create two power sources driving the same rail. This can backfeed voltage into one or 
-> both USB ports, which may damage hardware that lacks modern reverse-power protection. Wire 
+> the 5 V output of the USB-to-UART adapter to the CH9329's VCC pin (as per the image above),
+> you create two power sources driving the same rail. This can backfeed voltage into one or
+> both USB ports, which may damage hardware that lacks modern reverse-power protection. Wire
 > only **TX, RX, and GND** between the adapter and the CH9329; leave the 5 V / VCC pins unconnected.
 
 ---

@@ -115,6 +115,7 @@ def _setup_qt_mocks(self):
 **Why:** Tests shouldn't require physical devices.
 
 **Approach:**
+
 ```python
 def _setup_hardware_mocks(self):
     from kvm_serial.backend import video as video_mod
@@ -496,6 +497,7 @@ timeout = 5
 **Cause:** Mock needs return value or side effect configuration.
 
 **Solution:**
+
 ```python
 mock_obj = MagicMock()
 mock_obj.method.return_value = expected_value
@@ -506,6 +508,7 @@ mock_obj.method.return_value = expected_value
 **Cause:** Exception mock not configured properly.
 
 **Solution:**
+
 ```python
 with patch("serial.Serial", side_effect=SerialException("Port not available")):
     # Test code

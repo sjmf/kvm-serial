@@ -2,7 +2,7 @@
 
 Some capture methods require superuser privileges (`sudo`), for example `pyusb` provides the most accurate keyboard scancode capture, but needs to de-register the device driver for the input method in order to control it directly.
 
-For example usage, please see the accompanying blogpost: https://wp.finnigan.dev/?p=682
+For example usage, please see the [accompanying blogpost](https://wp.finnigan.dev/?p=682).
 
 | Mode     | Platform           | Modifiers  | Paste  | Blocking   | Focus  | Exit     | Permissions            |
 |----------|-------------------|------------|--------|------------|--------|----------|------------------------|
@@ -17,14 +17,14 @@ A 'yes' in the remaining columns means:
 
  * **Modifiers**:
 Keys like `Ctrl`, `Shift`, `Alt` and `Cmd`/`Win` will be captured. Combinations like Ctrl+C will be passed through.
- * **Paste**: 
+ * **Paste**:
 Content can be pasted from host to guest. Paste text into the console and it will be transmitted char-wise to the HID device
  * **Blocking**:
 Keyboard input will not function in other applications while the script is running
  * **Focus**:
 The console must remain in focus for input to be recorded (and transmitted over the UART)
  * **Implication**:
-You will need to select the best input method for your use case! 
+You will need to select the best input method for your use case!
 
 **Platform compatibility:**
 

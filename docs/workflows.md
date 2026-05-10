@@ -62,7 +62,7 @@ This directory contains CI/CD workflows for the KVM Serial project.
 
 When you push a version tag (e.g., `v1.5.2`), the following happens automatically:
 
-```
+```text
 Tag pushed: v1.5.2
 ├─ release.yml
 │  ├─ 1. Run tests

@@ -15,8 +15,8 @@ This app and python module allows you to control a second device using a UART-to
 for a low price. However, there is very little software support available for these modules, and protocol
 documentation is sparse.
 
-This software captures keyboard and mouse inputs from the local computer, sending these over a 
-serial UART connection to the bridge chip, which will output USB HID mouse and keyboard 
+This software captures keyboard and mouse inputs from the local computer, sending these over a
+serial UART connection to the bridge chip, which will output USB HID mouse and keyboard
 movements and scan codes to the remote computer.
 
 The `kvm_serial` package provides options for running the GUI, or as a script providing flexible options.
@@ -29,7 +29,6 @@ __[Download the latest release](https://github.com/sjmf/kvm-serial/releases/late
 
 *See [INSTALLATION.md](docs/INSTALLATION.md) for information on installing serial drivers, if required.*
 
-
 ## GUI Usage
 
 Run the GUI using the [executable for your platform](https://github.com/sjmf/kvm-serial/releases/latest/), or with Python using `python -m kvm_serial`.
@@ -40,8 +39,8 @@ Run the GUI using the [executable for your platform](https://github.com/sjmf/kvm
 The module can be [installed from PyPI](https://pypi.org/project/kvm-serial/) (`pip install kvm-serial`),
 or locally from a cloned git repo (`pip install -e .`).
 
-The GUI app will do a lot of the work for you: it will enumerate video devices and serial ports, 
-and give you a window to interact with the guest in. Application settings can be changed from the 
+The GUI app will do a lot of the work for you: it will enumerate video devices and serial ports,
+and give you a window to interact with the guest in. Application settings can be changed from the
 menus (File, Options, View), for example if the app doesn't select the correct devices by default.
 
 kvm-serial supports both CH9329 and CH9350L bridge hardware. See the user guides for hardware-specific setup:
@@ -56,7 +55,7 @@ This module requires a little bit of hardware to get going. You will need:
 * A UART-to-USB-HID bridge chip (CH9329 or CH9350L) — optionally with an assembled cable or module
 * Video capture card (e.g. HDMI)
 
-You can likely get everything you need for under £30, which is incredible when compared to the 
+You can likely get everything you need for under £30, which is incredible when compared to the
 price of a KVM crash cart adapter.
 
 ### Bridge Module/Cable
@@ -79,8 +78,8 @@ You can build your own by soldering a bridge chip to a UART transceiver chip (e.
 
 ### Video Capture Card
 
-You also need a capture card that takes the display output from your remote machine and presents it 
-as a USB device to your local system. The "*UGREEN Video Capture Card HDMI to USB C Capture 
+You also need a capture card that takes the display output from your remote machine and presents it
+as a USB device to your local system. The "*UGREEN Video Capture Card HDMI to USB C Capture
 Device*" was a good balance of price versus value. The more you spend on a capture device, the more
 responsive your video feed will likely be (to a point). HDMI and VGA hardware is available.
 
@@ -158,7 +157,7 @@ For live video, use the GUI (`kvm-gui`). See [MODES.md](docs/MODES.md) for keybo
 
 ## Troubleshooting
 
-**Permissions errors on Linux**: 
+**Permissions errors on Linux**:
 if your system user does not have serial write permissions (resulting in a permission error), you can add your user to the `dialout` group: e.g. `sudo usermod -a -G dialout $USER`. You must fully log out of the system to apply the change.
 
 **Difficulty installing requirements**: If you get `command not found: pip` or similar when installing requirements, try: `python -m pip [...]` to run pip instead.
