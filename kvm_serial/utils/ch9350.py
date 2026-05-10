@@ -370,6 +370,18 @@ class CH9350Comm(DataComm):
         if self.state in (self.STATE_0, self.STATE_1, self.STATE_2):
             dx = int(x - self._last_x)
             dy = int(y - self._last_y)
+            logger.debug(
+                "mouse_abs->rel state=%d xy=(%s,%s) wh=(%s,%s) last=(%s,%s) dxdy=(%d,%d)",
+                self.state,
+                x,
+                y,
+                width,
+                height,
+                self._last_x,
+                self._last_y,
+                dx,
+                dy,
+            )
             self._last_x, self._last_y = x, y
             self._last_width, self._last_height = width, height
             ok = True
