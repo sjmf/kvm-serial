@@ -224,6 +224,16 @@ class CH9350Comm(DataComm):
     MOU_SER = 0x22  # mouse / HID / port 1
     MOU_RID = 0x01  # 4-byte relative mouse report follows
 
+    # State-3/4 absolute coordinate range. The chip's built-in absolute mouse
+    # descriptor declares a 12-bit logical range (0..4095), matching the
+    # CH9329's identical wire format. Sending values outside this range
+    # produces mod-4096 wrap behaviour as the host parses the value against
+    # the descriptor's LogicalMax — a "tiny on-host motion creates enormous
+    # cursor jumps that wrap" symptom. The X/Y wire fields are 16-bit LE
+    # regardless; the upper 4 bits are unused / Const padding per the
+    # descriptor.
+    _ABS_MAX = 0x0FFF
+
     # How long to wait between 0x81 retransmits while a PID remains un-acked.
     _ANNOUNCE_RETRY_INTERVAL = 2.0
     _HEARTBEAT_INTERVAL = 1.0
@@ -370,8 +380,8 @@ class CH9350Comm(DataComm):
                 ok = self._send_relative_frame(buttons, chunk_dx, chunk_dy, chunk_wheel) and ok
             return ok
 
-        nx = max(0, min(0xFFFF, int((0xFFFF * x) // max(1, width))))
-        ny = max(0, min(0xFFFF, int((0xFFFF * y) // max(1, height))))
+        nx = max(0, min(self._ABS_MAX, int(((self._ABS_MAX + 1) * x) // max(1, width))))
+        ny = max(0, min(self._ABS_MAX, int(((self._ABS_MAX + 1) * y) // max(1, height))))
         self._last_x, self._last_y = x, y
         self._last_width, self._last_height = width, height
         return self._send_absolute_frame(buttons, nx, ny, wheel)
@@ -399,8 +409,19 @@ class CH9350Comm(DataComm):
         if self.state in (self.STATE_0, self.STATE_1, self.STATE_2):
             return self._send_relative_frame(buttons, dx, dy, wheel)
 
-        nx = max(0, min(0xFFFF, int((0xFFFF * self._last_x) // max(1, self._last_width))))
-        ny = max(0, min(0xFFFF, int((0xFFFF * self._last_y) // max(1, self._last_height))))
+        nx = max(
+            0,
+            min(
+                self._ABS_MAX, int(((self._ABS_MAX + 1) * self._last_x) // max(1, self._last_width))
+            ),
+        )
+        ny = max(
+            0,
+            min(
+                self._ABS_MAX,
+                int(((self._ABS_MAX + 1) * self._last_y) // max(1, self._last_height)),
+            ),
+        )
         return self._send_absolute_frame(buttons, nx, ny, wheel)
 
     # ------------------------------------------------------------- frame builders
@@ -417,8 +438,10 @@ class CH9350Comm(DataComm):
         return self._send_locked(frame)
 
     def _send_absolute_frame(self, buttons: int, x: int, y: int, wheel: int) -> bool:
-        # x and y are unsigned 16-bit; the leading 0x01 after the cmd byte is
-        # a fixed report-ID prefix matching empirical captures from real LCs.
+        # x and y are 12-bit values (0..4095) carried in 16-bit LE fields with
+        # the upper 4 bits unused / Const padding per the chip's built-in
+        # absolute descriptor. The leading 0x01 after the cmd byte is a fixed
+        # report-ID prefix matching empirical captures from real LCs.
         wh_b = max(-127, min(127, wheel)) & 0xFF
         frame = HEADER + bytes(
             [
