@@ -4,7 +4,10 @@ import sys
 import logging
 import time
 import math
-from typing import cast, Optional
+from typing import TYPE_CHECKING, cast, Optional
+
+if TYPE_CHECKING:
+    from kvm_serial.backend.manager import DataCommManager
 
 # Allow running as a script directly (python kvm_serial/kvm.py) by ensuring
 # the project root is first on sys.path so local `kvm_serial.*` imports resolve.
@@ -171,7 +174,7 @@ class KVMQtGui(QMainWindow):
     mouse_op: MouseOp | None = None
     # The DataCommManager owning the active comm + its lifecycle. Reset
     # alongside the serial port whenever __init_serial reopens the link.
-    comm_manager: object | None = None
+    comm_manager: "DataCommManager | None" = None
 
     # Dimensions
     window_default_width: int = 1280
@@ -938,7 +941,7 @@ class KVMQtGui(QMainWindow):
 
         if self.comm_manager is not None:
             try:
-                self.comm_manager.stop()  # type: ignore[attr-defined]
+                self.comm_manager.stop()
             except Exception as e:
                 logging.error(f"Error stopping DataCommManager: {e}")
             self.comm_manager = None
