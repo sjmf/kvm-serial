@@ -98,15 +98,15 @@ class TestCH9350Comm:
         """
         States 3/4 emit 10-byte 0x04 frames:
             HEADER + 0x04 + 0x01 + btn + xL xH + yL yH + wheel
-        x and y scale to the chip's 14-bit absolute space (0..16383)
+        x and y scale to the chip's 10-bit absolute space (0..1023)
         carried in 16-bit LE fields. Range empirically calibrated.
         """
         dc = CH9350Comm(mock_serial, state=3)
 
-        # Centre of a 1920x1080 surface scales to 0x2000 in both axes
-        # ((16384 * 960) // 1920 = 8192 = 0x2000).
+        # Centre of a 1920x1080 surface scales to 0x0200 in both axes
+        # ((1024 * 960) // 1920 = 512 = 0x0200).
         dc.send_mouse_absolute(0, 960, 540, 1920, 1080)
-        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\x00\x20\x00\x20\x00")
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\x00\x02\x00\x02\x00")
         mock_serial.write.reset_mock()
 
         # Origin → (0, 0).
@@ -114,9 +114,9 @@ class TestCH9350Comm:
         mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\x00\x00\x00\x00\x00")
         mock_serial.write.reset_mock()
 
-        # Bottom-right corner → (0x3FFF, 0x3FFF) (clamped at the 14-bit max).
+        # Bottom-right corner → (0x03FF, 0x03FF) (clamped at the 10-bit max).
         dc.send_mouse_absolute(0, 1920, 1080, 1920, 1080)
-        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\xff\x3f\xff\x3f\x00")
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\xff\x03\xff\x03\x00")
 
     @patch("serial.Serial", MockSerial)
     def test_state3_relative_re_emits_last_position(self, mock_serial):
@@ -139,12 +139,12 @@ class TestCH9350Comm:
         mock_serial.write.reset_mock()
 
         dc.send_mouse_relative(0x01, 0, 0, 0)
-        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x01\x00\x20\x00\x20\x00")
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x01\x00\x02\x00\x02\x00")
         mock_serial.write.reset_mock()
 
         # Scroll event: same position, wheel byte set.
         dc.send_mouse_relative(0, 0, 0, 1)
-        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\x00\x20\x00\x20\x01")
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x04\x01\x00\x00\x02\x00\x02\x01")
 
     @patch("serial.Serial", MockSerial)
     def test_state4_wire_identical_to_state3(self, mock_serial):

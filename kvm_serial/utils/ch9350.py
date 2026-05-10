@@ -224,15 +224,20 @@ class CH9350Comm(DataComm):
     MOU_SER = 0x22  # mouse / HID / port 1
     MOU_RID = 0x01  # 4-byte relative mouse report follows
 
-    # State-3/4 absolute coordinate range. Empirically calibrated against
-    # cursor landing position vs view input on a 1920x1080 target:
-    # sending 4095 (12-bit max, the CH9329's range) produced cursor-at-25%,
-    # implying the chip's built-in descriptor declares ~16383 (14-bit). The
-    # X/Y wire fields are 16-bit LE regardless; the upper 2 bits are unused
-    # / Const padding per the chip's descriptor. Sending values >16383
-    # produces mod-wrap behaviour ("tiny motion creates enormous cursor
-    # jumps that wrap") — the symptom that motivated this calibration.
-    _ABS_MAX = 0x3FFF
+    # State-3/4 absolute coordinate range. Empirically calibrated by
+    # sweeping scene-x across a 1920x1080 target and recording cursor
+    # landing position: cursor sweeps fully on nx 0..1023, then clamps to
+    # the left edge for nx 1024..2047, sweeps again on nx 2048..3071, etc.
+    # Pattern is consistent with a host descriptor declaring an 11-bit
+    # signed field (LogicalMin=-1024, LogicalMax=+1023, RepSize=11) with
+    # bit 10 as the sign bit; values with bit 10 set are interpreted as
+    # negative, off-screen-left, and clamped to the LogicalMin. Bits 11+
+    # are silently ignored, producing the period-2048 wrap. Effective
+    # usable range from the LC is 0..1023.
+    #
+    # The X/Y wire fields are 16-bit LE regardless; the upper 6 bits are
+    # unused / Const padding per the chip's descriptor.
+    _ABS_MAX = 0x03FF
 
     # How long to wait between 0x81 retransmits while a PID remains un-acked.
     _ANNOUNCE_RETRY_INTERVAL = 2.0
