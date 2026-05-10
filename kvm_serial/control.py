@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-# CH9329 keyboard controller
+# Serial KVM controller for USB HID Serial Bridges (CH9329, CH9350L)
 import signal
 import sys
 import argparse
@@ -7,23 +7,20 @@ import logging
 import platform
 
 # Allow running as a script directly (python kvm_serial/control.py) by ensuring
-# the project root is on sys.path so that `kvm_serial.*` imports resolve.
-try:
-    from importlib import import_module
-
-    import_module("kvm_serial.backend")
-except ModuleNotFoundError:
+# the project root is first on sys.path so local `kvm_serial.*` imports resolve.
+if __name__ == "__main__" and (__package__ is None or __package__ == ""):
     import os
 
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+    project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
 from serial import Serial
 
 logger = logging.getLogger(__name__)
 
-# Globally visible listener objects for thread stop
-ml = None
-keeb = None
+# The single DataCommManager for this run; stop_threads() joins it.
+mgr = None
 
 
 # Provide different options for handling SIGINT so Ctrl+C can be passed to controller
@@ -38,60 +35,74 @@ def signal_handler_ignore(sig, frame):
     logging.debug("Ignoring Ctrl+C")
 
 
+def _build_comm_cls(args):
+    """
+    Resolve --ch9350 / --ch9350-state into a DataComm-producing callable.
+    Defaults to CH9329Comm (the class itself, which is callable).
+    """
+    if args.ch9350:
+        from kvm_serial.utils.ch9350 import CH9350Comm
+
+        state = args.ch9350_state
+        return lambda port: CH9350Comm(port, state=state)
+    from kvm_serial.utils.ch9329 import CH9329Comm
+
+    return CH9329Comm
+
+
 def start_threads(args, serial_port):
-    """Start handler threads based on command line arguments.
+    """Construct the DataCommManager, attach listeners per CLI flags, and
+    start everything.
 
     Args:
         args: Parsed command line arguments.
         serial_port: Serial port object for communication.
     """
-    global ml, keeb
+    global mgr
+    from kvm_serial.backend.manager import DataCommManager
 
-    # Start mouse listner on --mouse (-e)
+    mgr = DataCommManager(serial_port, comm_cls=_build_comm_cls(args))
+
+    # Start mouse listener on --mouse (-e)
     if args.mouse:
         from kvm_serial.backend.mouse import MouseListener
 
-        ml = MouseListener(serial_port)
-        ml.start()
+        mgr.attach(MouseListener(serial_port))
 
     # Do not capture keyboard with --no-keyboard (-n)
     if not args.no_keyboard:
         from kvm_serial.backend.keyboard import KeyboardListener
 
-        keeb = KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout)
-        keeb.start()
+        mgr.attach(KeyboardListener(serial_port, mode=args.mode, layout=args.keyboard_layout))
+
+    mgr.start()
 
 
-def join_threads(args):
-    global ml, keeb
-
-    # Wait for threads to finish. The main thread depends on which inputs are active.
-    if (args.mode == "none" or args.no_keyboard) and ml is not None:
-        # Mouse-only: Ctrl+C raises KeyboardInterrupt and exits.
-        logging.info("Waiting for mouse listener...")
-        ml.thread.join()
-    elif not args.no_keyboard and keeb is not None:
-        # Keyboard listener owns the exit key (e.g. Ctrl+ESC).
-        logging.info("Waiting for keyboard listener...")
-        keeb.thread.join()
+def join_threads():
+    if mgr is not None:
+        mgr.join()
 
 
 def stop_threads():
-    global ml, keeb
-    if ml is not None and ml.thread.is_alive():
-        ml.stop()
+    global mgr
+    if mgr is not None:
+        mgr.stop()
+        # Drop the singleton so a subsequent run (e.g. from tests) can
+        # build a fresh manager without tripping the "already initialised"
+        # guard.
+        from kvm_serial.backend.manager import DataCommManager
 
-    if keeb is not None and keeb.thread.is_alive():
-        keeb.stop()
+        DataCommManager.reset()
+        mgr = None
 
 
 def parse_args():
     # Parse arguments using argparse module. Example call:
     # python control.py /dev/cu.usbserial --verbose --mode usb
     parser = argparse.ArgumentParser(
-        prog="CH9329 Control Script",
-        description="Use a serial terminal as a USB keyboard!",
-        epilog="(c) 2023 Samantha Finnigan. MIT License",
+        prog="Serial KVM Control Script",
+        description="Use a serial terminal as a USB keyboard and mouse!",
+        epilog="(c) 2023-25 Samantha Finnigan and contributors. MIT License",
     )
 
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -139,6 +150,26 @@ def parse_args():
         "-e",
         help="Capture mouse input",
         action="store_true",
+    )
+    proto_group = parser.add_mutually_exclusive_group()
+    proto_group.add_argument(
+        "--ch9329",
+        help="Use the CH9329 protocol (default; flag for imperative declaration)",
+        action="store_true",
+    )
+    proto_group.add_argument(
+        "--ch9350",
+        help="Use the CH9350L extender protocol",
+        action="store_true",
+    )
+    parser.add_argument(
+        "--ch9350-state",
+        help="CH9350L working state to drive (default 2: legacy BIOS / UEFI CSM "
+        "compatible). 0 = paired-mode descriptor handshake; 3 = absolute mouse; "
+        "4 = HID Digitizers. See docs/CH9350L_PROTO.md.",
+        type=int,
+        default=2,
+        choices=[0, 2, 3, 4],
     )
     vids_group = parser.add_argument_group(
         "Video Options (removed)",
@@ -195,7 +226,7 @@ def main():
 
     try:
         start_threads(args, serial_port)
-        join_threads(args)
+        join_threads()
     except KeyboardInterrupt:
         logging.warning("^C caught. Cleaning up!")
     except Exception as e:

@@ -1,5 +1,6 @@
 import sys
 import logging
+from abc import ABC, abstractmethod
 from serial import Serial, SerialException
 from serial.tools import list_ports
 
@@ -10,10 +11,15 @@ except ImportError:
     termios = None
 
 
-class DataComm:
+class DataComm(ABC):
     """
-    DataComm class based on beijixiaohu/ch9329Comm module; simplified and commented
-    Original: https://github.com/beijixiaohu/CH9329_COMM/ / https://pypi.org/project/ch9329Comm/
+    Abstract base for protocol implementations that drive a UART-to-USB-HID
+    bridge chip from kvm-serial. Subclasses implement the wire framing for a
+    specific chip family (CH9329, CH9350L, ...).
+
+    Callers interact through the high-level methods below; concrete subclasses
+    handle packet construction and any chip-specific state (pairing handshake,
+    descriptor announce, working-state selection, etc.).
     """
 
     SCANCODE_LENGTH = 8
@@ -21,70 +27,45 @@ class DataComm:
     def __init__(self, port: Serial):
         self.port = port
 
-    def send(
-        self,
-        data: bytes,
-        head: bytes = b"\x57\xab",
-        addr: bytes = b"\x00",
-        cmd: bytes = b"\x02",
-    ) -> bool:
-        """
-        Convert input to data packet and send command over serial.
-
-        Args:
-            data: data packet to encapsulate and send
-            head: Packet header
-            addr: Address
-            cmd: Data command (0x02 = Keyboard; 0x04 = Absolute mouse; 0x05 = Relative mouse)
-        Returns:
-            True if successful, otherwise throws an exception
-        """
-        # Check inputs
-        if len(head) != 2 or len(addr) != 1 or len(cmd) != 1:
-            raise ValueError("DataComm packet header MUST have: header 2b; addr 1b; cmd 1b")
-
-        length = len(data).to_bytes(1, "little")
-
-        # Calculate checksum
-        checksum = (
-            sum(head)
-            + int.from_bytes(addr, "big")
-            + int.from_bytes(cmd, "big")
-            + int.from_bytes(length, "big")
-            + sum(data)
-        ) % 256
-
-        # Build data packet
-        packet = head + addr + cmd + length + data + bytes([checksum])
-
-        # Write command to serial port
-        self.port.write(packet)
-
-        return True
-
+    @abstractmethod
     def send_scancode(self, scancode: bytes) -> bool:
-        """
-        Send function for use with scancodes
-        Does additional length checking and returns False if long
+        """Send an 8-byte USB HID boot-protocol keyboard report."""
 
-        Args:
-            scancode: An 8-byte scancode representing keyboard state
-        Returns:
-            bool: True if successful, False otherwise
-        """
-        if len(scancode) < self.SCANCODE_LENGTH:
-            return False
+    @abstractmethod
+    def release(self) -> bool:
+        """Send an empty (all keys released) keyboard report."""
 
-        return self.send(scancode)
+    @abstractmethod
+    def send_mouse_absolute(
+        self, buttons: int, x: int, y: int, width: int, height: int, wheel: int = 0
+    ) -> bool:
+        """Send an absolute-positioning mouse report.
 
-    def release(self):
+        x, y are in source pixel coordinates; width, height bound the source
+        surface so subclasses can scale into the chip's native coordinate
+        space (CH9329: 0..4095; CH9350 state 3/4: 0..0x3FF).
         """
-        Release the button.
 
-        Return:
-            bool: True if successful
+    @abstractmethod
+    def send_mouse_relative(self, buttons: int, dx: int, dy: int, wheel: int = 0) -> bool:
+        """Send a relative-motion mouse report.
+
+        dx, dy, wheel are signed 8-bit deltas (-127..+127); callers pass 0 for
+        unused fields (e.g. button-only events or pure scroll events).
         """
-        return self.send(b"\x00" * self.SCANCODE_LENGTH)
+
+    def start(self) -> None:
+        """
+        Optional lifecycle hook invoked once the comm is wired into a BaseOp.
+        Implementations that need background threads or a handshake (e.g.
+        CH9350Comm state 0) override this; default is a no-op.
+        """
+
+    def stop(self) -> None:
+        """
+        Optional lifecycle hook invoked at shutdown. Pairs with start();
+        default is a no-op.
+        """
 
 
 def list_serial_ports():

@@ -1,6 +1,7 @@
 .idea/
 .vscode/
 .claude/
+tmp/
 CLAUDE.md
 .DS_Store
 ._.DS_Store
@@ -22,6 +23,7 @@ uv.lock
 
 # MkDocs build output
 site/
+docs/index.md
 
 # Icon generation intermediate files
 assets/icon.iconset/

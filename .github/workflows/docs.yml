@@ -28,5 +28,8 @@ jobs:
       - name: Install MkDocs and Material theme
         run: pip install mkdocs-material
 
+      - name: Generate docs homepage from README
+        run: python scripts/generate_docs_index.py
+
       - name: Deploy to GitHub Pages
         run: mkdocs gh-deploy --force
