@@ -505,12 +505,13 @@ class CH9350Comm(DataComm):
         """
         State-0/1 relative mouse frame:
             HEADER + cmd + LEN + SER + RID + [btn dx dy wheel] + CTR + CTRSUM
-        cmd is 0x88 (state 0) or 0x83 (state 1). dx/dy clamp to ±127.
+        cmd is 0x88 (state 0) or 0x83 (state 1). dx/dy/wheel clamp to ±127.
         """
         cmd = 0x83 if self.state == self.STATE_1 else 0x88
         dx_b = max(-127, min(127, int(dx))) & 0xFF
         dy_b = max(-127, min(127, int(dy))) & 0xFF
-        data = bytes([self.MOU_RID, btn & 0xFF, dx_b, dy_b, wheel & 0xFF])
+        wh_b = max(-127, min(127, int(wheel))) & 0xFF
+        data = bytes([self.MOU_RID, btn & 0xFF, dx_b, dy_b, wh_b])
         ctr = self._mou_counter & 0xFF
         self._mou_counter += 1
         ctr_sum = (ctr + sum(data)) & 0xFF
