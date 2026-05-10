@@ -854,7 +854,7 @@ class KVMQtGui(QMainWindow):
     # (label, protocol, ch9350_state). State is unused for CH9329 but kept
     # here for menu uniformity.
     _PROTOCOL_OPTIONS = [
-        ("CH9329", "ch9329", 0),
+        ("CH9329", "ch9329", -1),
         ("CH9350L (state 0/1, paired)", "ch9350", 0),
         ("CH9350L (state 2, BIOS)", "ch9350", 2),
         ("CH9350L (state 3, abs mouse)", "ch9350", 3),
@@ -898,7 +898,8 @@ class KVMQtGui(QMainWindow):
             action.setChecked(action.text() == target_label)
 
         self.protocol_var = protocol
-        self.ch9350_state_var = state
+        if protocol == "ch9350":
+            self.ch9350_state_var = state
         logging.info(f"Selected protocol: {target_label}")
         self.__init_serial()
 
