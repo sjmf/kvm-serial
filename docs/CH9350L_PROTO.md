@@ -174,7 +174,7 @@ Three variants observed, distinguished by LEN and SER. The LEN=`0x08` form is no
 
 #### Absolute mouse with report ID — LEN = `0x0A`
 
-Produced by the CH9329 bridge (which reports absolute coordinates).
+Wire format produced by a CH9329 bridge, which presents both relative (RID `0x04`) and absolute (RID `0x05`) mouse reports as part of its composite USB descriptor. Documented in datasheet §4.3 as a valid LC→UC frame.
 
 ```
 57 AB [CMD] 0A [SER=0x23] [RID=05] [btn] [XL] [XH] [YL] [YH] [wheel] [CTR] [CTR_SUM]
@@ -186,6 +186,10 @@ Produced by the CH9329 bridge (which reports absolute coordinates).
 | RID | `0x05` | CH9329 absolute mouse report ID |
 | `XL`/`XH` | X coordinate | 16-bit little-endian, raw USB HID absolute space |
 | `YL`/`YH` | Y coordinate | 16-bit little-endian |
+
+> **⚠ The CH9350L UC does not forward LEN=`0x0A` mouse frames to the target host in state 0/1.** Verified empirically: the LC sends valid `0x83 0x0A` absolute frames with correct framing, the UC's `0x12` keep-alive shows `STATUS=0x07` (both ports enumerated), the target host's HID enumeration completes — and yet the cursor does not respond. Reproduced both with PoC-generated frames under several descriptor variants, and with **a real CH9329 chip plugged into the LC's USB-host port** as the source of absolute reports. See [§Divergences](#divergences-from-the-datasheet) for the full evidence.
+>
+> **Implication: state 0/1 paired mode supports relative mouse only.** For absolute cursor positioning on a CH9350L UC, configure the UC for state 3 or state 4 (dipswitch) where absolute coords flow as fixed-format `0x04` frames and the UC owns the USB device descriptors directly. See [§States 2/3/4](#states-234-alternative-dipswitch-configurations).
 
 #### Relative mouse with report ID — LEN = `0x08`
 
@@ -344,6 +348,8 @@ To get `STATUS` back to `0x07` (i.e. devices re-enumerated on the target host), 
 
 State 0 (`0x88`) is the unpaired form; state 1 (`0x83`) is the paired form. The CMD byte switches; the frame payload is identical. Heartbeats run at ~1 s cadence in both states. **Transition trigger:** the UC's `0x12` keep-alive must reflect every PID the LC announced via `0x81` in its `P1`/`P2` fields — receiving any single `0x12` is *not* sufficient. See [§Divergences](#divergences-from-the-datasheet) for how this differs from the datasheet's wording.
 
+> **Capability note: state 0/1 supports relative mouse only.** Although datasheet §4.3 documents the LEN=`0x0A` absolute-mouse frame as a valid state-0/1 LC→UC frame, the UC's frame-forwarding firmware silently drops it. Verified against multiple descriptor variants and against a real CH9329 chip as the LC USB-host source. For absolute cursor positioning, use state 3 or 4. See [§Mouse — CMD `0x83` / `0x88`](#mouse--cmd-0x83--0x88) and [§Divergences](#divergences-from-the-datasheet).
+
 ---
 
 ## Labelling Byte (SER)
@@ -477,6 +483,18 @@ The CH9350 V2.3 datasheet is broadly accurate but in several places contradicts 
 
 - **Datasheet (§4.3):** documents only the LEN=`0x0A` (CH9329 absolute, with report ID) and LEN=`0x07` (boot relative, no report ID) mouse frame formats.
 - **Observed:** a third variant exists — LEN=`0x08`, SER=`0x22`, with a `Report ID` byte preceding the 4-byte boot mouse data. This is what the LC emits when the connected USB mouse has a Report Descriptor that includes a `Report ID` item but uses standard relative coordinates.
+
+### LEN = `0x0A` absolute mouse frames are silently dropped by the UC in state 0/1
+
+- **Datasheet (§4.3):** documents the LEN=`0x0A`, RID=`0x05` absolute mouse frame as a normal LC→UC frame in state 0/1, alongside the relative variants. The descriptor-announce mechanism (`0x81`) is presented as a general-purpose channel for declaring arbitrary HID Report Descriptors to the UC.
+- **Observed:** the UC accepts the descriptor handshake (the announced descriptor's PID is reflected in `0x12`'s `P1`/`P2` slot, `STATUS` reaches `0x07`, the target host enumerates the device with the expected HID interfaces). But absolute mouse reports never reach the target's input pipeline — the cursor does not move. The same UC accepts and forwards LEN=`0x07`/`0x08` relative-mouse frames and LEN=`0x0B`/`0x0C` keyboard frames immediately, against the same descriptor exchange.
+- **Evidence (multiple sources):**
+  - PoC-generated `0x83 0x0A` frames with several composite-mouse descriptor variants — two-Application TLCs, single Pointer Physical with two reports, with/without `Wheel` declarations, with 0..65535 / 0..32767 / 0..4095 absolute coordinate ranges, with Report IDs `0x02` and `0x05`. Relative reports (RID `0x01`) moved the cursor in every variant; absolute reports (any RID, LEN=`0x0A`) produced no cursor motion at any coordinate, including screen edges.
+  - PoC-generated relative frames using RID `0x04` instead of RID `0x01` against a descriptor declaring both — to test whether the UC's frame validator is RID-pinned independent of frame length. (Result included for completeness; see capture `tmp/sniff/test-abs-LC-5.txt`.)
+  - **Real CH9329 chip** plugged into the LC's USB-host port as the report source. The LC announced the genuine 359-byte CH9329 composite descriptor (`PID=0x29e1`); the UC accepted it (`p2=29e1`, `STATUS=0x07`); the LC forwarded ~80 absolute frames (`57 ab 83 0a 23 05 …`) during stylus activity; the cursor did not move. Repeated across both LC ports.
+- **Interpretation:** the UC's frame-forwarding firmware is hard-bound to a subset of report shapes — relative mouse (LEN=`0x07`/`0x08`) and keyboard (LEN=`0x0B`/`0x0C`). The descriptor handshake forwards descriptor bytes verbatim to the target host for enumeration purposes, but report payloads outside the firmware's expected set are swallowed before reaching the USB device endpoints, regardless of whether the descriptor declares them. The chip's lineage is a BIOS keyboard-and-mouse extender; arbitrary HID classes were apparently never within scope for state-0/1's report path.
+- **Implication:** absolute mouse positioning on a CH9350L UC requires state 3 or state 4 (dipswitch-fixed BIOS modes), where the UC owns the USB device stack with built-in absolute-mouse / digitizer descriptors and frames flow as fixed-format `0x04` packets. State 0/1 cannot be made to support absolute mouse from the LC side alone; this is a UC firmware constraint, not a protocol negotiation issue.
+- **Caveat:** observed against one CH9350L board (single-DM/DP wired port; the same hardware used for all captures in this document). Whether other CH9350L boards or firmware revisions behave differently has not been tested.
 
 ---
 
