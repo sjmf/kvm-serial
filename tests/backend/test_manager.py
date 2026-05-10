@@ -169,3 +169,29 @@ def test_join_with_no_listeners_is_a_noop():
     """No listeners = nothing to wait on; join() returns silently."""
     mgr = DataCommManager(MagicMock(), comm_cls=lambda p: MagicMock())
     mgr.join()  # should not raise
+
+
+def test_reset_continues_when_stop_raises():
+    """reset() swallows exceptions from stop() and still clears the singleton."""
+    comm = MagicMock()
+    comm.stop.side_effect = RuntimeError("stop exploded")
+    DataCommManager(MagicMock(), comm_cls=lambda p: comm)
+
+    DataCommManager.reset()  # must not raise
+
+    with pytest.raises(RuntimeError):
+        DataCommManager.get()
+
+
+def test_stop_continues_when_comm_stop_raises():
+    """Exceptions from comm.stop() are swallowed; listener shutdown still completes."""
+    comm = MagicMock()
+    comm.stop.side_effect = RuntimeError("comm stop failed")
+    mgr = DataCommManager(MagicMock(), comm_cls=lambda p: comm)
+    listener = MagicMock()
+    mgr.attach(listener)
+
+    mgr.stop()  # must not raise
+
+    listener.stop.assert_called_once()
+    comm.stop.assert_called_once()

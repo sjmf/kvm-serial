@@ -1,3 +1,4 @@
+import time
 import pytest
 from unittest.mock import patch
 from kvm_serial.utils.ch9350 import (
@@ -5,6 +6,7 @@ from kvm_serial.utils.ch9350 import (
     DEFAULT_KBD_PID,
     DEFAULT_MOUSE_PID,
     HEADER,
+    HEARTBEAT_FRAME,
     _parse_frames,
     _split_relative_delta,
 )
@@ -474,3 +476,159 @@ class TestSplitRelativeDelta:
             # State-2 frame: header(2) + cmd(1) + btn(1) + dx(1) + dy(1) + wheel(1) = 7B
             wheels = [call.args[0][6] for call in mock_serial.write.call_args_list]
             assert wheels == [3, 0, 0]
+
+
+class TestCH9350ParseFramesEdgeCases:
+    """Edge-case coverage for _parse_frames: partial buffers and uncommon cmds."""
+
+    def test_partial_header_only_returns_empty(self):
+        """Only the 2-byte header in buffer: need cmd byte too, so hold."""
+        frames, remaining = _parse_frames(bytearray(b"\x57\xab"))
+        assert frames == []
+        assert remaining == bytearray(b"\x57\xab")
+
+    def test_partial_0x83_missing_len_byte(self):
+        """0x83 cmd present but LEN byte not yet received."""
+        frames, remaining = _parse_frames(bytearray(b"\x57\xab\x83"))
+        assert frames == []
+
+    def test_partial_0x83_truncated_payload(self):
+        """LEN says 5 bytes but only 2 payload bytes present."""
+        buf = bytearray(b"\x57\xab\x83\x05\x13\x01")  # need 4+5=9, have 6
+        frames, remaining = _parse_frames(buf)
+        assert frames == []
+
+    def test_complete_0x81_device_connection_frame(self):
+        """A well-formed 0x81 Device Connection Frame parses to (0x81, payload)."""
+        desc = b"\x01\x02\x03"
+        pid = b"\x40\x00"
+        chk = (sum(desc) + sum(pid)) & 0xFF
+        plen = len(desc)
+        raw = (
+            b"\x57\xab\x81\x00"
+            + bytes([plen & 0xFF, (plen >> 8) & 0xFF])
+            + desc
+            + pid
+            + bytes([chk])
+        )
+        frames, remaining = _parse_frames(bytearray(raw))
+        assert len(frames) == 1
+        assert frames[0][0] == 0x81
+        assert remaining == bytearray()
+
+    def test_partial_0x81_missing_len_field(self):
+        """0x81 present but fewer than 6 bytes total: hold until LEN is readable."""
+        frames, remaining = _parse_frames(bytearray(b"\x57\xab\x81\x00"))
+        assert frames == []
+
+    def test_partial_0x81_truncated_payload(self):
+        """LEN field present but payload bytes incomplete."""
+        plen = 10
+        buf = bytearray(b"\x57\xab\x81\x00" + bytes([plen, 0x00]) + b"\x01\x02")
+        frames, remaining = _parse_frames(buf)
+        assert frames == []
+
+    def test_unknown_cmd_bounded_by_next_header(self):
+        """Unknown cmd bytes are collected up to the start of the next header."""
+        heartbeat = b"\x57\xab\x82\xa3"
+        buf = bytearray(b"\x57\xab\xff\x01\x02") + bytearray(heartbeat)
+        frames, _ = _parse_frames(buf)
+        cmds = [f[0] for f in frames]
+        assert 0xFF in cmds
+        assert 0x82 in cmds
+
+    def test_unknown_cmd_large_buffer_no_header_flushed(self):
+        """Unknown cmd, no next header, buf > 128 bytes: frame emitted, buffer cleared."""
+        buf = bytearray(b"\x57\xab\xff") + bytearray(200)
+        frames, remaining = _parse_frames(buf)
+        assert any(f[0] == 0xFF for f in frames)
+        assert remaining == bytearray()
+
+    def test_unknown_cmd_small_buffer_no_header_held(self):
+        """Unknown cmd, no next header, buf <= 128 bytes: hold and wait for more data."""
+        buf = bytearray(b"\x57\xab\xff\x01\x02")
+        frames, remaining = _parse_frames(buf)
+        assert frames == []
+        assert remaining == buf
+
+
+class TestCH9350CommInternals:
+    """Direct tests of CH9350Comm lifecycle hooks and internal frame helpers."""
+
+    def test_start_called_twice_raises(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=2)
+        with patch.object(dc, "_rx_loop"):
+            dc.start()
+            with pytest.raises(RuntimeError, match="start\\(\\) called twice"):
+                dc.start()
+        dc.stop()
+
+    def test_start_state0_spawns_tx_thread(self, mock_serial):
+        """State 0 creates both rx and tx-maintenance threads."""
+        dc = CH9350Comm(mock_serial, state=0)
+        with patch.object(dc, "_rx_loop"), patch.object(dc, "_tx_maint_loop"):
+            dc.start()
+            assert dc._tx_thread is not None
+            assert dc._rx_thread is not None
+        dc.stop()
+        assert dc._tx_thread is None
+        assert dc._rx_thread is None
+
+    def test_start_state2_no_tx_thread(self, mock_serial):
+        """States 2/3/4 spawn the rx thread but no tx-maintenance thread."""
+        dc = CH9350Comm(mock_serial, state=2)
+        with patch.object(dc, "_rx_loop"):
+            dc.start()
+            assert dc._tx_thread is None
+        dc.stop()
+
+    def test_heartbeat_sends_frame_and_updates_timestamp(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=2)
+        before = time.time()
+        dc._heartbeat()
+        mock_serial.write.assert_called_once_with(HEARTBEAT_FRAME)
+        assert dc._last_hb >= before
+
+    def test_send_announce_sends_0x89_frame(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=2)
+        dc._send_announce()
+        mock_serial.write.assert_called_once_with(b"\x57\xab\x89")
+
+    def test_announce_descriptors_sends_two_0x81_frames(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=0)
+        with patch("kvm_serial.utils.ch9350.time.sleep"):
+            dc._announce_descriptors()
+        assert mock_serial.write.call_count == 2
+        for c in mock_serial.write.call_args_list:
+            frame = c.args[0]
+            assert frame[:2] == b"\x57\xab"
+            assert frame[2] == 0x81
+
+    def test_maybe_retransmit_sends_when_unacked_and_interval_elapsed(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=0)
+        dc._last_mouse_announce = 0.0
+        dc._last_kbd_announce = 0.0
+        # _uc_p1/p2 default to b"\x00\x00", which differs from both PIDs
+        dc._maybe_retransmit_descriptors(time.time())
+        assert mock_serial.write.call_count == 2
+
+    def test_maybe_retransmit_skips_when_recently_announced(self, mock_serial):
+        dc = CH9350Comm(mock_serial, state=0)
+        now = time.time()
+        dc._last_mouse_announce = now
+        dc._last_kbd_announce = now
+        dc._maybe_retransmit_descriptors(now)
+        mock_serial.write.assert_not_called()
+
+    def test_run_attach_sequence_no_wait_sends_full_sequence(self, mock_serial):
+        """wait_for_uc=False skips the UC-seen guard and sends the full attach sequence."""
+        dc = CH9350Comm(mock_serial, state=0)
+        with patch("kvm_serial.utils.ch9350.time.sleep"):
+            dc._run_attach_sequence(wait_for_uc=False)
+        cmds = [c.args[0][2] for c in mock_serial.write.call_args_list]
+        # 0x86 + 0x80 x2 + 0x82 (heartbeat) + 0x89 + 0x81 x2 (descriptors) = 7 writes
+        assert mock_serial.write.call_count == 7
+        assert 0x86 in cmds
+        assert 0x80 in cmds
+        assert 0x89 in cmds
+        assert 0x81 in cmds
