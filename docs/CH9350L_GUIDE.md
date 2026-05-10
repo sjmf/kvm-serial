@@ -88,14 +88,18 @@ and which UART frame format is used.
 
 - **State 3** is the recommended starting point for most users controlling a modern desktop OS
   with an absolute mouse pointer (the cursor goes exactly where you click in the video feed).
+  Because reports carry positions rather than deltas, target-side pointer acceleration has no
+  effect — the cursor lands exactly where the source pointer is in the video feed.
 - **State 2** is the right choice for BIOS/UEFI setup screens, boot menus, PXE boot, and
   recovery consoles. Legacy BIOS and UEFI CSM only enumerate USB HID boot-protocol devices
   with a relative mouse; the absolute-mouse descriptor used in states 3/4 will not enumerate
-  in those environments.
+  in those environments. The cursor is driven by relative deltas, so target-side pointer
+  acceleration applies (see the troubleshooting note below).
 - **State 4** is for multi-monitor setups using HID Digitizer absolute positioning.
 - **State 0/1** is the most advanced option: the UC mirrors descriptors from real USB HID
   devices. It supports relative mouse only (absolute mouse frames are silently dropped by the
-  UC firmware in this state). Most users should prefer state 3 or 4.
+  UC firmware in this state) and inherits target-side pointer acceleration as a result. Most
+  users should prefer state 3 or 4.
 
 > **BIOS/UEFI tip:** If you need to access the BIOS on the target machine, temporarily
 > switch to state 2 (change S0/S1 and power-cycle the board). You can switch back to state 3
@@ -259,6 +263,25 @@ Common causes:
 
 Absolute mouse is silently dropped by the CH9350L UC firmware in state 0/1. This is a
 hardware/firmware limitation. Use **state 3** or **state 4** for absolute mouse positioning.
+
+### Cursor lags behind on fast drags (states 0/1, 2)
+
+In states 0/1 and 2 kvm-serial converts the source pointer's absolute position into relative
+deltas, which means the cursor on the target is driven by the same path as any USB mouse
+plugged in directly — including the target's **pointer acceleration**. A slow drag tracks
+the source faithfully; a fast drag overshoots; a deliberate slow-down lets the source catch
+up. This is a property of relative-mouse input on accelerated OSes, not a kvm-serial bug.
+
+Mitigations:
+
+- **Switch to state 3** if the target supports it. State 3 ships positions rather than deltas
+  so target-side acceleration has no effect.
+- **Disable target-side pointer acceleration** if state 3 isn't an option:
+    - Windows: Settings → Devices → Mouse → Additional mouse options → Pointer Options →
+      uncheck *Enhance pointer precision*
+    - macOS: `defaults write -g com.apple.mouse.scaling -1` then log out (no GUI toggle)
+    - Linux: per-DE — typically `xinput set-prop` for X11, or the desktop environment's
+      mouse settings panel
 
 ### Descriptor handshake never completes (state 0/1)
 
