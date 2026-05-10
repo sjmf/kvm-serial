@@ -121,6 +121,83 @@ class TestMouse:
                 assert result is True
                 mock_comm.send_mouse_relative.reset_mock()
 
+    def test_drag_preserves_held_button(self, mock_serial, sys_modules_patch, _datacomm_manager):
+        """
+        Regression: a drag is mouse-down → on_move(s) while held → mouse-up.
+        Previously on_move always sent buttons=0, so the very first move event
+        during a drag released the held button on the target. on_click must
+        update MouseOp._buttons and on_move must pass it through.
+        """
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.mouse import MouseListener
+            from kvm_serial.backend.implementations.mouseop import MouseButton
+
+            mock_comm = _datacomm_manager.comm
+            listener = MouseListener(mock_serial)
+            listener._width = 1920
+            listener._height = 1080
+
+            left_button = MagicMock()
+            listener.pynput_button_mapping = {left_button: MouseButton.LEFT}  # type: ignore
+
+            # Press LEFT.
+            listener.on_click(100, 200, left_button, True)
+            mock_comm.send_mouse_relative.assert_called_once_with(0x01, 0, 0, 0)
+            mock_comm.reset_mock()
+
+            # Move while held: button must still be set in the abs frame.
+            listener.on_move(150, 250)
+            mock_comm.send_mouse_absolute.assert_called_once_with(0x01, 150, 250, 1920, 1080)
+            mock_comm.reset_mock()
+
+            # Another move while held.
+            listener.on_move(200, 300)
+            mock_comm.send_mouse_absolute.assert_called_once_with(0x01, 200, 300, 1920, 1080)
+            mock_comm.reset_mock()
+
+            # Release LEFT: button bit clears.
+            listener.on_click(200, 300, left_button, False)
+            mock_comm.send_mouse_relative.assert_called_once_with(0x00, 0, 0, 0)
+            mock_comm.reset_mock()
+
+            # Subsequent move with no buttons held: buttons=0.
+            listener.on_move(250, 350)
+            mock_comm.send_mouse_absolute.assert_called_once_with(0x00, 250, 350, 1920, 1080)
+
+    def test_multi_button_held_independently(
+        self, mock_serial, sys_modules_patch, _datacomm_manager
+    ):
+        """
+        Holding LEFT and pressing RIGHT (e.g. while LEFT is still down)
+        produces a combined bitmask 0x03; releasing one clears only that bit.
+        """
+        with patch.dict("sys.modules", sys_modules_patch):
+            from kvm_serial.backend.mouse import MouseListener
+            from kvm_serial.backend.implementations.mouseop import MouseButton
+
+            mock_comm = _datacomm_manager.comm
+            listener = MouseListener(mock_serial)
+            listener._width = 1920
+            listener._height = 1080
+            left = MagicMock()
+            right = MagicMock()
+            listener.pynput_button_mapping = {  # type: ignore
+                left: MouseButton.LEFT,
+                right: MouseButton.RIGHT,
+            }
+
+            listener.on_click(0, 0, left, True)  # 0x01
+            mock_comm.send_mouse_relative.assert_called_with(0x01, 0, 0, 0)
+
+            listener.on_click(0, 0, right, True)  # 0x01 | 0x02 = 0x03
+            mock_comm.send_mouse_relative.assert_called_with(0x03, 0, 0, 0)
+
+            listener.on_click(0, 0, left, False)  # 0x03 & ~0x01 = 0x02
+            mock_comm.send_mouse_relative.assert_called_with(0x02, 0, 0, 0)
+
+            listener.on_click(0, 0, right, False)  # 0x02 & ~0x02 = 0x00
+            mock_comm.send_mouse_relative.assert_called_with(0x00, 0, 0, 0)
+
     def test_on_scroll(self, mock_serial, sys_modules_patch, _datacomm_manager):
         """
         Test MouseListener.on_scroll forwards vertical scroll deltas as the
