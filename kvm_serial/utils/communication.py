@@ -43,7 +43,7 @@ class DataComm(ABC):
 
         x, y are in source pixel coordinates; width, height bound the source
         surface so subclasses can scale into the chip's native coordinate
-        space (CH9329: 0..4095; CH9350 state 3/4: 0..0xFFFF).
+        space (CH9329: 0..4095; CH9350 state 3/4: 0..0x3FF).
         """
 
     @abstractmethod
