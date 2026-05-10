@@ -169,4 +169,4 @@ With thanks to [@beijixiaohu](https://github.com/beijixiaohu), the author of the
 Thank you, once again, to everyone who has [contributed](CONTRIBUTING.md) to this project.
 
 ## License
-(c) 2023-25 Samantha Finnigan and contributors (except where acknowledged) and released under [MIT License](LICENSE.md).
+(c) 2023-26 Samantha Finnigan and contributors (except where acknowledged) and released under [MIT License](LICENSE.md).
