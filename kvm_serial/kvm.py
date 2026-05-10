@@ -923,14 +923,10 @@ class KVMQtGui(QMainWindow):
         CH9350Comm needs the chosen state bound via a lambda.
         """
         if self.protocol_var == "ch9350":
-            from kvm_serial.utils.ch9350 import CH9350Comm, COMPOSITE_MOUSE_DESC
+            from kvm_serial.utils.ch9350 import CH9350Comm
 
             state = self.ch9350_state_var
-            return lambda port: CH9350Comm(
-                port,
-                state=state,
-                mouse_desc=COMPOSITE_MOUSE_DESC,
-            )
+            return lambda port: CH9350Comm(port, state=state)
 
         from kvm_serial.utils.ch9329 import CH9329Comm
 
