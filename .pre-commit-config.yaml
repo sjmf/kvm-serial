@@ -14,5 +14,5 @@ repos:
     rev: v0.9.37
     hooks:
       - id: pymarkdown
-        args: ["scan", "--respect-gitignore"]
+        args: ["--config", ".pymarkdown.json", "scan", "--respect-gitignore"]
         types: [markdown]
