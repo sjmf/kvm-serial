@@ -224,15 +224,15 @@ class CH9350Comm(DataComm):
     MOU_SER = 0x22  # mouse / HID / port 1
     MOU_RID = 0x01  # 4-byte relative mouse report follows
 
-    # State-3/4 absolute coordinate range. The chip's built-in absolute mouse
-    # descriptor declares a 12-bit logical range (0..4095), matching the
-    # CH9329's identical wire format. Sending values outside this range
-    # produces mod-4096 wrap behaviour as the host parses the value against
-    # the descriptor's LogicalMax — a "tiny on-host motion creates enormous
-    # cursor jumps that wrap" symptom. The X/Y wire fields are 16-bit LE
-    # regardless; the upper 4 bits are unused / Const padding per the
-    # descriptor.
-    _ABS_MAX = 0x0FFF
+    # State-3/4 absolute coordinate range. Empirically calibrated against
+    # cursor landing position vs view input on a 1920x1080 target:
+    # sending 4095 (12-bit max, the CH9329's range) produced cursor-at-25%,
+    # implying the chip's built-in descriptor declares ~16383 (14-bit). The
+    # X/Y wire fields are 16-bit LE regardless; the upper 2 bits are unused
+    # / Const padding per the chip's descriptor. Sending values >16383
+    # produces mod-wrap behaviour ("tiny motion creates enormous cursor
+    # jumps that wrap") — the symptom that motivated this calibration.
+    _ABS_MAX = 0x3FFF
 
     # How long to wait between 0x81 retransmits while a PID remains un-acked.
     _ANNOUNCE_RETRY_INTERVAL = 2.0
@@ -394,6 +394,17 @@ class CH9350Comm(DataComm):
 
         nx = max(0, min(self._ABS_MAX, int(((self._ABS_MAX + 1) * x) // max(1, width))))
         ny = max(0, min(self._ABS_MAX, int(((self._ABS_MAX + 1) * y) // max(1, height))))
+        logger.debug(
+            "mouse_abs->native state=%d xy=(%s,%s) wh=(%s,%s) -> nxny=(%d,%d) of max=%d",
+            self.state,
+            x,
+            y,
+            width,
+            height,
+            nx,
+            ny,
+            self._ABS_MAX,
+        )
         self._last_x, self._last_y = x, y
         self._last_width, self._last_height = width, height
         return self._send_absolute_frame(buttons, nx, ny, wheel)
