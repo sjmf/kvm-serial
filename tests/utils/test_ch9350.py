@@ -6,6 +6,7 @@ from kvm_serial.utils.ch9350 import (
     DEFAULT_MOUSE_PID,
     HEADER,
     _parse_frames,
+    _split_relative_delta,
 )
 
 from tests._utilities import MockSerial, mock_serial
@@ -352,3 +353,122 @@ class TestCH9350Comm:
         dc._handle_frame(0x12, b"\x00\x00\x00\x00\x01\x07\xac\x20")
         assert dc.state == CH9350Comm.STATE_2
         assert not dc._reattach_needed.is_set()
+
+    @patch("serial.Serial", MockSerial)
+    def test_supports_absolute_mouse_property(self, mock_serial):
+        """States 3/4 forward absolute reports natively; states 0/1/2 translate
+        absolute targets into relative deltas. The property surfaces this."""
+        for state in (0, 2):
+            assert CH9350Comm(mock_serial, state=state).supports_absolute_mouse is False
+        for state in (3, 4):
+            assert CH9350Comm(mock_serial, state=state).supports_absolute_mouse is True
+
+        # State 1 is reached internally from state 0 via the PID-ack handshake;
+        # an instance promoted to state 1 still maps to relative-only forwarding.
+        dc = CH9350Comm(mock_serial, state=0)
+        dc.state = CH9350Comm.STATE_1
+        assert dc.supports_absolute_mouse is False
+
+
+class TestSplitRelativeDelta:
+    """
+    State-0/1/2 mouse frames carry signed-byte deltas (±127 per axis). For
+    absolute targets that translate to a delta exceeding that range,
+    _split_relative_delta fans the displacement out into a short burst of
+    chunks each within ±127 that sum to the original delta.
+    """
+
+    def test_within_range_passes_through(self):
+        """A single-frame delta is yielded unchanged."""
+        assert list(_split_relative_delta(0, 0)) == [(0, 0)]
+        assert list(_split_relative_delta(50, -30)) == [(50, -30)]
+        assert list(_split_relative_delta(127, -127)) == [(127, -127)]
+
+    def test_large_dx_splits(self):
+        """|dx| > 127 fans out; chunks within ±127 and sum equal to original."""
+        chunks = list(_split_relative_delta(300, 0))
+        assert len(chunks) == 3  # ceil(300 / 127) = 3
+        assert all(abs(cdx) <= 127 and abs(cdy) <= 127 for cdx, cdy in chunks)
+        assert sum(c[0] for c in chunks) == 300
+        assert sum(c[1] for c in chunks) == 0
+
+    def test_large_dy_splits(self):
+        chunks = list(_split_relative_delta(0, -400))
+        assert len(chunks) == 4  # ceil(400 / 127) = 4
+        assert all(abs(cdx) <= 127 and abs(cdy) <= 127 for cdx, cdy in chunks)
+        assert sum(c[1] for c in chunks) == -400
+
+    def test_diagonal_split_preserves_ratio(self):
+        """Both axes split together; chunk-count driven by the larger axis."""
+        chunks = list(_split_relative_delta(300, 50))
+        assert len(chunks) == 3
+        assert all(abs(cdx) <= 127 and abs(cdy) <= 127 for cdx, cdy in chunks)
+        assert sum(c[0] for c in chunks) == 300
+        assert sum(c[1] for c in chunks) == 50
+
+    def test_negative_axes(self):
+        chunks = list(_split_relative_delta(-500, -250))
+        assert all(abs(cdx) <= 127 and abs(cdy) <= 127 for cdx, cdy in chunks)
+        assert sum(c[0] for c in chunks) == -500
+        assert sum(c[1] for c in chunks) == -250
+
+    def test_state0_absolute_fans_out_on_wire(self, mock_serial):
+        """Verify the integration: a state-0 send_mouse_absolute call with a
+        delta > 127 produces multiple consecutive 0x88 mouse frames whose
+        chunk dx/dy sum to the requested displacement."""
+        from unittest.mock import patch
+
+        with patch("serial.Serial", MockSerial):
+            dc = CH9350Comm(mock_serial, state=0)
+            # First call establishes baseline at (0, 0); second call requests
+            # a 300-pixel jump in x. Expect three 0x88 frames, each within ±127
+            # in dx, summing to 300.
+            dc.send_mouse_absolute(0, 0, 0, 1920, 1080)
+            mock_serial.write.reset_mock()
+            dc.send_mouse_absolute(0, 300, 0, 1920, 1080)
+            assert mock_serial.write.call_count == 3
+            total_dx = 0
+            for call in mock_serial.write.call_args_list:
+                frame = call.args[0]
+                # 0x88 frame: header + cmd + LEN + SER + RID + btn + dx + dy + wheel + ctr + sum
+                assert frame[2] == 0x88  # cmd
+                dx_byte = frame[7]
+                dx_signed = dx_byte - 256 if dx_byte > 127 else dx_byte
+                assert -127 <= dx_signed <= 127
+                total_dx += dx_signed
+            assert total_dx == 300
+
+    def test_state2_absolute_fans_out_on_wire(self, mock_serial):
+        """State 2 also fans out; emits multiple 0x02 simple frames."""
+        from unittest.mock import patch
+
+        with patch("serial.Serial", MockSerial):
+            dc = CH9350Comm(mock_serial, state=2)
+            dc.send_mouse_absolute(0, 0, 0, 1920, 1080)
+            mock_serial.write.reset_mock()
+            dc.send_mouse_absolute(0, 0, 250, 1920, 1080)
+            assert mock_serial.write.call_count == 2  # ceil(250 / 127) = 2
+            total_dy = 0
+            for call in mock_serial.write.call_args_list:
+                frame = call.args[0]
+                assert frame[2] == 0x02  # state-2 cmd byte
+                dy_byte = frame[5]
+                dy_signed = dy_byte - 256 if dy_byte > 127 else dy_byte
+                assert -127 <= dy_signed <= 127
+                total_dy += dy_signed
+            assert total_dy == 250
+
+    def test_wheel_only_on_first_chunk(self, mock_serial):
+        """When fan-out applies, the wheel value rides only the first frame
+        so a single scroll request isn't multiplied by the fan-out count."""
+        from unittest.mock import patch
+
+        with patch("serial.Serial", MockSerial):
+            dc = CH9350Comm(mock_serial, state=2)
+            dc.send_mouse_absolute(0, 0, 0, 1920, 1080)
+            mock_serial.write.reset_mock()
+            dc.send_mouse_absolute(0, 300, 0, 1920, 1080, wheel=3)
+            assert mock_serial.write.call_count == 3
+            # State-2 frame: header(2) + cmd(1) + btn(1) + dx(1) + dy(1) + wheel(1) = 7B
+            wheels = [call.args[0][6] for call in mock_serial.write.call_args_list]
+            assert wheels == [3, 0, 0]

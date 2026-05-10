@@ -86,6 +86,30 @@ _PAYLOAD_LEN = {
 }
 
 
+def _split_relative_delta(dx: int, dy: int, max_step: int = 127):
+    """
+    Yield (chunk_dx, chunk_dy) tuples, each within ±max_step, summing to (dx, dy).
+
+    State-0/1/2 mouse frames carry signed-byte deltas; a single send for
+    |delta| > 127 would clamp at the comm layer and lose displacement. Splitting
+    proportionally lets a single absolute target translate to a short burst of
+    relative frames that the host integrates back into the requested motion --
+    same approach as Wacom's on-device pen-to-mouse conversion. Frames-per-axis
+    is ceil(max(|dx|, |dy|) / max_step); each yielded chunk respects max_step
+    by construction.
+    """
+    if abs(dx) <= max_step and abs(dy) <= max_step:
+        yield dx, dy
+        return
+    n = (max(abs(dx), abs(dy)) - 1) // max_step + 1
+    sent_dx = sent_dy = 0
+    for i in range(1, n + 1):
+        target_dx = dx * i // n
+        target_dy = dy * i // n
+        yield target_dx - sent_dx, target_dy - sent_dy
+        sent_dx, sent_dy = target_dx, target_dy
+
+
 def _parse_frames(buf: bytearray) -> tuple[list[tuple[int, bytes]], bytearray]:
     """
     Extract complete frames from buf. Returns (frames, remaining_buf) where
@@ -321,27 +345,47 @@ class CH9350Comm(DataComm):
         """
         Emit a positional update.
 
-        States 3/4: scale pixel coordinates into the chip's 16-bit absolute
-        space and emit a 0x04 frame.
-        States 0/1 and 2: no absolute-mouse path exists on the wire (the
-        announced descriptor is a relative-mouse boot report). Translate to
-        a relative delta from the previous absolute call. This means a
-        fresh-from-origin pointer move clamps each step to ±127 px (the
-        signed-byte range), but pynput's frequent event firing covers the
-        gap in practice.
+        States 3/4: native absolute path. Pixel coords scale into the chip's
+        16-bit absolute space and emit a 0x04 frame.
+        States 0/1 and 2: no absolute path exists on the wire (UC firmware
+        silently drops LEN=0x0A in state 0/1; state 2's BIOS boot mouse is
+        relative-only by design — see docs/CH9350L_PROTO.md §Divergences).
+        Translate to a relative delta from the last reported absolute
+        position. When |delta| > 127 in either axis (e.g. cursor teleport,
+        focus-into-window from far away) the displacement fans out into a
+        short burst of consecutive frames so the cursor reaches the true
+        target rather than stopping ~127 px short — equivalent to what a
+        Wacom-style device does on-chip in pen-to-mouse mode.
         """
         if self.state in (self.STATE_0, self.STATE_1, self.STATE_2):
             dx = int(x - self._last_x)
             dy = int(y - self._last_y)
             self._last_x, self._last_y = x, y
             self._last_width, self._last_height = width, height
-            return self._send_relative_frame(buttons, dx, dy, wheel)
+            ok = True
+            for i, (chunk_dx, chunk_dy) in enumerate(_split_relative_delta(dx, dy)):
+                # Wheel rides only the first chunk so a multi-frame fan-out
+                # doesn't multiply a single scroll request.
+                chunk_wheel = wheel if i == 0 else 0
+                ok = self._send_relative_frame(buttons, chunk_dx, chunk_dy, chunk_wheel) and ok
+            return ok
 
         nx = max(0, min(0xFFFF, int((0xFFFF * x) // max(1, width))))
         ny = max(0, min(0xFFFF, int((0xFFFF * y) // max(1, height))))
         self._last_x, self._last_y = x, y
         self._last_width, self._last_height = width, height
         return self._send_absolute_frame(buttons, nx, ny, wheel)
+
+    @property
+    def supports_absolute_mouse(self) -> bool:
+        """
+        True if this comm forwards absolute-mouse reports natively to the
+        target host (states 3/4); False if `send_mouse_absolute` translates
+        the requested position into relative deltas (states 0/1/2). Useful
+        for application code surfacing mode information or selecting
+        different UX for absolute-aware vs relative-only modes.
+        """
+        return self.state in (self.STATE_3, self.STATE_4)
 
     def send_mouse_relative(self, buttons: int, dx: int, dy: int, wheel: int = 0) -> bool:
         """
