@@ -8,6 +8,7 @@
     "md025": { "enabled": false },
     "md032": { "enabled": false },
     "md033": { "enabled": false },
-    "md036": { "enabled": false }
+    "md036": { "enabled": false },
+    "md041": { "enabled": false }
   }
 }

@@ -24,4 +24,4 @@ jobs:
         run: pip install pymarkdownlnt==0.9.37
 
       - name: Lint Markdown
-        run: pymarkdown scan --recurse .
+        run: pymarkdown scan --recurse --respect-gitignore .
