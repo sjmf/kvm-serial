@@ -1,0 +1,901 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Software KVM using the CH9329 UART Serial to USB HID controller">
+      
+      
+      
+        <link rel="canonical" href="https://sjmf.github.io/kvm-serial/CH9329_GUIDE/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>CH9329 User Guide - KVM Serial</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ch9329-user-guide" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="KVM Serial" class="md-header__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            KVM Serial
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CH9329 User Guide
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="KVM Serial" class="md-nav__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    KVM Serial
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SUPPORTED_DEVICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Keyboard Modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#hardware" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Hardware
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Hardware">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#what-you-need" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        What you need
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#pre-assembled-cables-and-modules" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Pre-assembled cables and modules
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#diy-wiring" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        DIY wiring
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#physical-setup" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Physical Setup
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#gui-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        GUI Usage
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#headless-cli-usage" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Headless / CLI Usage
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Headless / CLI Usage">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#keyboard-capture-modes" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard capture modes
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#troubleshooting" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Troubleshooting
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Troubleshooting">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#serial-port-not-detected" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Serial port not detected
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#no-keyboardmouse-response-on-the-target" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        No keyboard/mouse response on the target
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#keyboard-input-not-captured-on-the-host" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard input not captured on the host
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mouse-coordinates-appear-wrong" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mouse coordinates appear wrong
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#further-reading" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Further Reading
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ch9329-user-guide">CH9329 User Guide</h1>
+<p>The CH9329 is a UART-to-USB-HID bridge chip. It presents itself on the target PC as a composite
+USB keyboard and mouse device, and receives framed commands over a TTL UART from the host
+controller (kvm-serial). It is the simpler of the two supported bridge chips: no pairing handshake
+or dipswitch configuration is needed, and no special flags are required in kvm-serial. CH9329 is
+the default protocol.</p>
+<blockquote>
+<p><strong>Protocol reference:</strong> <a href="../CH9329_PROTO/">CH9329 Protocol Specification</a><br />
+<strong>Supported devices overview:</strong> <a href="../SUPPORTED_DEVICES/">Supported Devices</a></p>
+</blockquote>
+<hr />
+<h2 id="hardware">Hardware</h2>
+<h3 id="what-you-need">What you need</h3>
+<ul>
+<li>A CH9329 module or cable (UART-to-USB-HID)</li>
+<li>A USB-to-UART adapter to connect the CH9329 to your host computer, <strong>unless</strong> using a
+  pre-assembled all-in-one cable</li>
+<li>A USB video capture card (optional, for video feed from the remote machine)</li>
+</ul>
+<h3 id="pre-assembled-cables-and-modules">Pre-assembled cables and modules</h3>
+<p>Pre-assembled CH9329 cables are sold on eBay and AliExpress. Search for <strong>"CH9329 cable usb"</strong>.</p>
+<p>There are two common form factors:</p>
+<table>
+<thead>
+<tr>
+<th>Form factor</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Cable</strong></td>
+<td>USB-A at both ends. One end connects to the host (serial), the other to the target (USB HID). Plug-and-play — no soldering required. Make sure it has the CH9329 chip label; a plain USB-A to USB-A cable has no serial conversion and <strong>will not work</strong>.</td>
+</tr>
+<tr>
+<td><strong>Module</strong></td>
+<td>A small breakout board with serial header pins. Requires a separate USB-to-UART adapter (CP2102, CH340, FTDI, etc.) wired to the host computer.</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><em>Note: the author has no affiliation with any manufacturer or seller.</em></p>
+</blockquote>
+<h3 id="diy-wiring">DIY wiring</h3>
+<p><a href="https://wp.finnigan.dev/?p=682"><img alt="Home-made serial KVM module" src="../img/mini-uart.jpg" /></a><br />
+<em>A home-made serial KVM module: CH9329 chip soldered to a SILabs CP2102 USB-to-UART adapter. CH340 works too.<br />
+Note: this photo shows the 5 V pins connected — see the warning below before replicating this wiring.</em></p>
+<p>You can build your own module by wiring a CH9329 chip to a USB-to-UART adapter:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>Host PC (USB) ──► USB-to-UART adapter (e.g. CP2102 / CH340)
+<a id="__codelineno-0-2" name="__codelineno-0-2" href="#__codelineno-0-2"></a>                        │
+<a id="__codelineno-0-3" name="__codelineno-0-3" href="#__codelineno-0-3"></a>                        │ TX ──► RX  ┐
+<a id="__codelineno-0-4" name="__codelineno-0-4" href="#__codelineno-0-4"></a>                        │ RX ◄── TX  ├─ CH9329 module
+<a id="__codelineno-0-5" name="__codelineno-0-5" href="#__codelineno-0-5"></a>                        │ GND ─── GND ┘
+<a id="__codelineno-0-6" name="__codelineno-0-6" href="#__codelineno-0-6"></a>                              │
+<a id="__codelineno-0-7" name="__codelineno-0-7" href="#__codelineno-0-7"></a>                              ▼
+<a id="__codelineno-0-8" name="__codelineno-0-8" href="#__codelineno-0-8"></a>                    USB-A (target PC)
+</code></pre></div>
+<p>The CH9329 operates at 3.3 V or 5 V TTL. Default baud rate is <strong>9600 bps</strong>; the chip also supports
+1200, 2400, 4800, 14400, 19200, 38400, 57600, and 115200 bps (note: 115200 is not supported at
+3.3 V). For most uses, keep the default 9600 bps.</p>
+<blockquote>
+<p><strong>⚠ Warning — do not connect the 5 V power pins together.</strong><br />
+The CH9329 module is already powered by the target machine's USB port. If you also connect
+the 5 V output of the USB-to-UART adapter to the CH9329's VCC pin (as per the image above),
+you create two power sources driving the same rail. This can backfeed voltage into one or
+both USB ports, which may damage hardware that lacks modern reverse-power protection. Wire
+only <strong>TX, RX, and GND</strong> between the adapter and the CH9329; leave the 5 V / VCC pins unconnected.</p>
+</blockquote>
+<hr />
+<h2 id="physical-setup">Physical Setup</h2>
+<ol>
+<li>Connect the CH9329 module/cable to the <strong>target machine</strong> via USB.</li>
+<li>Connect the serial end (or USB-to-UART adapter) to your <strong>host machine</strong> via USB.</li>
+<li>Verify the device appears as a serial port on the host:</li>
+<li><strong>macOS/Linux:</strong> <code>/dev/cu.usbserial-XXXX</code> or <code>/dev/ttyUSB0</code></li>
+<li><strong>Windows:</strong> <code>COM3</code>, <code>COM4</code>, etc. (check Device Manager → Ports)</li>
+<li>On the target machine, the CH9329 should enumerate as a USB keyboard + mouse. No drivers
+   are needed on the target side.</li>
+</ol>
+<blockquote>
+<p><strong>Driver installation:</strong> If the serial port does not appear on your host, you may need to install
+a USB-to-UART driver. See <a href="../INSTALLATION/">INSTALLATION.md</a> for platform-specific instructions.</p>
+</blockquote>
+<hr />
+<h2 id="gui-usage">GUI Usage</h2>
+<p>No special configuration is needed for CH9329 — it is the default protocol.</p>
+<ol>
+<li>Launch the GUI (<code>python -m kvm_serial</code> or the packaged executable).</li>
+<li>Open <strong>File → Connect</strong> (or the connection toolbar).</li>
+<li>Select your serial port from the drop-down list and click <strong>Connect</strong>.</li>
+<li>If using a video capture card, select the camera under <strong>Options → Camera</strong>.</li>
+<li>The app will begin forwarding your keyboard and mouse input to the remote machine.</li>
+</ol>
+<p>The GUI detects CH9329 automatically; no additional menu options are required.</p>
+<hr />
+<h2 id="headless-cli-usage">Headless / CLI Usage</h2>
+<p>Use <code>kvm_serial.control</code> for terminal-based usage without a GUI (e.g. Raspberry Pi to Pi, or
+headless servers):</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a><span class="c1"># Basic keyboard forwarding only (default mode)</span>
+<a id="__codelineno-1-2" name="__codelineno-1-2" href="#__codelineno-1-2"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>/dev/cu.usbserial-A6023LNH
+<a id="__codelineno-1-3" name="__codelineno-1-3" href="#__codelineno-1-3"></a>
+<a id="__codelineno-1-4" name="__codelineno-1-4" href="#__codelineno-1-4"></a><span class="c1"># With mouse capture enabled</span>
+<a id="__codelineno-1-5" name="__codelineno-1-5" href="#__codelineno-1-5"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>--mouse<span class="w"> </span>/dev/cu.usbserial-A6023LNH
+<a id="__codelineno-1-6" name="__codelineno-1-6" href="#__codelineno-1-6"></a>
+<a id="__codelineno-1-7" name="__codelineno-1-7" href="#__codelineno-1-7"></a><span class="c1"># With video, use the GUI: python -m kvm_serial</span>
+<a id="__codelineno-1-8" name="__codelineno-1-8" href="#__codelineno-1-8"></a>
+<a id="__codelineno-1-9" name="__codelineno-1-9" href="#__codelineno-1-9"></a><span class="c1"># Windows COM port</span>
+<a id="__codelineno-1-10" name="__codelineno-1-10" href="#__codelineno-1-10"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>COM3
+<a id="__codelineno-1-11" name="__codelineno-1-11" href="#__codelineno-1-11"></a>
+<a id="__codelineno-1-12" name="__codelineno-1-12" href="#__codelineno-1-12"></a><span class="c1"># Verbose logging</span>
+<a id="__codelineno-1-13" name="__codelineno-1-13" href="#__codelineno-1-13"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>--verbose<span class="w"> </span>/dev/cu.usbserial-A6023LNH
+<a id="__codelineno-1-14" name="__codelineno-1-14" href="#__codelineno-1-14"></a>
+<a id="__codelineno-1-15" name="__codelineno-1-15" href="#__codelineno-1-15"></a><span class="c1"># Using uv</span>
+<a id="__codelineno-1-16" name="__codelineno-1-16" href="#__codelineno-1-16"></a>uv<span class="w"> </span>run<span class="w"> </span>kvm-control<span class="w"> </span>/dev/cu.usbserial-A6023LNH
+</code></pre></div>
+<p>CH9329 is the default protocol; no <code>--ch9350</code> flag is needed. Run with <code>--help</code> to see all options.</p>
+<h3 id="keyboard-capture-modes">Keyboard capture modes</h3>
+<p>By default, <code>curses</code> mode is used for keyboard-only, and <code>pynput</code> when mouse or video is enabled.
+Other modes can be selected with <code>--mode</code>:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>--mode<span class="w"> </span>tty<span class="w"> </span>/dev/cu.usbserial-A6023LNH
+<a id="__codelineno-2-2" name="__codelineno-2-2" href="#__codelineno-2-2"></a>python<span class="w"> </span>-m<span class="w"> </span>kvm_serial.control<span class="w"> </span>--mode<span class="w"> </span>usb<span class="w"> </span>/dev/cu.usbserial-A6023LNH<span class="w">   </span><span class="c1"># requires root</span>
+</code></pre></div>
+<p>See <a href="../MODES/">MODES.md</a> for a full comparison of capture modes and their trade-offs.</p>
+<hr />
+<h2 id="troubleshooting">Troubleshooting</h2>
+<h3 id="serial-port-not-detected">Serial port not detected</h3>
+<ul>
+<li>Check that the USB-to-UART driver is installed. See <a href="../INSTALLATION/">INSTALLATION.md</a>.</li>
+<li>On Linux, your user may need serial port access: <code>sudo usermod -a -G dialout $USER</code> (then log out and back in).</li>
+<li>On macOS, run <code>ls /dev/cu.*</code> to list available serial ports after connecting the device.</li>
+</ul>
+<h3 id="no-keyboardmouse-response-on-the-target">No keyboard/mouse response on the target</h3>
+<ul>
+<li>Ensure the USB end of the CH9329 is connected to the <strong>target</strong> machine and a USB HID device
+  has enumerated (check the target's device manager or <code>lsusb</code>).</li>
+<li>Double-check you have not connected the USB-A ends the wrong way around (target ↔ host reversed).</li>
+<li>Try a different USB port or cable.</li>
+<li>Check baud rate: kvm-serial defaults to 9600 bps which matches the CH9329 factory default.
+  If the chip has been reconfigured to a different baud rate, pass <code>--baud &lt;rate&gt;</code>.</li>
+</ul>
+<h3 id="keyboard-input-not-captured-on-the-host">Keyboard input not captured on the host</h3>
+<ul>
+<li>On macOS, pynput requires <strong>Input Monitoring</strong> permission (System Settings → Privacy &amp; Security).</li>
+<li>Try <code>--mode curses</code> or <code>--mode tty</code> as alternatives that do not require this permission.</li>
+</ul>
+<h3 id="mouse-coordinates-appear-wrong">Mouse coordinates appear wrong</h3>
+<ul>
+<li>CH9329 uses a 12-bit absolute coordinate space (0–4095 × 0–4095).</li>
+<li>kvm-serial maps screen/scene coordinates to this range automatically in the GUI.</li>
+<li>In headless mode, absolute mouse is sent when <code>--mouse</code> is active.</li>
+</ul>
+<hr />
+<h2 id="further-reading">Further Reading</h2>
+<ul>
+<li><a href="../CH9329_PROTO/">CH9329 Protocol Specification</a> — full frame format, command reference, and worked examples</li>
+<li><a href="../MODES/">MODES.md</a> — keyboard capture mode comparison</li>
+<li><a href="../INSTALLATION/">INSTALLATION.md</a> — platform-specific driver and permission setup</li>
+<li><a href="../SUPPORTED_DEVICES/">SUPPORTED_DEVICES.md</a> — comparison of CH9329 and CH9350L</li>
+</ul>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
