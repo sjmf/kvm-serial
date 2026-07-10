@@ -1,0 +1,1877 @@
+
+<!doctype html>
+<html lang="en" class="no-js">
+  <head>
+    
+      <meta charset="utf-8">
+      <meta name="viewport" content="width=device-width,initial-scale=1">
+      
+        <meta name="description" content="A Software KVM using the CH9329 UART Serial to USB HID controller">
+      
+      
+      
+        <link rel="canonical" href="https://sjmf.github.io/kvm-serial/CH9350L_PROTO/">
+      
+      
+      
+      
+        
+      
+      
+      <link rel="icon" href="../assets/images/favicon.png">
+      <meta name="generator" content="mkdocs-1.6.1, mkdocs-material-9.7.6">
+    
+    
+      
+        <title>CH9350L UART Protocol Specification - KVM Serial</title>
+      
+    
+    
+      <link rel="stylesheet" href="../assets/stylesheets/main.484c7ddc.min.css">
+      
+        
+        <link rel="stylesheet" href="../assets/stylesheets/palette.ab4e12ef.min.css">
+      
+      
+
+
+    
+    
+      
+    
+    
+      
+        
+        
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Roboto:300,300i,400,400i,700,700i%7CRoboto+Mono:400,400i,700,700i&display=fallback">
+        <style>:root{--md-text-font:"Roboto";--md-code-font:"Roboto Mono"}</style>
+      
+    
+    
+    <script>__md_scope=new URL("..",location),__md_hash=e=>[...e].reduce(((e,_)=>(e<<5)-e+_.charCodeAt(0)),0),__md_get=(e,_=localStorage,t=__md_scope)=>JSON.parse(_.getItem(t.pathname+"."+e)),__md_set=(e,_,t=localStorage,a=__md_scope)=>{try{t.setItem(a.pathname+"."+e,JSON.stringify(_))}catch(e){}}</script>
+    
+      
+
+    
+    
+  </head>
+  
+  
+    
+    
+      
+    
+    
+    
+    
+    <body dir="ltr" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo">
+  
+    
+    <input class="md-toggle" data-md-toggle="drawer" type="checkbox" id="__drawer" autocomplete="off">
+    <input class="md-toggle" data-md-toggle="search" type="checkbox" id="__search" autocomplete="off">
+    <label class="md-overlay" for="__drawer"></label>
+    <div data-md-component="skip">
+      
+        
+        <a href="#ch9350l-uart-protocol-specification" class="md-skip">
+          Skip to content
+        </a>
+      
+    </div>
+    <div data-md-component="announce">
+      
+    </div>
+    
+    
+      
+
+  
+
+<header class="md-header md-header--shadow" data-md-component="header">
+  <nav class="md-header__inner md-grid" aria-label="Header">
+    <a href=".." title="KVM Serial" class="md-header__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    <label class="md-header__button md-icon" for="__drawer">
+      
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M3 6h18v2H3zm0 5h18v2H3zm0 5h18v2H3z"/></svg>
+    </label>
+    <div class="md-header__title" data-md-component="header-title">
+      <div class="md-header__ellipsis">
+        <div class="md-header__topic">
+          <span class="md-ellipsis">
+            KVM Serial
+          </span>
+        </div>
+        <div class="md-header__topic" data-md-component="header-topic">
+          <span class="md-ellipsis">
+            
+              CH9350L UART Protocol Specification
+            
+          </span>
+        </div>
+      </div>
+    </div>
+    
+      
+        <form class="md-header__option" data-md-component="palette">
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: light)" data-md-color-scheme="default" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to dark mode"  type="radio" name="__palette" id="__palette_0">
+    
+      <label class="md-header__button md-icon" title="Switch to dark mode" for="__palette_1" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a4 4 0 0 0-4 4 4 4 0 0 0 4 4 4 4 0 0 0 4-4 4 4 0 0 0-4-4m0 10a6 6 0 0 1-6-6 6 6 0 0 1 6-6 6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+    
+    
+    
+    <input class="md-option" data-md-color-media="(prefers-color-scheme: dark)" data-md-color-scheme="slate" data-md-color-primary="indigo" data-md-color-accent="indigo"  aria-label="Switch to light mode"  type="radio" name="__palette" id="__palette_1">
+    
+      <label class="md-header__button md-icon" title="Switch to light mode" for="__palette_0" hidden>
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 18c-.89 0-1.74-.2-2.5-.55C11.56 16.5 13 14.42 13 12s-1.44-4.5-3.5-5.45C10.26 6.2 11.11 6 12 6a6 6 0 0 1 6 6 6 6 0 0 1-6 6m8-9.31V4h-4.69L12 .69 8.69 4H4v4.69L.69 12 4 15.31V20h4.69L12 23.31 15.31 20H20v-4.69L23.31 12z"/></svg>
+      </label>
+    
+  
+</form>
+      
+    
+    
+      <script>var palette=__md_get("__palette");if(palette&&palette.color){if("(prefers-color-scheme)"===palette.color.media){var media=matchMedia("(prefers-color-scheme: light)"),input=document.querySelector(media.matches?"[data-md-color-media='(prefers-color-scheme: light)']":"[data-md-color-media='(prefers-color-scheme: dark)']");palette.color.media=input.getAttribute("data-md-color-media"),palette.color.scheme=input.getAttribute("data-md-color-scheme"),palette.color.primary=input.getAttribute("data-md-color-primary"),palette.color.accent=input.getAttribute("data-md-color-accent")}for(var[key,value]of Object.entries(palette.color))document.body.setAttribute("data-md-color-"+key,value)}</script>
+    
+    
+    
+      
+      
+        <label class="md-header__button md-icon" for="__search">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        </label>
+        <div class="md-search" data-md-component="search" role="dialog">
+  <label class="md-search__overlay" for="__search"></label>
+  <div class="md-search__inner" role="search">
+    <form class="md-search__form" name="search">
+      <input type="text" class="md-search__input" name="query" aria-label="Search" placeholder="Search" autocapitalize="off" autocorrect="off" autocomplete="off" spellcheck="false" data-md-component="search-query" required>
+      <label class="md-search__icon md-icon" for="__search">
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M9.5 3A6.5 6.5 0 0 1 16 9.5c0 1.61-.59 3.09-1.56 4.23l.27.27h.79l5 5-1.5 1.5-5-5v-.79l-.27-.27A6.52 6.52 0 0 1 9.5 16 6.5 6.5 0 0 1 3 9.5 6.5 6.5 0 0 1 9.5 3m0 2C7 5 5 7 5 9.5S7 14 9.5 14 14 12 14 9.5 12 5 9.5 5"/></svg>
+        
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M20 11v2H8l5.5 5.5-1.42 1.42L4.16 12l7.92-7.92L13.5 5.5 8 11z"/></svg>
+      </label>
+      <nav class="md-search__options" aria-label="Search">
+        
+        <button type="reset" class="md-search__icon md-icon" title="Clear" aria-label="Clear" tabindex="-1">
+          
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M19 6.41 17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        </button>
+      </nav>
+      
+    </form>
+    <div class="md-search__output">
+      <div class="md-search__scrollwrap" tabindex="0" data-md-scrollfix>
+        <div class="md-search-result" data-md-component="search-result">
+          <div class="md-search-result__meta">
+            Initializing search
+          </div>
+          <ol class="md-search-result__list" role="presentation"></ol>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+      
+    
+    
+      <div class="md-header__source">
+        <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+      </div>
+    
+  </nav>
+  
+</header>
+    
+    <div class="md-container" data-md-component="container">
+      
+      
+        
+          
+        
+      
+      <main class="md-main" data-md-component="main">
+        <div class="md-main__inner md-grid">
+          
+            
+              
+              <div class="md-sidebar md-sidebar--primary" data-md-component="sidebar" data-md-type="navigation" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+
+
+<nav class="md-nav md-nav--primary" aria-label="Navigation" data-md-level="0">
+  <label class="md-nav__title" for="__drawer">
+    <a href=".." title="KVM Serial" class="md-nav__button md-logo" aria-label="KVM Serial" data-md-component="logo">
+      
+  
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 8a3 3 0 0 0 3-3 3 3 0 0 0-3-3 3 3 0 0 0-3 3 3 3 0 0 0 3 3m0 3.54C9.64 9.35 6.5 8 3 8v11c3.5 0 6.64 1.35 9 3.54 2.36-2.19 5.5-3.54 9-3.54V8c-3.5 0-6.64 1.35-9 3.54"/></svg>
+
+    </a>
+    KVM Serial
+  </label>
+  
+    <div class="md-nav__source">
+      <a href="https://github.com/sjmf/kvm-serial" title="Go to repository" class="md-source" data-md-component="source">
+  <div class="md-source__icon md-icon">
+    
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 448 512"><!--! Font Awesome Free 7.1.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2025 Fonticons, Inc.--><path d="M439.6 236.1 244 40.5c-5.4-5.5-12.8-8.5-20.4-8.5s-15 3-20.4 8.4L162.5 81l51.5 51.5c27.1-9.1 52.7 16.8 43.4 43.7l49.7 49.7c34.2-11.8 61.2 31 35.5 56.7-26.5 26.5-70.2-2.9-56-37.3L240.3 199v121.9c25.3 12.5 22.3 41.8 9.1 55-6.4 6.4-15.2 10.1-24.3 10.1s-17.8-3.6-24.3-10.1c-17.6-17.6-11.1-46.9 11.2-56v-123c-20.8-8.5-24.6-30.7-18.6-45L142.6 101 8.5 235.1C3 240.6 0 247.9 0 255.5s3 15 8.5 20.4l195.6 195.7c5.4 5.4 12.7 8.4 20.4 8.4s15-3 20.4-8.4l194.7-194.7c5.4-5.4 8.4-12.8 8.4-20.4s-3-15-8.4-20.4"/></svg>
+  </div>
+  <div class="md-source__repository">
+    sjmf/kvm-serial
+  </div>
+</a>
+    </div>
+  
+  <ul class="md-nav__list" data-md-scrollfix>
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href=".." class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Home
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../INSTALLATION/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Installation
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../SUPPORTED_DEVICES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Supported Devices
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../MODES/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Keyboard Modes
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../BUILD/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Building
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../TESTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Testing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../workflows/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    CI/CD Workflows
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+      
+      
+  
+  
+  
+  
+    <li class="md-nav__item">
+      <a href="../CONTRIBUTING/" class="md-nav__link">
+        
+  
+  
+  <span class="md-ellipsis">
+    
+  
+    Contributing
+  
+
+    
+  </span>
+  
+  
+
+      </a>
+    </li>
+  
+
+    
+  </ul>
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+            
+              
+              <div class="md-sidebar md-sidebar--secondary" data-md-component="sidebar" data-md-type="toc" >
+                <div class="md-sidebar__scrollwrap">
+                  <div class="md-sidebar__inner">
+                    
+
+<nav class="md-nav md-nav--secondary" aria-label="Table of contents">
+  
+  
+  
+    
+  
+  
+    <label class="md-nav__title" for="__toc">
+      <span class="md-nav__icon md-icon"></span>
+      Table of contents
+    </label>
+    <ul class="md-nav__list" data-md-component="toc" data-md-scrollfix>
+      
+        <li class="md-nav__item">
+  <a href="#overview" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Overview
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#physical-layer" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Physical Layer
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#frame-structure" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Frame Structure
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Frame Structure">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#length-prefixed-keymouse-frames-cmd-0x83-0x88" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Length-prefixed key/mouse frames (CMD 0x83 / 0x88)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#lower-computer-upper-computer-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Lower Computer → Upper Computer Frames
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Lower Computer → Upper Computer Frames">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#heartbeat-cmd-0x82" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Heartbeat — CMD 0x82
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-announce-cmd-0x89" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status Announce — CMD 0x89
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-connection-frame-cmd-0x81" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Connection Frame — CMD 0x81
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#keyboard-cmd-0x83-0x88" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keyboard — CMD 0x83 / 0x88
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Keyboard — CMD 0x83 / 0x88">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#ch9329-report-id-prefixed-keyboard-len-0x0c" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CH9329 / report-ID-prefixed keyboard, LEN = 0x0C
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#boot-protocol-keyboard-no-report-id-len-0x0b" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Boot-protocol keyboard (no report ID), LEN = 0x0B
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mouse-cmd-0x83-0x88" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mouse — CMD 0x83 / 0x88
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Mouse — CMD 0x83 / 0x88">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#absolute-mouse-with-report-id-len-0x0a" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Absolute mouse with report ID — LEN = 0x0A
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relative-mouse-with-report-id-len-0x08" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relative mouse with report ID — LEN = 0x08
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#relative-mouse-boot-protocol-no-report-id-len-0x07" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Relative mouse, boot protocol (no report ID) — LEN = 0x07
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#ctr_sum-worked-example" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        CTR_SUM Worked Example
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#device-notify-cmd-0x86" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Device Notify — CMD 0x86
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#status-led-cmd-0x80" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Status / LED — CMD 0x80
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#upper-computer-lower-computer-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Upper Computer → Lower Computer Frames
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Upper Computer → Lower Computer Frames">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#keep-alive-led-pid-ack-cmd-0x12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Keep-alive / LED / PID-ack — CMD 0x12
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#attach-sequence-timeline" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Attach Sequence Timeline
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#disconnect-sequence" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Disconnect Sequence
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Disconnect Sequence">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#re-attach-on-the-ucs-usb-device-side-target-replug" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Re-attach on the UC's USB-device side (target replug)
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#state-machine" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State Machine
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#labelling-byte-ser" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labelling Byte (SER)
+      
+    </span>
+  </a>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#states-234-alternative-dipswitch-configurations" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        States 2/3/4 (Alternative Dipswitch Configurations)
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="States 2/3/4 (Alternative Dipswitch Configurations)">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#lc-uc-fixed-length-frames" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LC → UC fixed-length frames
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#divergences-from-the-datasheet" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Divergences from the datasheet
+      
+    </span>
+  </a>
+  
+    <nav class="md-nav" aria-label="Divergences from the datasheet">
+      <ul class="md-nav__list">
+        
+          <li class="md-nav__item">
+  <a href="#0x86-is-fired-at-both-attach-and-disconnect-and-the-uc-does-not-reset" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0x86 is fired at both attach and disconnect, and the UC does not reset
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#0x80-is-used-in-every-state-not-only-state-234" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0x80 is used in every state, not only state 2/3/4
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#0x89-is-not-defined-in-the-datasheet-at-all" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0x89 is not defined in the datasheet at all
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#0x81-is-sent-at-attach-in-state-0-not-on-device-property-mismatch-in-state-1" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0x81 is sent at attach in state 0, not on "device property mismatch" in state 1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#0x81-field-naming-leading-byte-port-trailing-2-bytes-pid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        0x81 field naming: leading byte = port, trailing 2 bytes = PID
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#state-1-transition-is-pid-ack-not-first-0x12" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State-1 transition is PID-ack, not first 0x12
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#labelling-byte-unknown-protocol-bits-are-valid" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Labelling byte: "Unknown" protocol bits are valid
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#mouse-frame-variant-len-0x08-not-documented" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Mouse frame variant LEN = 0x08 not documented
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#len-0x0a-absolute-mouse-frames-are-silently-dropped-by-the-uc-in-state-01" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        LEN = 0x0A absolute mouse frames are silently dropped by the UC in state 0/1
+      
+    </span>
+  </a>
+  
+</li>
+        
+          <li class="md-nav__item">
+  <a href="#state-34-0x04-xy-is-11-bit-signed-not-16-bit-unsigned" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        State-3/4 0x04 X/Y is 11-bit signed, not 16-bit unsigned
+      
+    </span>
+  </a>
+  
+</li>
+        
+      </ul>
+    </nav>
+  
+</li>
+      
+        <li class="md-nav__item">
+  <a href="#reference-implementation" class="md-nav__link">
+    <span class="md-ellipsis">
+      
+        Reference Implementation
+      
+    </span>
+  </a>
+  
+</li>
+      
+    </ul>
+  
+</nav>
+                  </div>
+                </div>
+              </div>
+            
+          
+          
+            <div class="md-content" data-md-component="content">
+              
+              <article class="md-content__inner md-typeset">
+                
+                  
+
+
+  
+  
+
+
+<h1 id="ch9350l-uart-protocol-specification">CH9350L UART Protocol Specification</h1>
+<blockquote>
+<p><strong>Status:</strong> empirically verified by bidirectional bus sniffing.
+Frames in this document have been observed on the wire and the
+reference implementation (<code>ch9350_poc.py</code>) reproduces them exactly,
+including byte-for-byte matching of the <code>0x81</code> Device Connection Frames.
+Coverage now includes power-on, attach, key/mouse forwarding, steady-state
+operation, runtime disconnect, target-side reattach with full sequence replay,
+and all four alternative dipswitch states (2/3/4) including <code>0x80</code> LED feedback,
+state-2 relative mouse, and state-3/4 absolute mouse.</p>
+<p><strong>Manufacturer datasheet:</strong> WCH CH9350 V2.3 — <a href="https://www.wch-ic.com/downloads/CH9350DS_PDF.html">wch-ic.com/downloads/CH9350DS_PDF.html</a>. Section references in this document refer to that datasheet. See <a href="#divergences-from-the-datasheet">§Divergences from the datasheet</a> for the places where on-the-wire behaviour differs from what the datasheet documents.</p>
+<p><strong>Reference implementation:</strong> <code>ch9350_poc.py</code> (repo root) and the
+<a href="https://gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a">Gist at gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a</a></p>
+</blockquote>
+<hr />
+<h2 id="overview">Overview</h2>
+<p>The CH9350L is a USB-to-UART bridge chip designed to operate in pairs:</p>
+<ul>
+<li><strong>Lower Computer (LC)</strong> — acts as a USB <em>host</em>, enumerating attached HID devices (keyboard, mouse).</li>
+<li><strong>Upper Computer (UC)</strong> — acts as a USB <em>device</em>, presenting HID interfaces to the target PC.</li>
+</ul>
+<p>The two chips communicate over a full-duplex TTL UART bus. kvm-serial replaces the lower computer in software, speaking this protocol directly toward a physical UC module.</p>
+<p>Each module has three relevant dipswitches: <code>SEL</code> selects the chip's role (<code>SEL=1</code> → lower computer, <code>SEL=0</code> → upper computer); <code>S0</code> and <code>S1</code> together select the <strong>working state</strong> (default 0/1 with handshake; alternatives 2/3/4 with fixed built-in descriptors — see <a href="#states-234-alternative-dipswitch-configurations">§States 2/3/4</a>); <code>BAUD0</code>/<code>BAUD1</code> select the UART baud rate (default 115200).</p>
+<hr />
+<h2 id="physical-layer">Physical Layer</h2>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Baud rate</td>
+<td>115200</td>
+</tr>
+<tr>
+<td>Data bits</td>
+<td>8</td>
+</tr>
+<tr>
+<td>Parity</td>
+<td>None</td>
+</tr>
+<tr>
+<td>Stop bits</td>
+<td>1</td>
+</tr>
+<tr>
+<td>Logic level</td>
+<td>3.3 V TTL</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="frame-structure">Frame Structure</h2>
+<p>All frames share the same two-byte magic header:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-0-1" name="__codelineno-0-1" href="#__codelineno-0-1"></a>57 AB [CMD] [payload...]
+</code></pre></div>
+<p>The payload layout depends on <code>CMD</code>:</p>
+<table>
+<thead>
+<tr>
+<th>CMD</th>
+<th>Direction</th>
+<th>Length</th>
+<th>Used in</th>
+<th>Payload format</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x82</code></td>
+<td>LC → UC</td>
+<td>4B total</td>
+<td>0/1</td>
+<td>Heartbeat: <code>[IO]</code></td>
+</tr>
+<tr>
+<td><code>0x86</code></td>
+<td>LC → UC</td>
+<td>3B total</td>
+<td>0/1, 2, 3, 4</td>
+<td>Device Notify: no payload</td>
+</tr>
+<tr>
+<td><code>0x80</code></td>
+<td>LC → UC</td>
+<td>4B total</td>
+<td>0/1, 2, 3, 4</td>
+<td>Startup status (<code>0xFF</code>) / LED feedback (<code>0x3N</code>)</td>
+</tr>
+<tr>
+<td><code>0x89</code></td>
+<td>LC → UC</td>
+<td>3B total</td>
+<td>0/1, 2, 3, 4</td>
+<td>Status announce: no payload</td>
+</tr>
+<tr>
+<td><code>0x81</code></td>
+<td>LC → UC</td>
+<td>variable</td>
+<td>0/1 only</td>
+<td><code>[PORT] [LEN_LO LEN_HI] [DESCRIPTOR] [PID_LO PID_HI] [CHK]</code></td>
+</tr>
+<tr>
+<td><code>0x83</code>, <code>0x88</code></td>
+<td>LC → UC</td>
+<td>length-prefixed</td>
+<td>0/1 only</td>
+<td><code>[LEN] [SER] [report-bytes...] [CTR] [CTR_SUM]</code></td>
+</tr>
+<tr>
+<td><code>0x01</code>, <code>0x02</code>, <code>0x04</code></td>
+<td>LC → UC</td>
+<td>fixed (8 / 5 / 8B)</td>
+<td>2 / 2 / 3, 4</td>
+<td>State-2/3/4 keyboard / rel-mouse / abs-mouse</td>
+</tr>
+<tr>
+<td><code>0x10</code></td>
+<td>LC → UC</td>
+<td>7B total</td>
+<td>2, 3, 4</td>
+<td>VID/PID modify: <code>[VID_LO VID_HI] [PID_LO PID_HI]</code></td>
+</tr>
+<tr>
+<td><code>0x12</code></td>
+<td>UC → LC</td>
+<td>11B total</td>
+<td>0/1, 2, 3, 4</td>
+<td>Keep-alive: <code>[P1] [P2] [LED] [STATUS] [VERSION]</code></td>
+</tr>
+</tbody>
+</table>
+<h3 id="length-prefixed-keymouse-frames-cmd-0x83-0x88">Length-prefixed key/mouse frames (CMD <code>0x83</code> / <code>0x88</code>)</h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-1-1" name="__codelineno-1-1" href="#__codelineno-1-1"></a>57 AB [CMD] [LEN] [SER] [report-bytes...] [CTR] [CTR_SUM]
+</code></pre></div>
+<ul>
+<li><strong>LEN</strong> — number of bytes following LEN, i.e. <code>SER(1) + report-bytes(n) + CTR(1) + CTR_SUM(1)</code></li>
+<li><strong>SER</strong> — labelling byte; encodes device class, protocol, and port number (see §Labelling Byte)</li>
+<li><strong>CTR</strong> — monotonically increasing session counter, mod 256; separate per SER</li>
+<li><strong>CTR_SUM</strong> — checksum: <code>(CTR + sum(report-bytes)) mod 256</code>
+  where <code>report-bytes</code> is everything between SER and CTR, exclusive</li>
+</ul>
+<p>The CMD byte selects state 0 (<code>0x88</code>) vs state 1 (<code>0x83</code>); the payload format is identical between the two. See <a href="#state-machine">§State Machine</a> for the transition rule.</p>
+<hr />
+<h2 id="lower-computer-upper-computer-frames">Lower Computer → Upper Computer Frames</h2>
+<h3 id="heartbeat-cmd-0x82">Heartbeat — CMD <code>0x82</code></h3>
+<p>Sent by the LC at ~1 s cadence when idle. During active key/mouse traffic the cadence becomes denser — heartbeats are interleaved with <code>0x83</code>/<code>0x88</code> frames, sometimes only ~50 ms apart. The ~1 s figure is the <em>minimum-frequency</em> idle baseline, not a strict period.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-2-1" name="__codelineno-2-1" href="#__codelineno-2-1"></a>57 AB 82 [IO]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Byte</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>IO</code></td>
+<td>High nibble = <code>0xA</code> (fixed); low nibble = IO0/IO1/IO3/IO4 pin state. <code>0xA3</code> typical (all inputs high)</td>
+</tr>
+</tbody>
+</table>
+<h3 id="status-announce-cmd-0x89">Status Announce — CMD <code>0x89</code></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-3-1" name="__codelineno-3-1" href="#__codelineno-3-1"></a>57 AB 89
+</code></pre></div>
+<p>No payload. In state 0/1 captures the LC emits 3 instances at ~2 s intervals starting ~1.4 s after the first <code>0x86</code>, then stops for the rest of the session. In states 2/3/4 captures only a single <code>0x89</code> is observed, at startup. This is consistent with <code>0x89</code> being tied to the descriptor-announce phase: states 2/3/4 have no <code>0x81</code> descriptor exchange to wait on, so the opcode is sent once and not repeated. The UC continues normal operation in <code>0x89</code>'s absence. See <a href="#divergences-from-the-datasheet">§Divergences</a> for what the datasheet does (and does not) say about this opcode.</p>
+<h3 id="device-connection-frame-cmd-0x81">Device Connection Frame — CMD <code>0x81</code></h3>
+<p>Sent by the LC at attach time, once per connected USB device. Carries the device's HID Report Descriptor; the UC uses these to construct matching HID descriptors that it will advertise to the target PC over USB. <strong>Without <code>0x81</code> frames in state 0/1 the LC's subsequent <code>0x83</code>/<code>0x88</code> input frames produce no effect on the target host</strong> — observed empirically. The likely mechanism is that the UC has no descriptor to advertise so its target-side endpoints either fail to enumerate or enumerate with mismatched report IDs; the LC has no way to detect this from its side.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-4-1" name="__codelineno-4-1" href="#__codelineno-4-1"></a>57 AB 81 [PORT] [LEN_LO] [LEN_HI] [DESCRIPTOR...] [PID_LO] [PID_HI] [CHK]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Size</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PORT</td>
+<td>1B</td>
+<td><code>0x00</code> = port 1 (DP/DM), <code>0x01</code> = port 2 (HP/HM)</td>
+</tr>
+<tr>
+<td>LEN</td>
+<td>2B LE</td>
+<td>length of DESCRIPTOR (74 / 165 bytes observed)</td>
+</tr>
+<tr>
+<td>DESCRIPTOR</td>
+<td>LEN bytes</td>
+<td>raw USB HID Report Descriptor (no wrapping)</td>
+</tr>
+<tr>
+<td>PID</td>
+<td>2B LE</td>
+<td>device "PID" identifier — appears verbatim in the UC's <code>0x12</code> keep-alive once the descriptor has been processed</td>
+</tr>
+<tr>
+<td>CHK</td>
+<td>1B</td>
+<td><code>(sum(DESCRIPTOR) + sum(PID)) mod 256</code></td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>Naming note:</strong> the datasheet calls the leading 1-byte field <code>ID</code> and the trailing 2-byte field <code>2-byte ID</code>. Empirically the leading byte selects the USB port (0/1) and the trailing 2 bytes propagate into the UC keep-alive's PID-port1/PID-port2 fields, so this document refers to them as <code>PORT</code> and <code>PID</code>.</p>
+</blockquote>
+<p>The descriptor is a standard USB HID Report Descriptor in the format defined by the USB-IF HID specification (Usage Page, Usage, Collection, Report ID, etc.). The captured mouse and keyboard descriptors used by the reference implementation are 74 and 165 bytes long respectively. The mouse descriptor contains a single <code>Report ID</code> item (<code>0x01</code>); the keyboard descriptor contains three (<code>0x01</code> keyboard, <code>0x02</code> system control, <code>0x03</code> consumer control). In all observed <code>0x83</code>/<code>0x88</code> traffic the <code>RID</code> byte is <code>0x01</code>; the keyboard's secondary report IDs (system control, consumer control) were not exercised. In states 3/4, <code>0x04</code> absolute-mouse frames likewise carry <code>id=0x01</code> as a fixed prefix.</p>
+<p>The LC retransmits the keyboard <code>0x81</code> frame ~2 s after its first transmission if the UC's <code>0x12</code> keep-alive has not yet reflected the keyboard PID. Whether the retransmit is purely time-driven or specifically gated on the missing ack is not pinned down — every observed retransmit was followed shortly by the matching ack, so the two are not separable from the available captures.</p>
+<h3 id="keyboard-cmd-0x83-0x88">Keyboard — CMD <code>0x83</code> / <code>0x88</code></h3>
+<p>Two variants are produced depending on the USB device connected to the LC.</p>
+<h4 id="ch9329-report-id-prefixed-keyboard-len-0x0c">CH9329 / report-ID-prefixed keyboard, LEN = <code>0x0C</code></h4>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-5-1" name="__codelineno-5-1" href="#__codelineno-5-1"></a>57 AB [CMD] 0C [SER] [RID] [mod] [rsvd=00] [k0] [k1] [k2] [k3] [k4] [k5] [CTR] [CTR_SUM]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LEN</td>
+<td><code>0x0C</code> (12)</td>
+<td></td>
+</tr>
+<tr>
+<td>SER</td>
+<td><code>0x13</code></td>
+<td>keyboard / HID / port 2 (see §Labelling Byte)</td>
+</tr>
+<tr>
+<td>RID</td>
+<td>report ID byte</td>
+<td><code>0x01</code> for the captured keyboard descriptor</td>
+</tr>
+<tr>
+<td><code>mod</code></td>
+<td>modifier byte</td>
+<td>USB HID boot protocol modifier bitmask</td>
+</tr>
+<tr>
+<td><code>rsvd</code></td>
+<td><code>0x00</code></td>
+<td>reserved per HID boot keyboard</td>
+</tr>
+<tr>
+<td><code>k0..k5</code></td>
+<td>key scancodes</td>
+<td>USB HID usage IDs, zero-padded</td>
+</tr>
+</tbody>
+</table>
+<h4 id="boot-protocol-keyboard-no-report-id-len-0x0b">Boot-protocol keyboard (no report ID), LEN = <code>0x0B</code></h4>
+<p>Produced by a real keyboard whose descriptor contains no Report ID item.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-6-1" name="__codelineno-6-1" href="#__codelineno-6-1"></a>57 AB [CMD] 0B [SER=0x11] [mod] [rsvd=00] [k0] [k1] [k2] [k3] [k4] [k5] [CTR] [CTR_SUM]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LEN</td>
+<td><code>0x0B</code> (11)</td>
+<td>one byte shorter — no report ID</td>
+</tr>
+<tr>
+<td>SER</td>
+<td><code>0x11</code></td>
+<td>keyboard / Unknown protocol / port 2</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Modifier byte bitmask</strong> (same for both variants):</p>
+<table>
+<thead>
+<tr>
+<th>Bit</th>
+<th>Modifier</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td>Left Ctrl</td>
+</tr>
+<tr>
+<td>1</td>
+<td>Left Shift</td>
+</tr>
+<tr>
+<td>2</td>
+<td>Left Alt</td>
+</tr>
+<tr>
+<td>3</td>
+<td>Left GUI / Win</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Right Ctrl</td>
+</tr>
+<tr>
+<td>5</td>
+<td>Right Shift</td>
+</tr>
+<tr>
+<td>6</td>
+<td>Right Alt</td>
+</tr>
+<tr>
+<td>7</td>
+<td>Right GUI / Win</td>
+</tr>
+</tbody>
+</table>
+<h3 id="mouse-cmd-0x83-0x88">Mouse — CMD <code>0x83</code> / <code>0x88</code></h3>
+<p>Three variants observed, distinguished by LEN and SER. The LEN=<code>0x08</code> form is not in the datasheet; see <a href="#divergences-from-the-datasheet">§Divergences</a>.</p>
+<h4 id="absolute-mouse-with-report-id-len-0x0a">Absolute mouse with report ID — LEN = <code>0x0A</code></h4>
+<p>Wire format produced by a CH9329 bridge, which presents both relative (RID <code>0x04</code>) and absolute (RID <code>0x05</code>) mouse reports as part of its composite USB descriptor. Documented in datasheet §4.3 as a valid LC→UC frame.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-7-1" name="__codelineno-7-1" href="#__codelineno-7-1"></a>57 AB [CMD] 0A [SER=0x23] [RID=05] [btn] [XL] [XH] [YL] [YH] [wheel] [CTR] [CTR_SUM]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SER</td>
+<td><code>0x23</code></td>
+<td>mouse / HID / port 2</td>
+</tr>
+<tr>
+<td>RID</td>
+<td><code>0x05</code></td>
+<td>CH9329 absolute mouse report ID</td>
+</tr>
+<tr>
+<td><code>XL</code>/<code>XH</code></td>
+<td>X coordinate</td>
+<td>16-bit little-endian, raw USB HID absolute space</td>
+</tr>
+<tr>
+<td><code>YL</code>/<code>YH</code></td>
+<td>Y coordinate</td>
+<td>16-bit little-endian</td>
+</tr>
+</tbody>
+</table>
+<blockquote>
+<p><strong>⚠ The CH9350L UC does not forward LEN=<code>0x0A</code> mouse frames to the target host in state 0/1.</strong> Verified empirically: the LC sends valid <code>0x83 0x0A</code> absolute frames with correct framing, the UC's <code>0x12</code> keep-alive shows <code>STATUS=0x07</code> (both ports enumerated), the target host's HID enumeration completes — and yet the cursor does not respond. Reproduced both with PoC-generated frames under several descriptor variants, and with <strong>a real CH9329 chip plugged into the LC's USB-host port</strong> as the source of absolute reports. See <a href="#divergences-from-the-datasheet">§Divergences</a> for the full evidence.</p>
+<p><strong>Implication: state 0/1 paired mode supports relative mouse only.</strong> For absolute cursor positioning on a CH9350L UC, configure the UC for state 3 or state 4 (dipswitch) where absolute coords flow as fixed-format <code>0x04</code> frames and the UC owns the USB device descriptors directly. See <a href="#states-234-alternative-dipswitch-configurations">§States 2/3/4</a>.</p>
+</blockquote>
+<h4 id="relative-mouse-with-report-id-len-0x08">Relative mouse with report ID — LEN = <code>0x08</code></h4>
+<p>Produced by a real mouse on <strong>port 1</strong> whose descriptor contains a Report ID.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-8-1" name="__codelineno-8-1" href="#__codelineno-8-1"></a>57 AB [CMD] 08 [SER=0x22] [RID] [btn] [dx] [dy] [wheel] [CTR] [CTR_SUM]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SER</td>
+<td><code>0x22</code></td>
+<td>mouse / HID / port 1</td>
+</tr>
+<tr>
+<td>RID</td>
+<td>report ID</td>
+<td>matches Report ID in the mouse's <code>0x81</code> descriptor (e.g. <code>0x01</code>)</td>
+</tr>
+<tr>
+<td><code>dx</code>/<code>dy</code></td>
+<td>signed bytes</td>
+<td>8-bit relative deltas</td>
+</tr>
+</tbody>
+</table>
+<h4 id="relative-mouse-boot-protocol-no-report-id-len-0x07">Relative mouse, boot protocol (no report ID) — LEN = <code>0x07</code></h4>
+<p>Produced by a real mouse whose descriptor contains no Report ID.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-9-1" name="__codelineno-9-1" href="#__codelineno-9-1"></a>57 AB [CMD] 07 [SER=0x20] [btn] [dx] [dy] [wheel] [CTR] [CTR_SUM]
+</code></pre></div>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Value</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>SER</td>
+<td><code>0x20</code></td>
+<td>mouse / Unknown protocol / port 1</td>
+</tr>
+</tbody>
+</table>
+<h3 id="ctr_sum-worked-example">CTR_SUM Worked Example</h3>
+<p>Keyboard frame <code>57 AB 83 0C 13 01 00 00 14 00 00 00 00 00 00 15</code>:</p>
+<ul>
+<li>LEN=<code>0C</code>, SER=<code>13</code>, report-bytes = <code>01 00 00 14 00 00 00 00 00</code>, CTR=<code>00</code></li>
+<li><code>CTR_SUM = (0x00 + (0x01+0x00+0x00+0x14+0x00+0x00+0x00+0x00+0x00)) mod 256 = 0x15</code> ✓</li>
+</ul>
+<h3 id="device-notify-cmd-0x86">Device Notify — CMD <code>0x86</code></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-10-1" name="__codelineno-10-1" href="#__codelineno-10-1"></a>57 AB 86
+</code></pre></div>
+<p>Emitted by the LC on USB device events. The same opcode is used for both <strong>attach</strong> and <strong>disconnect</strong>; what disambiguates is the follow-up traffic. See <a href="#attach-sequence-timeline">§Attach Sequence Timeline</a> for the attach case and <a href="#disconnect-sequence">§Disconnect Sequence</a> for the disconnect case. The datasheet (§4.6) names this "Device Disconnect Command" and is partially incorrect on both opcode reuse and the claimed UC reset; see <a href="#divergences-from-the-datasheet">§Divergences</a>.</p>
+<h3 id="status-led-cmd-0x80">Status / LED — CMD <code>0x80</code></h3>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-11-1" name="__codelineno-11-1" href="#__codelineno-11-1"></a>57 AB 80 [VAL]
+</code></pre></div>
+<p>Single-byte payload, dual-purpose:</p>
+<ul>
+<li><strong>Startup (<code>VAL=0xFF</code>):</strong> sent twice ~210–260 ms apart immediately after the attach <code>0x86</code>. Means "LED state unknown" (pre-enumeration default).</li>
+<li><strong>State-2/3/4 LED feedback (<code>VAL=0x3N</code>):</strong> during operation the LC emits <code>0x80 (0x30 | LED_BITS)</code> to mirror the target host's keyboard LED state back to the source keyboard. Low nibble matches the NumLk/CapsLk/ScrLk encoding of <code>0x12</code>'s <code>LED</code> byte (bit 0/1/2). Not observed in state 0/1 captures.</li>
+</ul>
+<hr />
+<h2 id="upper-computer-lower-computer-frames">Upper Computer → Lower Computer Frames</h2>
+<h3 id="keep-alive-led-pid-ack-cmd-0x12">Keep-alive / LED / PID-ack — CMD <code>0x12</code></h3>
+<p>Sent by the UC approximately every 1 second.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-12-1" name="__codelineno-12-1" href="#__codelineno-12-1"></a>57 AB 12 [P1_LO] [P1_HI] [P2_LO] [P2_HI] [LED] [STATUS] [VERSION_HI] [VERSION_LO]
+</code></pre></div>
+<p>Total frame length: 11 bytes (header 2 + cmd 1 + payload 8).</p>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Size</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>P1</code></td>
+<td>2B LE</td>
+<td>PID of port 1 — populated from the <code>PID</code> field of the LC's <code>0x81</code> frame for port 1, once accepted</td>
+</tr>
+<tr>
+<td><code>P2</code></td>
+<td>2B LE</td>
+<td>PID of port 2 — populated similarly for port 2</td>
+</tr>
+<tr>
+<td><code>LED</code></td>
+<td>1B</td>
+<td>keyboard LED state: bit 0 = Num Lock, bit 1 = Caps Lock, bit 2 = Scroll Lock. <code>0xFF</code> observed when target host hasn't reported LED state yet</td>
+</tr>
+<tr>
+<td><code>STATUS</code></td>
+<td>1B</td>
+<td>bit-encoded UC health/enumeration state — see below</td>
+</tr>
+<tr>
+<td><code>VERSION</code></td>
+<td>2B</td>
+<td>high byte <code>0xAC</code> constant; low byte observed as <code>0x20</code> at steady state and <code>0x0B</code> during transients (first frame after attach, frame after a <code>STATUS</code> change). Purpose not decoded</td>
+</tr>
+</tbody>
+</table>
+<p><code>STATUS</code> byte interpretation (empirical):</p>
+<table>
+<thead>
+<tr>
+<th>Bit</th>
+<th>Mask</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>0</td>
+<td><code>0x01</code></td>
+<td>Port-0 device enumerated on target USB host</td>
+</tr>
+<tr>
+<td>1</td>
+<td><code>0x02</code></td>
+<td>Port-1 device enumerated on target USB host</td>
+</tr>
+<tr>
+<td>2</td>
+<td><code>0x04</code></td>
+<td>UART link healthy / UC alive</td>
+</tr>
+</tbody>
+</table>
+<p>Common values:
+- <code>0x07</code> — both devices live on target, HID forwarding works (the only "all green" state)
+- <code>0x04</code> — UART up, no target-side enumeration. Reasons include: cable in a DM/DP-less port, target replug pending re-enumeration (see <a href="#re-attach-on-the-ucs-usb-device-side-target-replug">§Reattach</a>), board-mode dipswitch wrong, or no target host attached
+- <code>0xFF</code> — UC's "fully unknown" state. Observed at startup (one or two frames before the UC settles into <code>0x07</code> or <code>0x04</code>), and during target-side cable yank
+- <code>0x00</code> — pre-attach, before UC is fully up</p>
+<p>The <code>P1</code>/<code>P2</code> fields start at <code>00 00</code> after power-on and populate as the UC processes each <code>0x81</code> frame. State-1 entry is gated on PID-ack (matching <code>P1</code>/<code>P2</code>), not on receiving any <code>0x12</code>. <strong><code>STATUS == 0x07</code> is the real "is HID actually being forwarded" indicator, not state-1 entry</strong> — a board can complete the UART-side handshake and reach state 1 yet have <code>STATUS</code> stuck at <code>0x04</code> indefinitely with no input reaching the target. See <a href="#state-machine">§State Machine</a> for the transition rule and <a href="#divergences-from-the-datasheet">§Divergences</a> for the comparison with the datasheet.</p>
+<blockquote>
+<p><strong>Diagnostic — <code>STATUS</code> stuck at <code>0x04</code>.</strong> If the LC-side handshake completes (PIDs ack'd, state 1 entered) but <code>STATUS</code> persists at <code>0x04</code> and <code>LED</code> persists at <code>0xFF</code>, the protocol negotiation is healthy and the issue is downstream of the UART link. The most common cause is a single-DM/DP-port board where the target cable is plugged into the unwired port — the board used for these captures has two USB-A ports but only one wired DM/DP pair, and only the wired port reaches <code>STATUS=0x07</code>. Confirmed by swapping ports: LC frames were byte-identical, but <code>STATUS</code> never moved off <code>0x04</code> on the wrong port. Identify the correct port empirically: the one where <code>STATUS</code> reaches <code>0x07</code> and the on-board LEDs mirror host NumLk/CapsLk/ScrLk state.</p>
+</blockquote>
+<hr />
+<h2 id="attach-sequence-timeline">Attach Sequence Timeline</h2>
+<p>LC→UC and UC→LC frames from a bidirectional state-0/1 capture (<a href="https://gist.github.com/sjmf/c1412b40e38f44738278c52416d5c0a9">gist</a>), expressed as deltas from the first <code>0x86</code>. Times are observational and will vary between runs.</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-13-1" name="__codelineno-13-1" href="#__codelineno-13-1"></a>t=0.000   LC → UC   57 AB 86                         attach
+<a id="__codelineno-13-2" name="__codelineno-13-2" href="#__codelineno-13-2"></a>t=0.260   LC → UC   57 AB 80 FF                      startup status (1/2)
+<a id="__codelineno-13-3" name="__codelineno-13-3" href="#__codelineno-13-3"></a>t=0.470   LC → UC   57 AB 80 FF                      startup status (2/2)
+<a id="__codelineno-13-4" name="__codelineno-13-4" href="#__codelineno-13-4"></a>t=0.470   LC → UC   57 AB 82 A3                      heartbeat begins
+<a id="__codelineno-13-5" name="__codelineno-13-5" href="#__codelineno-13-5"></a>t=0.500   UC → LC   57 AB 12 00 00 00 00 ...         keep-alive (~30 ms after 2nd 0x80 FF; no PIDs)
+<a id="__codelineno-13-6" name="__codelineno-13-6" href="#__codelineno-13-6"></a>t=1.440   LC → UC   57 AB 89                         status announce (1/3)
+<a id="__codelineno-13-7" name="__codelineno-13-7" href="#__codelineno-13-7"></a>t=1.490   LC → UC   57 AB 81 00 4A 00 [DESC] [PID]   mouse Device Connection
+<a id="__codelineno-13-8" name="__codelineno-13-8" href="#__codelineno-13-8"></a>t=1.550   LC → UC   57 AB 81 01 A5 00 [DESC] [PID]   keyboard Device Connection
+<a id="__codelineno-13-9" name="__codelineno-13-9" href="#__codelineno-13-9"></a>t=2.490   UC → LC   57 AB 12 40 00 00 00 ...         keep-alive (mouse PID ack)
+<a id="__codelineno-13-10" name="__codelineno-13-10" href="#__codelineno-13-10"></a>t=3.530   LC → UC   57 AB 89                         status announce (2/3)
+<a id="__codelineno-13-11" name="__codelineno-13-11" href="#__codelineno-13-11"></a>t=3.580   LC → UC   57 AB 81 01 A5 00 [DESC] [PID]   keyboard Device Connection (retransmit)
+<a id="__codelineno-13-12" name="__codelineno-13-12" href="#__codelineno-13-12"></a>t=4.520   UC → LC   57 AB 12 40 00 03 15 ...         keep-alive (both PIDs ack) ← state 1
+<a id="__codelineno-13-13" name="__codelineno-13-13" href="#__codelineno-13-13"></a>t=5.570   LC → UC   57 AB 89                         status announce (3/3 — last observed)
+<a id="__codelineno-13-14" name="__codelineno-13-14" href="#__codelineno-13-14"></a>t=...     LC → UC   57 AB 83 [LEN] [SER] [...]       key/mouse frames (state 1)
+</code></pre></div>
+<p>After both <code>P1</code> and <code>P2</code> in the UC's keep-alive match the <code>PID</code> values the LC sent in <code>0x81</code>, the LC switches CMD from <code>0x88</code> (state 0) to <code>0x83</code> (state 1). All subsequent key/mouse frames use the paired form.</p>
+<h2 id="disconnect-sequence">Disconnect Sequence</h2>
+<p>When a USB device is unplugged from the LC mid-session, only a single bare <code>0x86</code> is emitted; no other frames accompany it. Heartbeats continue at their normal cadence. From a capture with the mouse unplugged first and the keyboard ~2 s later:</p>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-14-1" name="__codelineno-14-1" href="#__codelineno-14-1"></a>... key/mouse frames, then idle ...
+<a id="__codelineno-14-2" name="__codelineno-14-2" href="#__codelineno-14-2"></a>LC → UC   57 AB 82 A3        heartbeat (1 s cadence)
+<a id="__codelineno-14-3" name="__codelineno-14-3" href="#__codelineno-14-3"></a>LC → UC   57 AB 86            ← mouse unplugged (no follow-up frames)
+<a id="__codelineno-14-4" name="__codelineno-14-4" href="#__codelineno-14-4"></a>LC → UC   57 AB 82 A3        heartbeat (cadence unchanged)
+<a id="__codelineno-14-5" name="__codelineno-14-5" href="#__codelineno-14-5"></a>LC → UC   57 AB 86            ← keyboard unplugged (no follow-up frames)
+<a id="__codelineno-14-6" name="__codelineno-14-6" href="#__codelineno-14-6"></a>LC → UC   57 AB 82 A3        heartbeat (cadence unchanged)
+<a id="__codelineno-14-7" name="__codelineno-14-7" href="#__codelineno-14-7"></a>... heartbeats only thereafter ...
+</code></pre></div>
+<p>The interval between the two <code>0x86</code> frames in this capture (~2 s) reflects the operator's actions, not any protocol timer. The UC's <code>0x12</code> keep-alive does <strong>not</strong> zero its <code>P1</code>/<code>P2</code> PID slots after disconnect on the LC's USB-host side — it continues to report the last-known PIDs at its normal ~1 s cadence. The LC also remains in state 1 (CMD <code>0x83</code>) and does not revert to state 0.</p>
+<h3 id="re-attach-on-the-ucs-usb-device-side-target-replug">Re-attach on the UC's USB-device side (target replug)</h3>
+<p>When the UC's <em>target-PC</em> USB cable is unplugged and re-plugged (a different event from an LC-side peripheral disconnect), the UC's <code>0x12</code> does react: <code>P1</code>/<code>P2</code> clear to <code>00 00</code> for one or two frames during the transient, <code>STATUS</code> flashes <code>0xFF</code>, then PIDs settle back to their previous values but <code>STATUS</code> remains at <code>0x04</code> until the LC drives a re-enumeration.</p>
+<p>To get <code>STATUS</code> back to <code>0x07</code> (i.e. devices re-enumerated on the target host), the LC must replay the <strong>full</strong> attach sequence (<code>0x86 → 0x80 0xFF ×2 → 0x89 → 0x81 ×N</code>). Retransmitting <code>0x81</code> alone is insufficient — the UC accepts the descriptors and reflects the PIDs in <code>0x12</code>, but does not re-present its USB-device side to the target host. Validated by the PoC's <code>_run_attach_sequence(wait_for_uc=False)</code> reattach trigger.</p>
+<hr />
+<h2 id="state-machine">State Machine</h2>
+<div class="highlight"><pre><span></span><code><a id="__codelineno-15-1" name="__codelineno-15-1" href="#__codelineno-15-1"></a>  USB device attached on LC
+<a id="__codelineno-15-2" name="__codelineno-15-2" href="#__codelineno-15-2"></a>         │
+<a id="__codelineno-15-3" name="__codelineno-15-3" href="#__codelineno-15-3"></a>         ▼
+<a id="__codelineno-15-4" name="__codelineno-15-4" href="#__codelineno-15-4"></a>    ┌─────────┐    UC keep-alive shows         ┌─────────┐
+<a id="__codelineno-15-5" name="__codelineno-15-5" href="#__codelineno-15-5"></a>    │ State 0 │    P1==mouse_pid AND           │ State 1 │
+<a id="__codelineno-15-6" name="__codelineno-15-6" href="#__codelineno-15-6"></a>    │  SOLO   │ ─────────────────────────────▶ │ PAIRED  │
+<a id="__codelineno-15-7" name="__codelineno-15-7" href="#__codelineno-15-7"></a>    │         │    P2==kbd_pid                 │         │
+<a id="__codelineno-15-8" name="__codelineno-15-8" href="#__codelineno-15-8"></a>    └─────────┘                                └─────────┘
+<a id="__codelineno-15-9" name="__codelineno-15-9" href="#__codelineno-15-9"></a>    CMD = 0x88                                 CMD = 0x83
+</code></pre></div>
+<p>State 0 (<code>0x88</code>) is the unpaired form; state 1 (<code>0x83</code>) is the paired form. The CMD byte switches; the frame payload is identical. Heartbeats run at ~1 s cadence in both states. <strong>Transition trigger:</strong> the UC's <code>0x12</code> keep-alive must reflect every PID the LC announced via <code>0x81</code> in its <code>P1</code>/<code>P2</code> fields — receiving any single <code>0x12</code> is <em>not</em> sufficient. See <a href="#divergences-from-the-datasheet">§Divergences</a> for how this differs from the datasheet's wording.</p>
+<blockquote>
+<p><strong>Capability note: state 0/1 supports relative mouse only.</strong> Although datasheet §4.3 documents the LEN=<code>0x0A</code> absolute-mouse frame as a valid state-0/1 LC→UC frame, the UC's frame-forwarding firmware silently drops it. Verified against multiple descriptor variants and against a real CH9329 chip as the LC USB-host source. For absolute cursor positioning, use state 3 or 4. See <a href="#mouse--cmd-0x83--0x88">§Mouse — CMD <code>0x83</code> / <code>0x88</code></a> and <a href="#divergences-from-the-datasheet">§Divergences</a>.</p>
+</blockquote>
+<hr />
+<h2 id="labelling-byte-ser">Labelling Byte (SER)</h2>
+<p><code>SER</code> (the byte after <code>LEN</code> in <code>0x83</code>/<code>0x88</code> frames) is a packed bitfield encoding device class, USB protocol mode, and port number. Per CH9350 datasheet §4.3:</p>
+<table>
+<thead>
+<tr>
+<th>Bit</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>7, 6, 3</td>
+<td>Reserved</td>
+</tr>
+<tr>
+<td>5, 4</td>
+<td>Device class — <code>01</code> = keyboard, <code>10</code> = mouse, <code>11</code> = multimedia, <code>00</code> = other</td>
+</tr>
+<tr>
+<td>2, 1</td>
+<td>Protocol — <code>01</code> = HID, <code>10</code> = BIOS, <code>00</code> = Unknown, <code>11</code> = reserved</td>
+</tr>
+<tr>
+<td>0</td>
+<td>Port — <code>0</code> = port 1 (DP/DM), <code>1</code> = port 2 (HP/HM)</td>
+</tr>
+</tbody>
+</table>
+<p>Decoded examples of observed values:</p>
+<table>
+<thead>
+<tr>
+<th>SER</th>
+<th>Bits 5,4</th>
+<th>Bits 2,1</th>
+<th>Bit 0</th>
+<th>Decode</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x11</code></td>
+<td>01 (kbd)</td>
+<td>00 (unknown)</td>
+<td>1 (port 2)</td>
+<td>Real boot keyboard, port 2</td>
+</tr>
+<tr>
+<td><code>0x13</code></td>
+<td>01 (kbd)</td>
+<td>01 (HID)</td>
+<td>1 (port 2)</td>
+<td>HID keyboard, port 2</td>
+</tr>
+<tr>
+<td><code>0x20</code></td>
+<td>10 (mouse)</td>
+<td>00 (unknown)</td>
+<td>0 (port 1)</td>
+<td>Real boot mouse, port 1</td>
+</tr>
+<tr>
+<td><code>0x22</code></td>
+<td>10 (mouse)</td>
+<td>01 (HID)</td>
+<td>0 (port 1)</td>
+<td>HID mouse, port 1</td>
+</tr>
+<tr>
+<td><code>0x23</code></td>
+<td>10 (mouse)</td>
+<td>01 (HID)</td>
+<td>1 (port 2)</td>
+<td>HID mouse, port 2</td>
+</tr>
+</tbody>
+</table>
+<p>Empirically the UC accepts <code>Unknown</code>-protocol values (bits 2,1 = 00) and forwards them correctly, despite the datasheet implying only HID/BIOS are valid.</p>
+<blockquote>
+<p><strong>Interpretation (USB HID).</strong> These bits likely map to USB HID's two <code>SET_PROTOCOL</code> modes:
+- <code>HID</code> (<code>01</code>) → Report Protocol → frame carries an <code>RID</code> byte after SER (LEN = <code>0x0C</code> keyboard, <code>0x0A</code>/<code>0x08</code> mouse).
+- <code>BIOS</code> (<code>10</code>) → Boot Protocol → fixed-layout 8-byte keyboard / 3-byte mouse report, no <code>RID</code>.
+- <code>Unknown</code> (<code>00</code>) → device classified as neither (no Report ID item in its descriptor, no boot interface advertised); the UC handles it as fixed-layout, hence the <code>RID</code>-less LEN = <code>0x0B</code> / <code>0x07</code> variants.</p>
+<p>This is consistent with the data but has not been verified against a device that explicitly advertises HID Boot Protocol (<code>bInterfaceSubClass = 0x01</code>).</p>
+</blockquote>
+<hr />
+<h2 id="states-234-alternative-dipswitch-configurations">States 2/3/4 (Alternative Dipswitch Configurations)</h2>
+<p>States 2, 3 and 4 are simpler modes that bypass the descriptor-exchange handshake: the UC presents fixed <strong>built-in</strong> HID descriptors to the target host, and the LC forwards HID reports as fixed-length frames. The three modes differ only in <em>what built-in descriptor the UC advertises</em>; the LC-side UART protocol is essentially identical between states 3 and 4. All three are selected via the <code>S1</code>/<code>S0</code> dipswitches on <strong>both</strong> ends (SEL still selects LC vs UC role); BAUD pins still control baud rate independently:</p>
+<table>
+<thead>
+<tr>
+<th>S1</th>
+<th>S0</th>
+<th>State</th>
+<th>UC built-in HID interfaces (datasheet §3.3–3.5)</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>HIGH</td>
+<td>HIGH</td>
+<td>0/1 (default)</td>
+<td>None — descriptor sent over UART via <code>0x81</code></td>
+</tr>
+<tr>
+<td>HIGH</td>
+<td>LOW</td>
+<td>2</td>
+<td>BIOS keyboard + <strong>relative</strong> mouse</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>HIGH</td>
+<td>3</td>
+<td>BIOS keyboard + <strong>absolute</strong> mouse</td>
+</tr>
+<tr>
+<td>LOW</td>
+<td>LOW</td>
+<td>4</td>
+<td>BIOS keyboard + <strong>HID Digitizers</strong> (replaces abs mouse for multi-monitor)</td>
+</tr>
+</tbody>
+</table>
+<p>The "BIOS keyboard" wording comes straight from the datasheet (§3.3 et seq.) and means a USB HID Boot-protocol keyboard — the kind a PC's BIOS/UEFI accepts before any OS-level HID drivers load. The mouse semantics, however, differ between the three modes, and that determines which mode is appropriate for which environment:</p>
+<ul>
+<li><strong>State 2 — legacy / pre-boot.</strong> BIOS keyboard + <em>relative</em> mouse. This is the right choice for BIOS setup, boot menus, recovery consoles, and UEFI CSM environments, where the boot mouse protocol only understands relative motion. States 3 and 4 will not enumerate in those environments because their absolute-mouse / HID-Digitizers descriptors fall outside the boot protocol.</li>
+<li><strong>State 3 — modern OS, no handshake, abs mouse.</strong> BIOS keyboard + absolute mouse. Useful when the descriptor-exchange handshake of state 0/1 isn't available (e.g. minimal embedded LC firmware) but absolute-cursor positioning is wanted. Most modern OSes (Linux, macOS, Windows) accept the abs-mouse interface.</li>
+<li><strong>State 4 — HID Digitizer.</strong> The defining feature of state 4 is that the UC identifies on the target USB bus as a HID Digitizer (the same device class as a graphics tablet / pen input), not as a regular mouse. The chip exposes a different USB device class so the host OS routes pointer reports through its digitizer/pen pipeline rather than its mouse pipeline. The HID Digitizers class itself is widely supported (Linux <code>hid-multitouch</code>, macOS, Android, iOS, Windows all parse the descriptors), but <strong>how the OS routes those reports is implementation-dependent.</strong> On Windows 7+, digitizer abs-coords map cleanly to the full virtual desktop spanning multiple monitors — solving the limitation that a plain abs-mouse only addresses the primary monitor. On Linux, macOS, and other targets, a digitizer report may land in a tablet/pen input pipeline rather than driving the system cursor, depending on the desktop environment and its input stack. The datasheet's §3.5 caveat — <em>"some systems do not support HID Digitizers devices"</em> — is best read as "OS routing of digitizer events to the cursor varies; verify on your target" rather than as a strict OS allowlist. State 3 (UC identifies as a regular HID Mouse with absolute coords) is the safer default for plain cursor-positioning KVM use.</li>
+</ul>
+<h3 id="lc-uc-fixed-length-frames">LC → UC fixed-length frames</h3>
+<table>
+<thead>
+<tr>
+<th>CMD</th>
+<th>Frame</th>
+<th>Used in</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>0x01</code></td>
+<td><code>57 AB 01</code> + 8-byte HID boot keyboard report</td>
+<td>2, 3, 4</td>
+<td>Keyboard</td>
+</tr>
+<tr>
+<td><code>0x02</code></td>
+<td><code>57 AB 02 [btn] [dx] [dy] [wheel]</code></td>
+<td>2 only</td>
+<td>Relative mouse</td>
+</tr>
+<tr>
+<td><code>0x04</code></td>
+<td><code>57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]</code></td>
+<td>3, 4</td>
+<td>Absolute mouse — <code>id</code>=<code>0x01</code>, X/Y as 16-bit LE</td>
+</tr>
+<tr>
+<td><code>0x10</code></td>
+<td><code>57 AB 10 [VID_LO] [VID_HI] [PID_LO] [PID_HI]</code></td>
+<td>2, 3, 4</td>
+<td>VID/PID modification (datasheet §3, p.9): override the UC's USB descriptor identity</td>
+</tr>
+</tbody>
+</table>
+<p>Verified empirically across all three modes by bidirectional sniff: <a href="https://gist.github.com/sjmf/9bf8975412ecbb0985bd4e5c549a915d">state-2 gist</a>, <a href="https://gist.github.com/sjmf/5a3fd16fbe81668eddacb0fb4951e09b">state-3/4 gist</a>.</p>
+<p><strong>Common to all three modes (2, 3, 4):</strong></p>
+<ul>
+<li><strong>Startup announce.</strong> The LC emits <code>0x86 → 0x80 0xFF → 0x89 → 0x80 0xFF</code> at attach, identical to state 0/1 but with <strong>no <code>0x81</code> Device Connection frames</strong> — the UC has built-in descriptors and does not need them.</li>
+<li><strong>UC keep-alive (<code>0x12</code>) flows.</strong> Within ~250 ms of the startup announce, the UC begins emitting <code>0x12</code> keep-alives at ~1 s cadence and <code>STATUS</code> reaches <code>0x07</code>. <code>P1</code>/<code>P2</code> stay at <code>0000</code> for the entire session (no descriptor announce, nothing to ack), confirming that <code>STATUS</code> bits are gated on USB-side enumeration on the target, <strong>not</strong> on PID-ack.</li>
+<li><strong><code>0x80 0x3N</code> LED-feedback channel</strong> from LC → UC during operation, mirroring the host's keyboard LED state back to the source keyboard. Example: pressing CapsLk → LC emits <code>01 00 00 39 ...</code> → UC responds with <code>12 ... led=0x02</code> → LC echoes <code>80 32</code>; on release the LC drops back to <code>80 30</code>.</li>
+<li><strong>Per-keystroke retransmit.</strong> Each key event produces 3–4 repeated frames on the wire (no SER, no counter, no checksum, so the LC cannot detect loss — it just retransmits).</li>
+</ul>
+<p><strong>State 2 (relative mouse):</strong></p>
+<ul>
+<li><strong>Mouse <code>0x02</code> format verified.</strong> <code>57 AB 02 [btn] [dx] [dy] [wheel]</code> with signed 8-bit dx/dy (two's complement). The LC emits up to ~7 frames per ~50 ms burst during continuous motion — higher rate than keyboard, with no retransmit padding (a dropped sample is masked by the next).</li>
+<li><strong>Idle keyboard reports during mouse activity.</strong> With both a keyboard and mouse plugged into the LC, continuous mouse motion produces occasional <code>57 AB 01 00 00 00 00 00 00 00 00</code> frames (no key pressed) interleaved with mouse frames. They appear only during active mouse traffic — not during keyboard-only typing or steady-state idle. Most likely the LC's USB host poll cycle reads both endpoints together and emits the keyboard endpoint's "no change" report alongside each batch of mouse reports.</li>
+<li><strong>State 2 silently drops absolute mouse.</strong> Plugging a CH9329 (abs-mouse + keyboard composite) into the LC in state 2: keyboard reports forwarded via <code>0x01</code>, but no <code>0x04</code> frames ever appeared on the wire and abs-mouse coordinates were silently dropped. The link was healthy throughout (<code>STATUS=0x07</code>); the LC simply has no destination for abs-mouse reports because the UC's state-2 built-in descriptor is relative-only. Switching to state 3 or 4 fixes this.</li>
+</ul>
+<p><strong>States 3 and 4 (absolute mouse):</strong></p>
+<ul>
+<li><strong>No <code>0x02</code> frames on the wire</strong> — only <code>0x04</code>. State-2 relative-mouse and state-3/4 absolute-mouse modes are mutually exclusive.</li>
+<li><strong><code>0x04</code> format verified.</strong> <code>57 AB 04 0x01 [btn] [XL XH] [YL YH] [wheel]</code> — 7-byte payload after the cmd byte; <code>id=0x01</code> is a fixed report-ID prefix; X/Y are 16-bit little-endian.</li>
+<li><strong>Effective X/Y range is 0..1023 (10-bit), not the 16-bit field width.</strong> The chip's built-in absolute-mouse descriptor declares an 11-bit signed field (<code>LogicalMin=-1024, LogicalMax=+1023, RepSize=11</code>); bit 10 is the sign bit and bits 11+ are silently ignored. Sending values outside 0..1023 produces a periodic clip-sweep-clip-sweep pattern with period 2048 in the value: cursor sweeps left-to-right on <code>nx ∈ 0..1023</code>, clamps at the left edge for <code>nx ∈ 1024..2047</code> (negative-interpreted), sweeps again on <code>nx ∈ 2048..3071</code> (low 11 bits positive), and so on. Note: this is <em>different</em> from the CH9329, which uses a 12-bit (0..4095) range despite emitting the same <code>0x04</code> wire frame format — the chip's USB-side descriptor differs even though the UART-side framing matches. Calibrate empirically per board if the symptom recurs.</li>
+<li><strong>The LC integrates relative motion into absolute coordinates</strong> when the source device is a relative-motion mouse. So states 3/4 force absolute-mouse semantics on the target regardless of what the source device reports.</li>
+<li><strong>States 3 and 4 are indistinguishable at the UART layer</strong> because the choice between them is made on the UC, not the LC. The UC reads its own dipswitch and selects which built-in descriptor to advertise to the target — HID Mouse for state 3, HID Digitizers for state 4 — without any signalling from the LC. The LC just emits <code>0x04</code> abs-coordinate frames either way, and the UC routes them to whichever of its built-in descriptors is active. From an implementation perspective, <strong>states 3 and 4 share the same LC code path</strong>; the operator picks between them via dipswitches on the UC based on what the target host supports.</li>
+<li><strong>Sustained frame stream required for cursor motion.</strong> A real LC emits <code>0x04</code> frames at ~50 ms intervals during continuous motion (typically hundreds of frames over a few seconds, with sub-pixel deltas rolled forward into each next frame). An emulator that fires one isolated <code>0x04</code> per command does <em>not</em> produce visible cursor movement on the target — even though the target's USB host controller still receives the report (the screen un-dims, indicating the OS sees activity). The likely mechanism is that HID Digitizers / abs-mouse drivers require a sustained stream to treat reports as active input rather than as glitches; isolated reports wake the bus but do not update the cursor. The PoC's REPL <code>m X Y</code> issues one frame per command and reproduces this "screen wakes, cursor doesn't move" symptom; an LC integration that wants S3/4 cursor motion must emit a continuous burst per move event, mimicking the real LC's poll-driven cadence.</li>
+</ul>
+<hr />
+<h2 id="divergences-from-the-datasheet">Divergences from the datasheet</h2>
+<p>The CH9350 V2.3 datasheet is broadly accurate but in several places contradicts what a real CH9350L LC actually emits on the wire. The captures referenced below were all taken against a known-working hardware setup (real LC + USB keyboard + USB mouse, paired with a real UC that successfully forwarded HID input to a target PC).</p>
+<h3 id="0x86-is-fired-at-both-attach-and-disconnect-and-the-uc-does-not-reset"><code>0x86</code> is fired at both attach and disconnect, and the UC does not reset</h3>
+<ul>
+<li><strong>Datasheet (§4.6 "Device Disconnect Command"):</strong> <em>"The lower computer will send the command when it detects the device is removed, and the upper computer will reset the chip when it receives the command."</em></li>
+<li><strong>Observed (attach):</strong> <code>0x86</code> is the <strong>first</strong> frame the LC emits after a USB device is plugged in, followed by <code>0x80 0xFF</code> ×2, heartbeats, <code>0x89</code>, and one <code>0x81</code> per device.</li>
+<li><strong>Observed (disconnect):</strong> the LC emits a <em>bare</em> <code>0x86</code> per device unplugged, with no follow-up frames. The opcode is the same in both contexts; the presence or absence of subsequent <code>0x80</code>/<code>0x89</code>/<code>0x81</code> frames is what disambiguates.</li>
+<li><strong>No chip reset:</strong> after both devices are disconnected, the UC's <code>0x12</code> keep-alive continues at its normal cadence with its previously-learned PIDs in the <code>P1</code>/<code>P2</code> slots. Whatever "reset" the datasheet refers to is internal to the UC and not visible from the LC side.</li>
+</ul>
+<h3 id="0x80-is-used-in-every-state-not-only-state-234"><code>0x80</code> is used in every state, not only state 2/3/4</h3>
+<ul>
+<li><strong>Datasheet (§4.8 "Status Change Command"):</strong> <em>"State 2/3/4 supports this command, which is sent by the lower computer, received by the upper computer and has response."</em></li>
+<li><strong>Observed in state 0/1:</strong> <code>0x80 0xFF</code> is sent twice (~210–260 ms apart) at attach time, immediately after <code>0x86</code>. The <code>0xFF</code> payload means "LED state unknown" (pre-enumeration default).</li>
+<li><strong>Observed in states 2/3/4:</strong> the same <code>0x80 0xFF</code> startup pair, plus a recurring <code>0x80 0xNN</code> LED-feedback channel during operation (<code>NN = 0x30 | LED_BITS</code>). The datasheet's "Status Change Command" naming is consistent with this LED-feedback role; the datasheet is wrong that the opcode is <em>exclusive</em> to states 2/3/4.</li>
+</ul>
+<h3 id="0x89-is-not-defined-in-the-datasheet-at-all"><code>0x89</code> is not defined in the datasheet at all</h3>
+<ul>
+<li><strong>Datasheet:</strong> no entry for <code>0x89</code>.</li>
+<li><strong>Observed:</strong> sent 3 times at ~2 s intervals during the descriptor-announce phase in state 0/1, and once at startup in states 2/3/4 (where there is no descriptor announce). Not seen during steady-state operation, typing, mouse movement, or disconnect.</li>
+</ul>
+<h3 id="0x81-is-sent-at-attach-in-state-0-not-on-device-property-mismatch-in-state-1"><code>0x81</code> is sent at attach in state 0, not on "device property mismatch" in state 1</h3>
+<ul>
+<li><strong>Datasheet (§4.1 "Device Connection Frame"):</strong> <em>"State 1 in lower computer mode will send the data frame when a device property mismatch is detected."</em></li>
+<li><strong>Observed:</strong> the LC sends <code>0x81</code> at attach time <strong>while still in state 0</strong> (CMD <code>0x88</code>). The frame is not a recovery mechanism; it is the primary means by which the LC tells the UC what HID descriptors to advertise to the target PC. State-1 transition happens <em>after</em> the UC acknowledges the descriptor (see below).</li>
+</ul>
+<h3 id="0x81-field-naming-leading-byte-port-trailing-2-bytes-pid"><code>0x81</code> field naming: leading byte = port, trailing 2 bytes = PID</h3>
+<ul>
+<li><strong>Datasheet (§4.1):</strong> describes the frame as <code>0x57 0xAB 0x81 [1-byte ID] [2-byte Payload length] [Payload] [2-byte ID] [1-byte parity check]</code>. The two <code>ID</code> fields are not given distinct names.</li>
+<li><strong>Observed:</strong> the leading 1-byte <code>ID</code> selects the USB port (<code>0x00</code> = port 1 / DP-DM, <code>0x01</code> = port 2 / HP-HM). The trailing 2-byte <code>ID</code> is the device PID and is reflected verbatim into the UC's <code>0x12</code> keep-alive in the corresponding <code>PID-port1</code> / <code>PID-port2</code> slot once the descriptor is processed. This document calls them <code>PORT</code> and <code>PID</code> for clarity.</li>
+</ul>
+<h3 id="state-1-transition-is-pid-ack-not-first-0x12">State-1 transition is PID-ack, not first <code>0x12</code></h3>
+<ul>
+<li><strong>Datasheet (§3.2):</strong> <em>"When CH9350L is used in pairs, it switches from state 0 to state 1."</em> — implies a single-event transition.</li>
+<li><strong>Common prior assumption</strong> (in earlier versions of this document and in the PoC): receiving any <code>0x12</code> from the UC is the trigger.</li>
+<li><strong>Observed:</strong> the UC sends <code>0x12</code> keep-alives starting ~30 ms after the second <code>0x80 0xFF</code>, well before any <code>0x81</code> has been sent — and continues sending them with <code>00 00</code> PIDs until each <code>0x81</code> is processed. The LC does not transition to state 1 (CMD <code>0x83</code>) until the UC's <code>0x12</code> reflects <strong>every</strong> PID the LC has announced via <code>0x81</code>. This was proven by bidirectional capture: with two devices announced, the LC stayed in state 0 until both <code>P1</code> and <code>P2</code> were populated in the UC's keep-alive.</li>
+<li><strong>Interpretation (USB HID):</strong> this is the natural ordering rule for a composite HID device — INPUT reports for any interface cannot be safely forwarded until <em>all</em> configured interfaces have completed enumeration on the target host. The PID-ack gate is the LC's mechanism for waiting on that.</li>
+</ul>
+<h3 id="labelling-byte-unknown-protocol-bits-are-valid">Labelling byte: "Unknown" protocol bits are valid</h3>
+<ul>
+<li><strong>Datasheet (§4.3):</strong> documents bits 2,1 as <code>01 = HID, 10 = BIOS, 00 = Unknown, 11 = reserved</code>, implying only HID/BIOS are usable.</li>
+<li><strong>Observed:</strong> SER values <code>0x11</code> (kbd / Unknown / port 2) and <code>0x20</code> (mouse / Unknown / port 1) are routinely sent by a real LC for keyboards and mice whose USB descriptors lack a <code>Report ID</code> item, and the UC forwards them correctly. The "Unknown" classification is a normal operating mode, not an error condition.</li>
+</ul>
+<h3 id="mouse-frame-variant-len-0x08-not-documented">Mouse frame variant LEN = <code>0x08</code> not documented</h3>
+<ul>
+<li><strong>Datasheet (§4.3):</strong> documents only the LEN=<code>0x0A</code> (CH9329 absolute, with report ID) and LEN=<code>0x07</code> (boot relative, no report ID) mouse frame formats.</li>
+<li><strong>Observed:</strong> a third variant exists — LEN=<code>0x08</code>, SER=<code>0x22</code>, with a <code>Report ID</code> byte preceding the 4-byte boot mouse data. This is what the LC emits when the connected USB mouse has a Report Descriptor that includes a <code>Report ID</code> item but uses standard relative coordinates.</li>
+</ul>
+<h3 id="len-0x0a-absolute-mouse-frames-are-silently-dropped-by-the-uc-in-state-01">LEN = <code>0x0A</code> absolute mouse frames are silently dropped by the UC in state 0/1</h3>
+<ul>
+<li><strong>Datasheet (§4.3):</strong> documents the LEN=<code>0x0A</code>, RID=<code>0x05</code> absolute mouse frame as a normal LC→UC frame in state 0/1, alongside the relative variants. The descriptor-announce mechanism (<code>0x81</code>) is presented as a general-purpose channel for declaring arbitrary HID Report Descriptors to the UC.</li>
+<li><strong>Observed:</strong> the UC accepts the descriptor handshake (the announced descriptor's PID is reflected in <code>0x12</code>'s <code>P1</code>/<code>P2</code> slot, <code>STATUS</code> reaches <code>0x07</code>, the target host enumerates the device with the expected HID interfaces). But absolute mouse reports never reach the target's input pipeline — the cursor does not move. The same UC accepts and forwards LEN=<code>0x07</code>/<code>0x08</code> relative-mouse frames and LEN=<code>0x0B</code>/<code>0x0C</code> keyboard frames immediately, against the same descriptor exchange.</li>
+<li><strong>Evidence (multiple sources):</strong></li>
+<li>PoC-generated <code>0x83 0x0A</code> frames with several composite-mouse descriptor variants — two-Application TLCs, single Pointer Physical with two reports, with/without <code>Wheel</code> declarations, with 0..65535 / 0..32767 / 0..4095 absolute coordinate ranges, with Report IDs <code>0x02</code> and <code>0x05</code>. Relative reports (RID <code>0x01</code>) moved the cursor in every variant; absolute reports (any RID, LEN=<code>0x0A</code>) produced no cursor motion at any coordinate, including screen edges.</li>
+<li>PoC-generated relative frames using RID <code>0x04</code> instead of RID <code>0x01</code> against a descriptor declaring both — to test whether the UC's frame validator is RID-pinned independent of frame length. (Result included for completeness; see capture <code>tmp/sniff/test-abs-LC-5.txt</code>.)</li>
+<li><strong>Real CH9329 chip</strong> plugged into the LC's USB-host port as the report source. The LC announced the genuine 359-byte CH9329 composite descriptor (<code>PID=0x29e1</code>); the UC accepted it (<code>p2=29e1</code>, <code>STATUS=0x07</code>); the LC forwarded ~80 absolute frames (<code>57 ab 83 0a 23 05 …</code>) during stylus activity; the cursor did not move. Repeated across both LC ports.</li>
+<li><strong>Interpretation:</strong> the UC's frame-forwarding firmware is hard-bound to a subset of report shapes — relative mouse (LEN=<code>0x07</code>/<code>0x08</code>) and keyboard (LEN=<code>0x0B</code>/<code>0x0C</code>). The descriptor handshake forwards descriptor bytes verbatim to the target host for enumeration purposes, but report payloads outside the firmware's expected set are swallowed before reaching the USB device endpoints, regardless of whether the descriptor declares them. The chip's lineage is a BIOS keyboard-and-mouse extender; arbitrary HID classes were apparently never within scope for state-0/1's report path.</li>
+<li><strong>Implication:</strong> absolute mouse positioning on a CH9350L UC requires state 3 or state 4 (dipswitch-fixed BIOS modes), where the UC owns the USB device stack with built-in absolute-mouse / digitizer descriptors and frames flow as fixed-format <code>0x04</code> packets. State 0/1 cannot be made to support absolute mouse from the LC side alone; this is a UC firmware constraint, not a protocol negotiation issue.</li>
+<li><strong>Caveat:</strong> observed against one CH9350L board (single-DM/DP wired port; the same hardware used for all captures in this document). Whether other CH9350L boards or firmware revisions behave differently has not been tested.</li>
+</ul>
+<h3 id="state-34-0x04-xy-is-11-bit-signed-not-16-bit-unsigned">State-3/4 <code>0x04</code> X/Y is 11-bit signed, not 16-bit unsigned</h3>
+<ul>
+<li><strong>Datasheet (§4.3):</strong> documents the <code>0x04</code> absolute mouse frame as <code>57 AB 04 [id] [btn] [XL] [XH] [YL] [YH] [wheel]</code> with X/Y as 16-bit LE fields; no statement is made about the chip's USB-side LogicalMin/LogicalMax declarations.</li>
+<li><strong>Common assumption</strong> (in earlier versions of this document and in the implementation): the field width = the usable range, i.e. X/Y are full 16-bit unsigned 0..0xFFFF. The CH9329's identical <code>0x04</code> wire format uses 12-bit (0..4095), so 12-bit was a plausible fallback hypothesis.</li>
+<li><strong>Observed:</strong> cursor sweeps on <code>nx ∈ 0..1023</code>, clamps at left edge on <code>nx ∈ 1024..2047</code>, sweeps again on <code>nx ∈ 2048..3071</code>, and so on with period 2048. The signature of an 11-bit signed field on the host side: bit 10 acts as the sign bit, negative-interpreted values are out of <code>LogicalMin=0</code> and clamp to the left edge, and bits 11+ are silently ignored.</li>
+<li><strong>Effective LC-side range: 0..1023 (10-bit unsigned).</strong> X/Y on the wire remain 16-bit LE; the upper 6 bits are unused / Const padding per the chip's descriptor. A value of e.g. <code>0xFFFF</code> becomes <code>0x07FF</code> after low-bit masking, gets bit-10-sign-extended to <code>-1</code>, and the host clamps to 0.</li>
+<li><strong>The chip declares a different range than the CH9329</strong> despite the matching wire format. Implementations should treat the X/Y range as a per-chip property and calibrate empirically — the periodic clip-sweep symptom is the diagnostic signature.</li>
+</ul>
+<hr />
+<h2 id="reference-implementation">Reference Implementation</h2>
+<p><code>ch9350_poc.py</code> (<a href="https://gist.github.com/sjmf/c4329fd27e403a264648bf4e7744655a">gist</a>) reproduces the attach sequence and emits matching <code>0x81</code> frames using HID Report Descriptors captured byte-for-byte from a real CH9350L LC. Frame <em>content</em> is byte-identical to what a real LC emits; frame <em>timing</em> (heartbeat / <code>0x89</code> cadence, inter-frame gaps) is approximate. For the curious, the reverse-engineering process for each stage of the protocol is described in more detail on <a href="https://github.com/sjmf/kvm-serial/issues/13">issue #13</a>.</p>
+
+
+
+
+
+
+
+
+
+
+
+
+                
+              </article>
+            </div>
+          
+          
+<script>var target=document.getElementById(location.hash.slice(1));target&&target.name&&(target.checked=target.name.startsWith("__tabbed_"))</script>
+        </div>
+        
+      </main>
+      
+        <footer class="md-footer">
+  
+  <div class="md-footer-meta md-typeset">
+    <div class="md-footer-meta__inner md-grid">
+      <div class="md-copyright">
+  
+  
+    Made with
+    <a href="https://squidfunk.github.io/mkdocs-material/" target="_blank" rel="noopener">
+      Material for MkDocs
+    </a>
+  
+</div>
+      
+    </div>
+  </div>
+</footer>
+      
+    </div>
+    <div class="md-dialog" data-md-component="dialog">
+      <div class="md-dialog__inner md-typeset"></div>
+    </div>
+    
+    
+    
+      
+      
+      <script id="__config" type="application/json">{"annotate": null, "base": "..", "features": ["navigation.sections", "content.code.copy"], "search": "../assets/javascripts/workers/search.2c215733.min.js", "tags": null, "translations": {"clipboard.copied": "Copied to clipboard", "clipboard.copy": "Copy to clipboard", "search.result.more.one": "1 more on this page", "search.result.more.other": "# more on this page", "search.result.none": "No matching documents", "search.result.one": "1 matching document", "search.result.other": "# matching documents", "search.result.placeholder": "Type to start searching", "search.result.term.missing": "Missing", "select.version": "Select version"}, "version": null}</script>
+    
+    
+      <script src="../assets/javascripts/bundle.79ae519e.min.js"></script>
+      
+    
+  </body>
+</html>
