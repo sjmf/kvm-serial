@@ -65,7 +65,7 @@ def create_icon():
         # Try to use a nice font if available
         font_size = int(size * 0.25)  # 1/4 of canvas size
         font = ImageFont.truetype("/System/Library/Fonts/Helvetica.ttc", font_size, index=1)  # bold
-    except:
+    except OSError:
         # Fallback to default font
         font = ImageFont.load_default()
 
