@@ -653,5 +653,315 @@ class TestKVMResolutionMenu(KVMTestBase, KVMTestMixins.VideoTestMixin):
         mock_single_shot.assert_called_once_with(0, app._resize_window_to_scaled_video)
 
 
+class TestKVMDeviceRefresh(
+    KVMTestBase, KVMTestMixins.SerialTestMixin, KVMTestMixins.VideoTestMixin
+):
+    """Tests for the Refresh Devices entries in the Serial Port and Video Device menus."""
+
+    def _make_tracking_menu(self):
+        """Return a mock menu that tracks added actions via addAction/addSeparator."""
+        actions = []
+
+        menu = MagicMock()
+        menu.addAction.side_effect = lambda a: actions.append(a)
+        menu.addSeparator.side_effect = lambda: actions.append(_FakeSeparator())
+        menu.actions.side_effect = lambda: list(actions)
+        menu.clear.side_effect = actions.clear
+        return menu
+
+    def _make_cameras(self, ids):
+        """Create mock cameras with the given unique_ids."""
+        cameras = self.create_mock_cameras(len(ids))
+        for camera, uid in zip(cameras, ids):
+            camera.unique_id = uid
+            camera.__str__ = MagicMock(return_value=f"Camera {uid}")
+        return cameras
+
+    # Menu structure
+
+    def test_serial_port_menu_ends_with_refresh_action(self):
+        app = self.create_kvm_app()
+        app.serial_ports = self.create_mock_serial_ports()
+        app.serial_port_var = app.serial_ports[0]
+        app.serial_port_menu = self._make_tracking_menu()
+
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+            app._populate_serial_port_menu()
+
+        actions = app.serial_port_menu.actions()
+        self.assertEqual([a.text() for a in actions[:-2]], app.serial_ports)
+        self.assertTrue(actions[-2].isSeparator())
+        self.assertEqual(actions[-1].text(), "Refresh Devices")
+        self.assertFalse(actions[-1]._checkable)
+        actions[-1].triggered.connect.assert_called_once_with(app._refresh_serial_ports)
+
+    def test_serial_port_menu_refresh_action_present_when_no_ports(self):
+        app = self.create_kvm_app()
+        app.serial_ports = []
+        app.serial_port_menu = self._make_tracking_menu()
+
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+            app._populate_serial_port_menu()
+
+        self.assertEqual(app.serial_port_menu.actions()[-1].text(), "Refresh Devices")
+
+    def test_video_device_menu_ends_with_refresh_action(self):
+        app = self.create_kvm_app()
+        app.video_devices = self._make_cameras(["a", "b"])
+        app.video_var = 1
+        app.video_device_menu = self._make_tracking_menu()
+
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+            app._populate_video_device_menu()
+
+        actions = app.video_device_menu.actions()
+        self.assertEqual([a.text() for a in actions[:-2]], ["Camera a", "Camera b"])
+        self.assertTrue(actions[1].isChecked())
+        self.assertTrue(actions[-2].isSeparator())
+        self.assertEqual(actions[-1].text(), "Refresh Devices")
+        self.assertFalse(actions[-1]._checkable)
+        actions[-1].triggered.connect.assert_called_once_with(app._refresh_video_devices)
+
+    def test_video_device_menu_refresh_action_present_when_no_cameras(self):
+        app = self.create_kvm_app()
+        app.video_devices = []
+        app.video_device_menu = self._make_tracking_menu()
+
+        with patch("kvm_serial.kvm.QAction", side_effect=_FakeQAction):
+            app._populate_video_device_menu()
+
+        self.assertEqual(app.video_device_menu.actions()[-1].text(), "Refresh Devices")
+
+    # Serial refresh
+
+    def test_refresh_serial_keeps_active_port_open(self):
+        app = self.create_kvm_app()
+        app.serial_ports = ["/dev/ttyUSB0"]
+        app.serial_port_var = "/dev/ttyUSB0"
+
+        with (
+            patch(
+                "kvm_serial.kvm.list_serial_ports", return_value=["/dev/ttyUSB0", "/dev/ttyUSB1"]
+            ),
+            self.patch_kvm_method(app, "_populate_serial_port_menu") as mock_menu,
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial,
+        ):
+            app._refresh_serial_ports()
+
+        self.assertEqual(app.serial_ports, ["/dev/ttyUSB0", "/dev/ttyUSB1"])
+        self.assertEqual(app.serial_port_var, "/dev/ttyUSB0")
+        mock_menu.assert_called_once()
+        mock_init_serial.assert_not_called()
+
+    def test_refresh_serial_switches_when_active_port_removed(self):
+        app = self.create_kvm_app()
+        app.serial_ports = ["/dev/ttyUSB0"]
+        app.serial_port_var = "/dev/ttyUSB0"
+        observed = []
+
+        with (
+            patch(
+                "kvm_serial.kvm.list_serial_ports", return_value=["/dev/ttyACM0", "/dev/ttyACM1"]
+            ),
+            patch.object(
+                app,
+                "_populate_serial_port_menu",
+                side_effect=lambda: observed.append(app.serial_port_var),
+            ),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial,
+        ):
+            app._refresh_serial_ports()
+
+        self.assertEqual(app.serial_port_var, "/dev/ttyACM1")
+        self.assertEqual(observed, ["/dev/ttyACM1"])  # var set before menu build
+        mock_init_serial.assert_called_once()
+
+    def test_refresh_serial_picks_up_port_after_none_found(self):
+        app = self.create_kvm_app()
+        app.serial_ports = []
+        app.serial_port_var = "None found"
+
+        with (
+            patch("kvm_serial.kvm.list_serial_ports", return_value=["/dev/ttyUSB0"]),
+            self.patch_kvm_method(app, "_populate_serial_port_menu"),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial,
+        ):
+            app._refresh_serial_ports()
+
+        self.assertEqual(app.serial_port_var, "/dev/ttyUSB0")
+        mock_init_serial.assert_called_once()
+
+    def test_refresh_serial_all_ports_removed(self):
+        app = self.create_kvm_app()
+        app.serial_ports = ["/dev/ttyUSB0"]
+        app.serial_port_var = "/dev/ttyUSB0"
+
+        with (
+            patch("kvm_serial.kvm.list_serial_ports", return_value=[]),
+            self.patch_kvm_method(app, "_populate_serial_port_menu"),
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial,
+            patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning,
+        ):
+            app._refresh_serial_ports()
+
+        self.assertEqual(app.serial_ports, [])
+        self.assertEqual(app.serial_port_var, "None found")
+        # __init_serial closes the stale port and skips reopening for "None found"
+        mock_init_serial.assert_called_once()
+        mock_warning.assert_not_called()
+
+    def test_refresh_serial_exception_keeps_state(self):
+        app = self.create_kvm_app()
+        app.serial_ports = ["/dev/ttyUSB0"]
+        app.serial_port_var = "/dev/ttyUSB0"
+
+        with (
+            patch("kvm_serial.kvm.list_serial_ports", side_effect=Exception("boom")),
+            self.patch_kvm_method(app, "_populate_serial_port_menu") as mock_menu,
+            self.patch_kvm_method(app, "_KVMQtGui__init_serial") as mock_init_serial,
+            patch("kvm_serial.kvm.QMessageBox.critical") as mock_critical,
+        ):
+            app._refresh_serial_ports()
+
+        mock_critical.assert_called_once()
+        self.assertEqual(app.serial_ports, ["/dev/ttyUSB0"])
+        self.assertEqual(app.serial_port_var, "/dev/ttyUSB0")
+        mock_menu.assert_not_called()
+        mock_init_serial.assert_not_called()
+
+    # Video refresh
+
+    def test_refresh_video_keeps_active_camera_and_tracks_new_index(self):
+        app = self.create_kvm_app()
+        app.video_devices = self._make_cameras(["a", "b"])
+        app.video_var = 1  # streaming "b"
+        refreshed = self._make_cameras(["c", "a", "b"])  # "b" moved to index 2
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=refreshed),
+            self.patch_kvm_method(app, "_populate_video_device_menu") as mock_menu,
+            self.patch_kvm_method(app, "_populate_resolution_menu") as mock_res_menu,
+            self.patch_kvm_method(app, "_set_camera") as mock_set_camera,
+        ):
+            app._refresh_video_devices()
+
+        self.assertEqual(app.video_devices, refreshed)
+        self.assertEqual(app.video_var, 2)
+        self.assertEqual(app.video_device_var, "Camera b")
+        mock_menu.assert_called_once()
+        mock_res_menu.assert_not_called()
+        mock_set_camera.assert_not_called()
+
+    def test_refresh_video_switches_when_active_camera_removed(self):
+        app = self.create_kvm_app()
+        app.video_devices = self._make_cameras(["a", "b"])
+        app.video_var = 1
+        app.resolution_var = ""
+        refreshed = self._make_cameras(["a", "c"])
+        observed = []
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=refreshed),
+            patch.object(
+                app,
+                "_populate_video_device_menu",
+                side_effect=lambda: observed.append(app.video_var),
+            ),
+            self.patch_kvm_method(app, "_populate_resolution_menu") as mock_res_menu,
+            self.patch_kvm_method(app, "_set_camera") as mock_set_camera,
+        ):
+            app._refresh_video_devices()
+
+        self.assertEqual(app.video_var, 0)
+        self.assertEqual(observed, [0])  # var set before menu build
+        self.assertEqual(app.video_device_var, "Camera a")
+        mock_res_menu.assert_called_once_with(0)
+        mock_set_camera.assert_called_once_with(refreshed[0])
+
+    def test_refresh_video_switch_with_supported_resolution_opens_once(self):
+        """_populate_resolution_menu opens the camera itself when resolution_var is
+        supported, so the refresh must not open it a second time."""
+        app = self.create_kvm_app()
+        app.video_devices = []
+        app.video_var = -1
+        app.video_device_var = "None found"
+        app.resolution_var = "1280x720"
+        refreshed = self._make_cameras(["a"])
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=refreshed),
+            self.patch_kvm_method(app, "_populate_video_device_menu"),
+            self.patch_kvm_method(app, "_populate_resolution_menu") as mock_res_menu,
+            self.patch_kvm_method(app, "_set_camera") as mock_set_camera,
+        ):
+            app._refresh_video_devices()
+
+        self.assertEqual(app.video_var, 0)
+        self.assertEqual(app.video_device_var, "Camera a")
+        mock_res_menu.assert_called_once_with(0)
+        mock_set_camera.assert_not_called()
+
+    def test_refresh_video_all_cameras_removed_stops_camera(self):
+        app = self.create_kvm_app()
+        app.video_devices = self._make_cameras(["a"])
+        app.video_var = 0
+        mock_qcamera = MagicMock()
+        app.qcamera = mock_qcamera
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
+            self.patch_kvm_method(app, "_populate_video_device_menu") as mock_menu,
+            self.patch_kvm_method(app, "_populate_resolution_menu") as mock_res_menu,
+            patch("kvm_serial.kvm.QMessageBox.warning") as mock_warning,
+        ):
+            app._refresh_video_devices()
+
+        mock_qcamera.stop.assert_called_once()
+        mock_qcamera.unload.assert_called_once()
+        self.assertIsNone(app.qcamera)
+        self.assertEqual(app.video_devices, [])
+        self.assertEqual(app.video_var, -1)
+        self.assertEqual(app.video_device_var, "None found")
+        mock_menu.assert_called_once()
+        mock_res_menu.assert_called_once_with(-1)
+        mock_warning.assert_not_called()
+
+    def test_refresh_video_exception_keeps_state(self):
+        app = self.create_kvm_app()
+        cameras = self._make_cameras(["a"])
+        app.video_devices = cameras
+        app.video_var = 0
+
+        with (
+            patch("kvm_serial.kvm.enumerate_cameras", side_effect=Exception("boom")),
+            self.patch_kvm_method(app, "_populate_video_device_menu") as mock_menu,
+            self.patch_kvm_method(app, "_set_camera") as mock_set_camera,
+            patch("kvm_serial.kvm.QMessageBox.critical") as mock_critical,
+        ):
+            app._refresh_video_devices()
+
+        mock_critical.assert_called_once()
+        self.assertEqual(app.video_devices, cameras)
+        self.assertEqual(app.video_var, 0)
+        mock_menu.assert_not_called()
+        mock_set_camera.assert_not_called()
+
+    def test_stop_camera_tolerates_errors(self):
+        app = self.create_kvm_app()
+        mock_qcamera = MagicMock()
+        mock_qcamera.stop.side_effect = RuntimeError("already gone")
+        app.qcamera = mock_qcamera
+
+        app._stop_camera()
+
+        self.assertIsNone(app.qcamera)
+
+    def test_stop_camera_noop_without_camera(self):
+        app = self.create_kvm_app()
+        app.qcamera = None
+        app._stop_camera()
+        self.assertIsNone(app.qcamera)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

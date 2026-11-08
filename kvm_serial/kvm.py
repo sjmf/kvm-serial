@@ -780,6 +780,38 @@ class KVMQtGui(QMainWindow):
             if port == self.serial_port_var:
                 action.setChecked(True)
 
+        self.serial_port_menu.addSeparator()
+        refresh_action = QAction("Refresh Devices", self)
+        refresh_action.triggered.connect(self._refresh_serial_ports)
+        self.serial_port_menu.addAction(refresh_action)
+
+    def _refresh_serial_ports(self):
+        """
+        Re-enumerate serial ports without restarting the application.
+
+        The active port is left open if it is still present. Otherwise fall back to the
+        last port found (matching start-up behaviour) and reinitialise the serial link.
+        """
+        try:
+            ports = list_serial_ports()
+        except Exception as e:
+            logging.error(f"Error refreshing serial ports: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to discover serial ports: {e}")
+            return
+
+        self.serial_ports = ports
+        logging.info(f"Refreshed serial ports: {ports}")
+
+        if self.serial_port_var in ports:
+            self._populate_serial_port_menu()
+            return
+
+        # Active port vanished (or none was selected): pick a new default BEFORE the
+        # menu build so the checkmark lands on the right entry.
+        self.serial_port_var = ports[-1] if ports else "None found"
+        self._populate_serial_port_menu()
+        self.__init_serial()
+
     def _populate_baud_rates(self):
         """
         Populate the baud rate menu with available baud rates.
@@ -1149,6 +1181,54 @@ class KVMQtGui(QMainWindow):
             if i == self.video_var:
                 action.setChecked(True)
 
+        self.video_device_menu.addSeparator()
+        refresh_action = QAction("Refresh Devices", self)
+        refresh_action.triggered.connect(self._refresh_video_devices)
+        self.video_device_menu.addAction(refresh_action)
+
+    def _refresh_video_devices(self):
+        """
+        Re-enumerate cameras without restarting the application.
+
+        The active camera is matched by unique_id and left streaming if it is still
+        present (its position in the list may have changed). Otherwise switch to the
+        first camera found, or stop video if there are none.
+        """
+        try:
+            cameras = enumerate_cameras()
+        except Exception as e:
+            logging.error(f"Error refreshing video devices: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to discover video devices: {e}")
+            return
+
+        current = self._selected_camera()
+        self.video_devices = cameras
+        logging.info(f"Refreshed video devices: {[str(v) for v in cameras]}")
+
+        if current is not None:
+            for i, camera in enumerate(cameras):
+                if camera.unique_id == current.unique_id:
+                    self.video_var = i
+                    self.video_device_var = str(camera)
+                    self._populate_video_device_menu()
+                    return
+
+        if cameras:
+            self.video_var = 0
+            self.video_device_var = str(cameras[0])
+            self._populate_video_device_menu()
+            # As in _load_settings: _populate_resolution_menu opens the camera when a
+            # supported resolution_var is set, otherwise clears it and we open at default.
+            self._populate_resolution_menu(0)
+            if not self.resolution_var:
+                self._set_camera(cameras[0])
+        else:
+            self._stop_camera()
+            self.video_var = -1
+            self.video_device_var = "None found"
+            self._populate_video_device_menu()
+            self._populate_resolution_menu(-1)
+
     def _on_video_device_selected(self, device_idx, device_label):
         """
         Handle selection of a video device.
@@ -1508,12 +1588,7 @@ class KVMQtGui(QMainWindow):
             return
 
         # Tear down any previous camera
-        if self.qcamera is not None:
-            try:
-                self.qcamera.stop()
-                self.qcamera.unload()
-            except Exception as e:
-                logging.debug(f"Error stopping previous QCamera: {e}")
+        self._stop_camera()
 
         self.qcamera = QCamera(camera.info)
         self.qcamera.setViewfinder(self.video_item)
@@ -1551,6 +1626,16 @@ class KVMQtGui(QMainWindow):
                 )
 
         self.qcamera.start()
+
+    def _stop_camera(self) -> None:
+        """Stop and unload the active QCamera, if any."""
+        if self.qcamera is not None:
+            try:
+                self.qcamera.stop()
+                self.qcamera.unload()
+            except Exception as e:
+                logging.debug(f"Error stopping QCamera: {e}")
+            self.qcamera = None
 
     def _grab_video_frame(self) -> Optional[QPixmap]:
         """Render the current video item to a QPixmap at native resolution.
@@ -1796,13 +1881,7 @@ class KVMQtGui(QMainWindow):
         """Clean up resources when closing the application"""
         # Stop and tear down the active QCamera (QtMultimedia owns the threading
         # internally, so no manual quit/wait is needed)
-        if self.qcamera is not None:
-            try:
-                self.qcamera.stop()
-                self.qcamera.unload()
-            except Exception as e:
-                logging.debug(f"Error stopping QCamera on close: {e}")
-            self.qcamera = None
+        self._stop_camera()
 
         # Stop the DataCommManager (background threads, descriptor handshake
         # for CH9350 state 0/1) before closing the underlying port.
