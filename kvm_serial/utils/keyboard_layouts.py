@@ -60,24 +60,34 @@ LAYOUT_OVERRIDES: Dict[str, Dict[str, Optional[int]]] = {
     "pl_PL": {
         # Polish letters and punctuation differences
         # Values map to the closest base HID positions so the layout is usable in this project
-        "ą": 0x04, "Ą": 0x04,
-        "ć": 0x06, "Ć": 0x06,
-        "ę": 0x08, "Ę": 0x08,
-        "ł": 0x0F, "Ł": 0x0F,
-        "ń": 0x11, "Ń": 0x11,
-        "ó": 0x12, "Ó": 0x12,
-        "ś": 0x16, "Ś": 0x16,
-        "ź": 0x1D, "Ź": 0x1D,
-        "ż": 0x1D, "Ż": 0x1D,
+        "ą": 0x04,
+        "Ą": 0x04,
+        "ć": 0x06,
+        "Ć": 0x06,
+        "ę": 0x08,
+        "Ę": 0x08,
+        "ł": 0x0F,
+        "Ł": 0x0F,
+        "ń": 0x11,
+        "Ń": 0x11,
+        "ó": 0x12,
+        "Ó": 0x12,
+        "ś": 0x16,
+        "Ś": 0x16,
+        "ź": 0x1D,
+        "Ź": 0x1D,
+        "ż": 0x1D,
+        "Ż": 0x1D,
         # punctuation commonly moved on Polish keyboard
         ";": 0x33,
         ":": 0x33,
         "/": 0x38,
         "?": 0x38,
-        "\"": 0x1F,
+        '"': 0x1F,
         "'": 0x34,
     },
 }
+
 
 def get_layout(layout_name: str) -> Dict[str, int]:
     """
