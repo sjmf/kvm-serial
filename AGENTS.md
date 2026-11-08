@@ -53,9 +53,11 @@ codesign --force --deep --sign - --entitlements assets/entitlements.plist "dist/
 `DataComm` is an abstract base class with a high-level API (`send_scancode()`, `send_mouse_absolute()`, `send_mouse_relative()`, `release()`). Concrete subclasses implement chip-specific framing:
 
 - **`CH9329Comm`** (`kvm_serial/utils/ch9329.py`) — command-style protocol with framed packets:
-  ```
+
+  ```text
   header(2B: 0x57 0xAB) + addr(1B) + cmd(1B) + len(1B) + data + checksum(1B)
   ```
+
   Command bytes: `0x02` = keyboard, `0x04` = absolute mouse, `0x05` = relative mouse.
 
 - **`CH9350Comm`** (`kvm_serial/utils/ch9350.py`) — paired-chip protocol with descriptor handshake (state 0/1) or fixed-format frames (states 2/3/4). Full specification in `docs/CH9350L_PROTO.md`.
