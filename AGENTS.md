@@ -91,10 +91,18 @@ Mouse coordinates are in scene space (native camera resolution), not window pixe
 
 ### Video capture (`kvm_serial/backend/video.py`)
 
-`CaptureDevice` uses Qt5 (QtMultimedia) for both enumeration and frame capture:
-- Enumeration: `QCameraInfo.availableCameras()` — platform-independent, wraps AVFoundation (macOS), DirectShow (Windows), and V4L2 (Linux)
-- Capture: `QCamera` with platform-specific backends (CAP_AVFOUNDATION, CAP_DSHOW, CAP_V4L2)
-- Settings probing: `QCamera.supportedViewfinderSettings()` — no separate native introspection layer needed
+`CaptureDevice` uses Qt5 (QtMultimedia) for both enumeration and frame capture. On macOS and Windows, Qt drives the native camera stacks directly (AVFoundation, DirectShow). On Linux, capture is layered over GStreamer:
+
+```text
+QCamera -> Qt's GStreamer media plugin
+        -> GStreamer camerabin          (gstreamer1.0-plugins-bad; -extra on Ubuntu 26.04)
+        -> wrappercamerabinsrc -> v4l2src  (gstreamer1.0-plugins-good)
+        -> V4L2 kernel API (/dev/videoN)
+```
+
+- Enumeration: `QCameraInfo.availableCameras()`. On Linux this lists V4L2 device nodes without needing `camerabin`, so a camera can appear in the menu yet fail to open when `camerabin` is missing (Qt logs "the 'camerabin' plugin is missing").
+- Capture: `QCamera`, through the platform backend above.
+- Settings probing: `QCamera.supportedViewfinderSettings()`, with no separate native introspection layer. On the GStreamer backend `load()` is asynchronous and this list stays empty until `LoadedStatus`, so call `wait_for_loaded()` after `load()` before reading it (#47).
 
 `CameraProperties` holds device metadata (`index, name, unique_id, width, height, fps, resolutions, default_resolution`) with the live `QCameraInfo` object for passing to `QCamera()` when opening. The GUI menu position (`self.video_var`) maps directly to the enumerated device list; no platform-specific index translation is needed.
 

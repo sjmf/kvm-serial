@@ -137,7 +137,9 @@ If the driver isn't loaded, it should automatically load when you connect the de
 
 ### System Dependencies
 
-Install required system libraries for PyQt5 and QtMultimedia:
+Install required system libraries for PyQt5 and QtMultimedia.
+
+On Linux, Qt5 captures video through GStreamer. Its `camerabin` element (in the "bad" plugin set) and `v4l2src` (in the "good" set) are both required. If `camerabin` is missing, capture devices still appear in the Video Device menu but never open, and Qt logs "the 'camerabin' plugin is missing" to the console.
 
 **Ubuntu/Debian**:
 
@@ -145,6 +147,8 @@ Install required system libraries for PyQt5 and QtMultimedia:
 sudo apt-get update
 sudo apt-get install -y \
     libqt5multimedia5-plugins \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
     libpulse-mainloop-glib0 \
     libxcb-xinerama0 \
     libxcb-icccm4 \
@@ -164,6 +168,8 @@ sudo apt-get install -y \
 ```bash
 sudo dnf install -y \
     qt5-qtmultimedia \
+    gstreamer1-plugins-good \
+    gstreamer1-plugins-bad-free \
     libxcb \
     xcb-util-wm \
     xcb-util-image \

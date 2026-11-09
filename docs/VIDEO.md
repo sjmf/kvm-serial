@@ -2,7 +2,7 @@
 
 This document describes the video implementation used by the GUI. kvm-serial captures video through Qt's `QtMultimedia` module. Qt wraps the
 three native camera stacks (AVFoundation on macOS, DirectShow on Windows, V4L2
-on Linux) behind a single API and delivers frames directly into a
+on Linux, reached through GStreamer's `camerabin` and `v4l2src`) behind a single API and delivers frames directly into a
 `QGraphicsVideoItem` that lives in the GUI's scene.
 
 ## Overview
@@ -149,6 +149,11 @@ falls back to `video_view.grab()`.
 QtMultimedia requires system runtime libraries/plugins on Linux.
 If they are missing, importing `PyQt5.QtMultimedia` will fail in
 [kvm_serial/backend/video.py](../kvm_serial/backend/video.py).
+
+Camera capture also needs GStreamer's `camerabin` element
+(`gstreamer1.0-plugins-bad`) and `v4l2src` (`gstreamer1.0-plugins-good`).
+Without `camerabin`, enumeration still lists the V4L2 devices, but each camera
+stays in `UnavailableStatus` and never opens.
 
 Install guidance is maintained in
 [docs/INSTALLATION.md](./INSTALLATION.md).
