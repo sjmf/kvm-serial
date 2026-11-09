@@ -59,13 +59,18 @@ stores what the GUI needs to drive menus and opening:
 
 1. creating `QCamera(info)`
 2. calling `load()`
-3. waiting for loaded state via `_wait_for_loaded()`
+3. waiting for loaded state via `wait_for_loaded()`
 4. reading `supportedViewfinderSettings()`
 5. calling `unload()`
 
-`_wait_for_loaded()` spins a local `QEventLoop` with a timeout
+`wait_for_loaded()` spins a local `QEventLoop` with a timeout
 (`PROBE_TIMEOUT_MS`, currently 2000 ms). This keeps probing robust when a
-backend is slower to report loaded status.
+backend is slower to report loaded status. AVFoundation and DirectShow load
+synchronously, but the GStreamer camerabin backend Qt5 uses on Linux returns
+from `load()` while still in `LoadingStatus`, with an empty
+`supportedViewfinderSettings()` list. The wait returns immediately if the
+camera is already loaded or `UnavailableStatus`, and stops early on any status
+change that ends loading.
 
 ## GUI Lifecycle
 
@@ -102,8 +107,15 @@ at the correct resolution in a single `_set_camera(...)` call.
 1. stops/unloads any previously active `self.qcamera`
 2. creates a new `QCamera(camera.info)`
 3. attaches sink: `setViewfinder(self.video_item)`
-4. optionally applies resolution via `QCameraViewfinderSettings`
-5. starts capture with `start()`
+4. calls `load()` and waits for loaded state via `wait_for_loaded()`, so
+   `supportedViewfinderSettings()` is populated before a format is picked
+5. optionally applies resolution via `QCameraViewfinderSettings`
+6. starts capture with `start()`
+
+The wait spins a nested event loop, so a menu action can call `_set_camera(...)`
+again before the first call finishes. The outer call then finds that
+`self.qcamera` has been replaced and returns without touching or starting the
+newer camera.
 
 Errors from Qt camera initialization are routed to
 `_on_camera_initialization_error()` via `self.qcamera.error.connect(...)`.

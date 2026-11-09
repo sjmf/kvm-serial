@@ -7,6 +7,11 @@ at the module level so they don't require a real camera or display server.
 from unittest.mock import patch, MagicMock
 import pytest
 
+from PyQt5.QtMultimedia import QCamera
+
+# Bound before the autouse fixture below patches the module attribute.
+from kvm_serial.backend.video import wait_for_loaded as real_wait_for_loaded
+
 
 @pytest.fixture
 def fake_info():
@@ -54,10 +59,10 @@ def fake_camera_factory(fake_settings):
 
 @pytest.fixture(autouse=True)
 def skip_event_loop_wait():
-    """Patch _wait_for_loaded to a no-op so QEventLoop.exec_() isn't entered with a mock QCamera."""
+    """Patch wait_for_loaded to a no-op so QEventLoop.exec_() isn't entered with a mock QCamera."""
     from kvm_serial.backend import video as video_mod
 
-    with patch.object(video_mod, "_wait_for_loaded", return_value=True):
+    with patch.object(video_mod, "wait_for_loaded", return_value=True):
         yield
 
 
@@ -213,6 +218,76 @@ class TestEnumerateCameras:
 
         assert len(cameras) == 1
         assert cameras[0].name == "FaceTime HD Camera"
+
+
+class TestWaitForLoaded:
+    """wait_for_loaded() with QEventLoop/QTimer mocked, so no event loop is spun."""
+
+    @pytest.fixture
+    def loop_mocks(self):
+        from kvm_serial.backend import video as video_mod
+
+        with (
+            patch.object(video_mod, "QEventLoop") as MockLoop,
+            patch.object(video_mod, "QTimer") as MockTimer,
+        ):
+            yield MockLoop.return_value, MockTimer.return_value
+
+    def _cam(self, *statuses):
+        cam = MagicMock()
+        cam.status.side_effect = list(statuses)
+        return cam
+
+    def test_already_loaded_returns_true_without_loop(self, loop_mocks):
+        loop, _ = loop_mocks
+        cam = self._cam(QCamera.LoadedStatus)
+        assert real_wait_for_loaded(cam) is True
+        loop.exec_.assert_not_called()
+
+    def test_unavailable_returns_false_without_loop(self, loop_mocks):
+        """A missing backend plugin leaves the camera Unavailable: don't wait out the timeout."""
+        loop, _ = loop_mocks
+        cam = self._cam(QCamera.UnavailableStatus, QCamera.UnavailableStatus)
+        assert real_wait_for_loaded(cam) is False
+        loop.exec_.assert_not_called()
+
+    def _captured_slot(self, cam):
+        (slot,), _ = cam.statusChanged.connect.call_args
+        return slot
+
+    def test_waits_until_loaded(self, loop_mocks):
+        loop, timer = loop_mocks
+        cam = self._cam(QCamera.LoadingStatus, QCamera.LoadingStatus, QCamera.LoadedStatus)
+
+        def run_loop():
+            slot = self._captured_slot(cam)
+            slot(QCamera.LoadingStatus)
+            loop.quit.assert_not_called()
+            slot(QCamera.LoadedStatus)
+
+        loop.exec_.side_effect = run_loop
+        assert real_wait_for_loaded(cam, timeout_ms=1234) is True
+        timer.start.assert_called_once_with(1234)
+        loop.quit.assert_called_once()
+        cam.statusChanged.disconnect.assert_called_once()
+
+    @pytest.mark.parametrize(
+        "status",
+        [QCamera.UnavailableStatus, QCamera.UnloadingStatus, QCamera.UnloadedStatus],
+    )
+    def test_stops_early_when_loading_ends_without_loaded(self, loop_mocks, status):
+        """Torn down or failed mid-load: quit the loop rather than block for the timeout."""
+        loop, _ = loop_mocks
+        cam = self._cam(QCamera.LoadingStatus, QCamera.LoadingStatus, status)
+        loop.exec_.side_effect = lambda: self._captured_slot(cam)(status)
+        assert real_wait_for_loaded(cam) is False
+        loop.quit.assert_called_once()
+
+    def test_timeout_returns_false(self, loop_mocks):
+        loop, timer = loop_mocks
+        cam = self._cam(QCamera.LoadingStatus, QCamera.LoadingStatus, QCamera.LoadingStatus)
+        assert real_wait_for_loaded(cam) is False
+        timer.timeout.connect.assert_called_once_with(loop.quit)
 
 
 class TestCaptureDeviceShim:

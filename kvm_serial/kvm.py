@@ -48,7 +48,7 @@ from PyQt5.QtWidgets import (
 import kvm_serial.utils.settings as settings_util
 from kvm_serial.utils.communication import list_serial_ports
 from kvm_serial.utils import scancode_to_ascii, string_to_scancodes
-from kvm_serial.backend.video import CameraProperties, enumerate_cameras
+from kvm_serial.backend.video import CameraProperties, enumerate_cameras, wait_for_loaded
 from kvm_serial.backend.implementations.qtop import QtOp
 from kvm_serial.backend.implementations.mouseop import MouseOp, MouseButton
 
@@ -460,7 +460,7 @@ class KVMQtGui(QMainWindow):
         # Defer device enumeration and settings load past the event-loop start.
         # Both run in the same deferred callback so _load_settings always sees a
         # fully-populated video_devices list — a fixed 10ms timer would race with
-        # _wait_for_loaded()'s inner QEventLoop during camera probing.
+        # wait_for_loaded()'s inner QEventLoop during camera probing.
         QTimer.singleShot(0, self.__init_devices)
 
         # Status bar timer
@@ -473,7 +473,7 @@ class KVMQtGui(QMainWindow):
         Initialise and populate device lists (serial ports, video devices, keyboard layouts),
         then load saved settings. Settings load is intentionally last so it always sees
         complete device lists; calling it from a separate timer would race with the inner
-        QEventLoop spun by _wait_for_loaded() during camera probing.
+        QEventLoop spun by wait_for_loaded() during camera probing.
         """
         self._populate_serial_ports()
         self._populate_baud_rates()
@@ -1590,21 +1590,39 @@ class KVMQtGui(QMainWindow):
         # Tear down any previous camera
         self._stop_camera()
 
-        self.qcamera = QCamera(camera.info)
-        self.qcamera.setViewfinder(self.video_item)
+        # Hold the new camera in a local: wait_for_loaded() below spins a nested
+        # event loop, during which a menu action can re-enter _set_camera and
+        # replace self.qcamera.
+        qcamera = QCamera(camera.info)
+        self.qcamera = qcamera
+        qcamera.setViewfinder(self.video_item)
 
         # Surface camera errors to the user via the existing error path.
         # Bind the camera into the closure so a deferred error from a previously
         # active QCamera can't read errorString() off whatever's in self.qcamera now.
-        self.qcamera.error.connect(
-            lambda _err, c=self.qcamera: self._on_camera_initialization_error(c.errorString())
+        qcamera.error.connect(
+            lambda _err, c=qcamera: self._on_camera_initialization_error(c.errorString())
         )
 
         # load() must be called before start() so Qt can negotiate a pixel format
         # compatible with the QGraphicsVideoItem surface.  Without it, the camera
         # starts on its native format (often UYVY for HDMI capture cards) which
         # QGraphicsVideoItem may not support, producing "Failed to start viewfinder".
-        self.qcamera.load()
+        #
+        # load() is asynchronous on the GStreamer camerabin backend Qt5 uses on
+        # Linux: it returns in LoadingStatus with supportedViewfinderSettings()
+        # still empty, so _pick_viewfinder_settings() found no match and the
+        # requested resolution was silently dropped (#47). Wait for LoadedStatus
+        # first, as the probe in backend/video.py does.
+        qcamera.load()
+        if not wait_for_loaded(qcamera):
+            logging.warning(
+                f"Camera {camera.name} did not reach LoadedStatus before applying "
+                "viewfinder settings; capabilities may be incomplete"
+            )
+        if self.qcamera is not qcamera:
+            logging.debug(f"Camera {camera.name} superseded while loading; not starting")
+            return
 
         # Apply viewfinder settings (resolution + pixel format). Must be set
         # before start(). _pick_viewfinder_settings searches the supported list
@@ -1614,7 +1632,7 @@ class KVMQtGui(QMainWindow):
         if target_w > 0 and target_h > 0:
             settings = self._pick_viewfinder_settings(target_w, target_h)
             if settings is not None:
-                self.qcamera.setViewfinderSettings(settings)
+                qcamera.setViewfinderSettings(settings)
                 fmt = settings.pixelFormat()
                 logging.info(
                     f"Camera {camera.name} viewfinder set to {target_w}x{target_h} ({fmt})"
@@ -1625,7 +1643,7 @@ class KVMQtGui(QMainWindow):
                     f"{target_w}x{target_h}; letting Qt choose"
                 )
 
-        self.qcamera.start()
+        qcamera.start()
 
     def _stop_camera(self) -> None:
         """Stop and unload the active QCamera, if any."""

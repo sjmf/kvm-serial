@@ -27,7 +27,9 @@ except ImportError as e:  # pragma: no cover - environment-specific
 
 # Maximum time to wait for QCamera.load() to populate supported settings.
 # load() is documented as asynchronous; in practice AVFoundation/DirectShow
-# return synchronously, but V4L2 may take a moment on first access.
+# return synchronously, but the GStreamer camerabin backend Qt5 uses on Linux
+# returns while still in LoadingStatus, with supportedViewfinderSettings()
+# empty until LoadedStatus arrives a few milliseconds later (see #47).
 PROBE_TIMEOUT_MS = 2000
 
 
@@ -64,10 +66,19 @@ class CameraProperties:
         return self.name  # f"{self.name} ({self.width}x{self.height}@{self.fps}fps)"
 
 
-def _wait_for_loaded(cam: QCamera, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
-    """Spin a local event loop until the camera reaches LoadedStatus or times out."""
+def wait_for_loaded(cam: QCamera, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
+    """Spin a local event loop until the camera reaches LoadedStatus or times out.
+
+    Call after cam.load(). Returns True once the camera is loaded. Returns False
+    straight away if it is already UnavailableStatus (e.g. the backend plugin is
+    missing), and stops waiting early on any status change that ends loading
+    (Unavailable, or Unloading/Unloaded when the camera is torn down mid-load),
+    so the GUI is not blocked for the full timeout when loading cannot succeed.
+    """
     if cam.status() == QCamera.LoadedStatus:
         return True
+    if cam.status() == QCamera.UnavailableStatus:
+        return False
 
     loop = QEventLoop()
     timer = QTimer()
@@ -75,7 +86,7 @@ def _wait_for_loaded(cam: QCamera, timeout_ms: int = PROBE_TIMEOUT_MS) -> bool:
     timer.timeout.connect(loop.quit)
 
     def _on_status(status):
-        if status == QCamera.LoadedStatus:
+        if status != QCamera.LoadingStatus:
             loop.quit()
 
     cam.statusChanged.connect(_on_status)
@@ -89,7 +100,7 @@ def _probe_camera(info: QCameraInfo, index: int) -> CameraProperties:
     """Load a camera in viewfinder-only mode to read its capabilities."""
     cam = QCamera(info)
     cam.load()
-    if not _wait_for_loaded(cam):
+    if not wait_for_loaded(cam):
         logger.warning(
             "Camera %d (%s) did not reach LoadedStatus within %dms; "
             "capabilities may be incomplete",
@@ -152,7 +163,7 @@ def enumerate_cameras() -> List[CameraProperties]:
 
     Requires a running QCoreApplication (or QApplication). Safe to call from
     the main GUI thread; QCamera signals will be delivered via the local event
-    loop spun by _wait_for_loaded.
+    loop spun by wait_for_loaded.
     """
     infos = QCameraInfo.availableCameras()
     cameras: List[CameraProperties] = []

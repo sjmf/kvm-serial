@@ -122,6 +122,10 @@ class KVMTestBase(unittest.TestCase):
             patches.append(patch(f"PyQt5.QtGui.{gui_item}"))
 
         # Mock QtMultimedia components used by kvm_serial.kvm and video module
+        # wait_for_loaded() spins a real QEventLoop; with a mocked QCamera it would
+        # never see LoadedStatus and block the test run. Patched before kvm is
+        # imported so kvm's `from ... import wait_for_loaded` binds the mock.
+        patches.append(patch("kvm_serial.backend.video.wait_for_loaded", return_value=True))
         patches.append(patch("PyQt5.QtMultimedia.QCamera"))
         patches.append(patch("PyQt5.QtMultimedia.QCameraViewfinderSettings"))
         patches.append(patch("PyQt5.QtMultimediaWidgets.QGraphicsVideoItem"))

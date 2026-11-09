@@ -70,6 +70,82 @@ class TestKVMVideoPipeline(KVMTestBase):
             previous.stop.assert_called_once()
             previous.unload.assert_called_once()
 
+    def _make_camera(self):
+        camera = MagicMock(
+            unique_id="uid",
+            width=1280,
+            height=720,
+            resolutions=[(1280, 720)],
+            default_resolution=(1280, 720),
+            info=MagicMock(),
+        )
+        camera.name = "Cam"
+        return camera
+
+    def test_set_camera_waits_for_loaded_before_picking_settings(self):
+        """Regression (#47): on Linux load() returns before supportedViewfinderSettings()
+        is populated, so the wait must sit between load() and settings selection."""
+        app = self.create_kvm_app()
+        order = []
+
+        with (
+            patch("kvm_serial.kvm.QCamera") as MockQCamera,
+            patch("kvm_serial.kvm.wait_for_loaded", return_value=True) as mock_wait,
+            patch.object(app, "_pick_viewfinder_settings", return_value=MagicMock()) as mock_pick,
+        ):
+            mock_cam = MockQCamera.return_value
+            mock_cam.load.side_effect = lambda: order.append("load")
+            mock_wait.side_effect = lambda c: order.append("wait") or True
+            mock_pick.side_effect = lambda w, h: order.append("pick") or MagicMock()
+            mock_cam.start.side_effect = lambda: order.append("start")
+            app._set_camera(self._make_camera(), width=1280, height=720)
+
+        mock_wait.assert_called_once_with(mock_cam)
+        self.assertEqual(order, ["load", "wait", "pick", "start"])
+        mock_cam.setViewfinderSettings.assert_called_once()
+
+    def test_set_camera_load_timeout_warns_and_still_starts(self):
+        """If LoadedStatus never arrives, log a warning and fall through to start()."""
+        app = self.create_kvm_app()
+
+        with (
+            patch("kvm_serial.kvm.QCamera") as MockQCamera,
+            patch("kvm_serial.kvm.wait_for_loaded", return_value=False),
+            patch.object(app, "_pick_viewfinder_settings", return_value=None),
+            self.assertLogs(level="WARNING") as logs,
+        ):
+            app._set_camera(self._make_camera())
+
+        MockQCamera.return_value.start.assert_called_once()
+        self.assertTrue(any("did not reach LoadedStatus" in m for m in logs.output))
+
+    def test_set_camera_superseded_during_wait_does_not_start(self):
+        """A menu action can re-enter _set_camera from wait_for_loaded()'s nested event
+        loop. The outer call must not configure or start the camera that replaced it."""
+        app = self.create_kvm_app()
+        outer_cam, inner_cam = MagicMock(name="outer"), MagicMock(name="inner")
+
+        def reenter(cam):
+            if cam is outer_cam:
+                app._set_camera(self._make_camera())  # e.g. user picks another device
+            return True
+
+        with (
+            patch("kvm_serial.kvm.QCamera", side_effect=[outer_cam, inner_cam]),
+            patch("kvm_serial.kvm.wait_for_loaded", side_effect=reenter),
+            patch.object(app, "_pick_viewfinder_settings", return_value=MagicMock()),
+        ):
+            app._set_camera(self._make_camera())
+
+        self.assertIs(app.qcamera, inner_cam)
+        inner_cam.start.assert_called_once()
+        inner_cam.setViewfinderSettings.assert_called_once()
+        outer_cam.start.assert_not_called()
+        outer_cam.setViewfinderSettings.assert_not_called()
+        # The inner call tore down the outer camera as the previous instance
+        outer_cam.stop.assert_called_once()
+        outer_cam.unload.assert_called_once()
+
     def test_set_camera_skips_when_info_missing(self):
         """A CameraProperties with no QCameraInfo cannot be opened — skip silently."""
         app = self.create_kvm_app()
