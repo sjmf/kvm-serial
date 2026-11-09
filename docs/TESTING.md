@@ -120,10 +120,10 @@ def _setup_qt_mocks(self):
 def _setup_hardware_mocks(self):
     from kvm_serial.backend import video as video_mod
     return [
-        patch.object(video_mod, "CaptureDevice"),
-        patch.object(video_mod, "CameraProperties"),
-        patch("kvm_serial.kvm.CaptureDevice"),
-        patch("kvm_serial.kvm.VideoCaptureWorker"),
+        patch.object(video_mod, "enumerate_cameras", return_value=[]),
+        patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
+        patch.object(video_mod, "wait_for_loaded", return_value=True),
+        patch("kvm_serial.kvm.wait_for_loaded", return_value=True),
         patch("kvm_serial.utils.communication.list_serial_ports"),
         patch("kvm_serial.kvm.list_serial_ports"),
         patch("kvm_serial.kvm.QtOp"),
@@ -131,9 +131,11 @@ def _setup_hardware_mocks(self):
     ]
 ```
 
-`patch.object` is used for the two `video_mod` patches rather than string-based `patch()` because `kvm_serial.backend` may already be in `sys.modules` without the `video` submodule attribute attached, which causes string-based patches to silently target a stale reference. Importing the module explicitly and using `patch.object` avoids this cross-group test pollution issue.
+Names that `kvm.py` pulls in with `from kvm_serial.backend.video import ...` are patched twice: on the `video` module (via `patch.object` on an explicitly imported module) and at `kvm.py`'s own import point. The import-point patch is the one the application actually calls.
 
-Three additional single-target mocks are set up via their own methods: `_setup_serial_mock()` patches `serial.Serial`, `_setup_cv2_mock()` patches `cv2.cvtColor`, and `_setup_settings_mock()` patches `kvm_serial.kvm.settings_util`.
+`wait_for_loaded()` must always be mocked. It spins a real `QEventLoop` until the camera reports `LoadedStatus`, which a mocked `QCamera` never does, so the test hangs. See [Tests Hang Without a Timeout Error](#issue-tests-hang-without-a-timeout-error).
+
+Two additional single-target mocks are set up via their own methods: `_setup_serial_mock()` patches `serial.Serial`, and `_setup_settings_mock()` patches `kvm_serial.kvm.settings_util`.
 
 **Pattern:** Mock at the point where the application module imports and uses hardware libraries, not at the library itself — this ensures the patch applies to the exact name binding in `kvm.py`.
 
@@ -343,9 +345,16 @@ def tearDown(self):
     ]:
         if module in sys.modules:
             del sys.modules[module]
+        # Also detach the submodule from its parent package
+        parent_name, _, child = module.rpartition(".")
+        parent = sys.modules.get(parent_name)
+        if parent is not None and child in vars(parent):
+            delattr(parent, child)
 ```
 
 Prevents test interdependencies and ensures fresh imports.
+
+Deleting the `sys.modules` entry alone is not enough. Importing `kvm_serial.kvm` also sets a `kvm` attribute on the `kvm_serial` package, and that attribute outlives the `sys.modules` entry. On Python < 3.12, `patch("kvm_serial.kvm.name")` resolves `kvm_serial.kvm` by `getattr` on the parent package, so it patches the stale module from the previous test, while `create_kvm_app()` imports a fresh, unpatched one. Python 3.12+ resolves targets through `importlib.import_module`, which hides the problem locally, but CI runs on 3.10.
 
 ### 6. Early Module Mocking with pytest_configure
 
@@ -383,7 +392,7 @@ def pytest_configure(config):
 
 **Why the Hierarchy Matters**: Notice how `mock_serial_mod.tools` points to the same object as `sys.modules['serial.tools']`. This is crucial. When Python imports `serial.tools.list_ports`, it follows the hierarchy: first it finds `serial` in `sys.modules`, then accesses its `.tools` attribute, then accesses `.list_ports`. If these aren't the same object references, Python creates multiple mock instances. Tests will fail with mysterious assertion errors like `Expected 'method' to be called once. Called 0 times.` because the code under test called a *different* mock instance than the one being asserted against.
 
-By placing this in the root `tests/conftest.py`, the mocks apply to all test groups in a single pytest run, so `pytest tests/` works correctly. The CI workflow still runs each group as a separate step, but this is for coverage accumulation (`--cov-append`), not for isolation.
+By placing this in the root `tests/conftest.py`, the mocks apply to all test groups in a single pytest run, so `pytest tests/` works correctly. This is how the CI workflow runs the suite.
 
 **Caution — sys.modules is global state**: the injected mocks persist for the entire pytest session and cannot be undone. If a future test ever needs the *real* `serial` module (e.g. an integration test against physical hardware), it cannot coexist in the same pytest invocation. Similarly, adding a second `pytest_configure` hook in a subdirectory `conftest.py` that tries to install a different mock for the same module keys will silently win or lose depending on conftest load order, causing hard-to-diagnose failures. Keep all serial mocking in the single root conftest.
 
@@ -435,7 +444,7 @@ tests/
 └── test_control.py    # Control module tests
 ```
 
-The root `tests/conftest.py` contains the `pytest_configure` hook that mocks serial modules for the entire suite. Running `pytest tests/` works correctly. The CI workflow runs each group in a separate step for coverage accumulation (`--cov-append`), not because isolation requires it.
+The root `tests/conftest.py` contains the `pytest_configure` hook that mocks serial modules for the entire suite. Running `pytest tests/` works correctly, and is how the CI workflow runs it.
 
 ## Running Tests
 
@@ -491,6 +500,12 @@ timeout = 5
 **Cause:** Missing module cleanup in `tearDown`.
 
 **Solution:** Verify all tested modules are removed from `sys.modules`.
+
+### Issue: Tests Hang Without a Timeout Error
+
+**Cause:** Code under test entered a real Qt event loop, usually `QEventLoop.exec_()` inside `wait_for_loaded()`. pytest-timeout's default signal method cannot interrupt it, because the alarm handler only runs once control returns to Python, so the run hangs instead of failing. In CI this means the job runs until GitHub's job timeout.
+
+**Solution:** Make sure the function that spins the loop is mocked at the application's import point, and that module cleanup detaches stale submodules (see [Module Cleanup](#5-module-cleanup)). To find where a hang is, run with `--timeout-method=thread`, which dumps every thread's stack when the timeout expires.
 
 ### Issue: "AttributeError: Mock object has no attribute X"
 

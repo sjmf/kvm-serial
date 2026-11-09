@@ -104,7 +104,9 @@ Layout files map ASCII characters to USB HID scancodes. `en_GB`, `en_US`, and `p
 
 ## Testing
 
-Run the full suite with `pytest tests/`. CI runs groups separately only to accumulate `--cov-append` coverage, not due to isolation constraints.
+Read [docs/TESTING.md](docs/TESTING.md) before adding or changing tests. It documents the mocking patterns the suite depends on (patch timing, import-point patching, module cleanup) and the failure modes they prevent.
+
+Run the full suite with `pytest tests/`. CI runs it in a single invocation on Python 3.10. `unittest.mock.patch` resolves dotted targets differently before Python 3.12, so when changing test infrastructure (`KVMTestBase`, patch targets, module cleanup), also run the suite on 3.10.
 
 The root `tests/conftest.py` injects `serial`/`serial.tools`/`serial.tools.list_ports` mocks into `sys.modules` via `pytest_configure` before any collection, so the whole suite can run in one invocation.
 

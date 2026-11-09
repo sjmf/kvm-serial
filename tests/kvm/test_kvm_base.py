@@ -59,6 +59,14 @@ class KVMTestBase(unittest.TestCase):
         for module in modules_to_remove:
             if module in sys.modules:
                 del sys.modules[module]
+            # Also detach the submodule from its parent package. On Python < 3.12,
+            # patch("pkg.mod.name") resolves "pkg.mod" via getattr on the parent, so
+            # a stale attribute makes string-based patches target the old module
+            # while the next import creates a fresh, unpatched one.
+            parent_name, _, child = module.rpartition(".")
+            parent = sys.modules.get(parent_name)
+            if parent is not None and child in vars(parent):
+                delattr(parent, child)
 
     def _setup_qt_mocks(self):
         """Set up comprehensive PyQt5 mocking to prevent GUI creation."""
@@ -122,10 +130,6 @@ class KVMTestBase(unittest.TestCase):
             patches.append(patch(f"PyQt5.QtGui.{gui_item}"))
 
         # Mock QtMultimedia components used by kvm_serial.kvm and video module
-        # wait_for_loaded() spins a real QEventLoop; with a mocked QCamera it would
-        # never see LoadedStatus and block the test run. Patched before kvm is
-        # imported so kvm's `from ... import wait_for_loaded` binds the mock.
-        patches.append(patch("kvm_serial.backend.video.wait_for_loaded", return_value=True))
         patches.append(patch("PyQt5.QtMultimedia.QCamera"))
         patches.append(patch("PyQt5.QtMultimedia.QCameraViewfinderSettings"))
         patches.append(patch("PyQt5.QtMultimediaWidgets.QGraphicsVideoItem"))
@@ -152,6 +156,11 @@ class KVMTestBase(unittest.TestCase):
             # Video enumeration mocking — no cameras by default; tests opt in.
             patch.object(video_mod, "enumerate_cameras", return_value=[]),
             patch("kvm_serial.kvm.enumerate_cameras", return_value=[]),
+            # wait_for_loaded() spins a real QEventLoop; with a mocked QCamera it never
+            # sees LoadedStatus and blocks the run (pytest-timeout can't interrupt
+            # exec_()). Patched at kvm's import point, like enumerate_cameras above.
+            patch.object(video_mod, "wait_for_loaded", return_value=True),
+            patch("kvm_serial.kvm.wait_for_loaded", return_value=True),
             # Serial communication mocking
             patch("kvm_serial.utils.communication.list_serial_ports"),
             patch("kvm_serial.kvm.list_serial_ports"),
